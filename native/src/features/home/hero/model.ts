@@ -14,6 +14,8 @@ export const PILLARS: readonly PillarKey[] = ['training', 'food', 'sleep'];
 /** One logged day. A null is no reading (no sleep recorded), never drawn as zero. */
 export interface HeroDayIn {
   trainMin: number | null; kcal: number | null; sleepMin: number | null;
+  /** Food was logged but none of it lists energy: the total is unknown, not 0. */
+  kcalUnknown?: boolean;
   /** The app's day score for this day (score/days.ts, the number Progress shows), null with nothing to go on. When left
    * out the hero falls back to the mean of its arcs. */
   score?: number | null;
@@ -85,9 +87,11 @@ function pillarsFor(day: HeroDayIn | undefined, v: Triple, input: HeroInput): [H
   const g = input.goals, eu = input.energy, hid = input.hide, rest = isRest(v);
   const tMin = fin(day?.trainMin) ? Math.round(day.trainMin) : 0, kc = fin(day?.kcal) ? Math.round(day.kcal) : 0;
   const sleepMissing = !fin(day?.sleepMin), sMin = sleepMissing ? 0 : Math.round(day!.sleepMin!);
+  // Food logged without energy is an unknown total, said as such, never drawn as 0.
+  const kUnknown = !!day?.kcalUnknown && !fin(day?.kcal);
   const made = (key: PillarKey, i: number, p: Omit<HeroPillar, 'key' | 'label' | 'value' | 'met' | 'spoken'> & { said: string }): HeroPillar => {
     const met = v[i] >= 1, label = LABEL[key]();
-    const tail = met ? `, ${t('homeHeroGoalMetSpoken')}` : (i === 0 && rest) ? '' : `, ${pc(v[i])}`;
+    const tail = met ? `, ${t('homeHeroGoalMetSpoken')}` : (i === 0 && rest) || (i === 1 && kUnknown) ? '' : `, ${pc(v[i])}`;
     const { said, ...rest2 } = p;
     return { key, label, value: v[i], met, ...rest2, spoken: `${label}, ${said}${tail}. ${t('homeHeroShowDetails')}` };
   };
@@ -99,9 +103,9 @@ function pillarsFor(day: HeroDayIn | undefined, v: Triple, input: HeroInput): [H
       said: fill(t('homeHeroMinutes'), { n: tMin, goal: g.trainMin }),
     });
   const food = made('food', 1, {
-    rest: false, missing: false, arc: [[hid ? '•••' : enN(kc, eu), 'v', 0], [eu, 'u', 2.5]], goal: `${enN(g.kcal, eu)} ${eu}`, cap: enN(g.kcal, eu),
-    status: hid ? t('homeHeroHidden') : kc <= 0 ? t('homeHeroNothing') : kc >= g.kcal ? t('homeHeroGoalMet') : fill(t('homeHeroEnergyLeft'), { n: enN(g.kcal - kc, eu), u: eu, pct: pc(v[1]) }),
-    said: hid ? fill(t('homeHeroHiddenSpoken'), { goal: enN(g.kcal, eu), u: eu }) : fill(t('homeHeroEnergySpoken'), { n: enN(kc, eu), goal: enN(g.kcal, eu), u: eu }),
+    rest: false, missing: kUnknown, arc: [[hid ? '•••' : kUnknown ? '–' : enN(kc, eu), 'v', 0], [eu, 'u', 2.5]], goal: `${enN(g.kcal, eu)} ${eu}`, cap: enN(g.kcal, eu),
+    status: hid ? t('homeHeroHidden') : kUnknown ? t('homeHeroEnergyUnknown') : kc <= 0 ? t('homeHeroNothing') : kc >= g.kcal ? t('homeHeroGoalMet') : fill(t('homeHeroEnergyLeft'), { n: enN(g.kcal - kc, eu), u: eu, pct: pc(v[1]) }),
+    said: hid ? fill(t('homeHeroHiddenSpoken'), { goal: enN(g.kcal, eu), u: eu }) : kUnknown ? t('homeHeroEnergyUnknown') : fill(t('homeHeroEnergySpoken'), { n: enN(kc, eu), goal: enN(g.kcal, eu), u: eu }),
   });
   // No sleep reading is said as such, never drawn as 0h.
   const sleep = made('sleep', 2, {
@@ -112,9 +116,9 @@ function pillarsFor(day: HeroDayIn | undefined, v: Triple, input: HeroInput): [H
   return [training, food, sleep];
 }
 
-function describe(date: string, v: Triple) {
-  if (!v.some(x => x > 0)) return `${date}. ${t('homeHeroNothing')}.`;
-  return `${date}. ${PILLARS.map((k, i) => `${LABEL[k]()} ${pc(v[i])}${v[i] >= 1 ? `, ${t('homeHeroGoalMetSpoken')}` : ''}`).join(', ')}.`;
+function describe(date: string, v: Triple, empty = !v.some(x => x > 0), foodUnknown = false) {
+  if (empty) return `${date}. ${t('homeHeroNothing')}.`;
+  return `${date}. ${PILLARS.map((k, i) => `${LABEL[k]()} ${i === 1 && foodUnknown ? t('homeHeroUnknown') : pc(v[i])}${v[i] >= 1 ? `, ${t('homeHeroGoalMetSpoken')}` : ''}`).join(', ')}.`;
 }
 
 /** Everything the hero shows for the selected day (0 oldest .. 6 today). */
@@ -122,19 +126,19 @@ export function heroView(input: HeroInput, sel = 6): HeroView {
   const n = input.days.length, today = sel === n - 1, now = input.now;
   const dateOf = (i: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - (n - 1 - i));
   const long = (i: number) => WEEKDAYS[dateOf(i).getDay()];
-  const v = dayValues(input.days[sel], input.goals), rest = isRest(v), empty = !v.some(x => x > 0);
+  const v = dayValues(input.days[sel], input.goals), rest = isRest(v), empty = !v.some(x => x > 0) && !input.days[sel]?.kcalUnknown;
   const pillars = pillarsFor(input.days[sel], v, input);
   const allMet = !empty && pillars.every((p, i) => p.met || (i === 0 && rest));
   const pct = scoreOf(input.days[sel], v);
   const caption = (today ? t('homeHeroToday') : long(sel)) + (rest ? ` · ${t('homeHeroRestDay')}` : '') + (allMet ? ` · ${t('homeHeroAllMet')}` : '');
   const name = today ? t('homeHeroToday') : long(sel);
-  const label = `${describe(name, v)} ${t('homeHeroDayScore').replace('{n}', String(pct))} ${pillars.map((p, i) => `${p.label} ${i === 0 && rest ? t('homeHeroRestSpoken') : p.spoken.split(', ')[1].replace(/\. .*$/, '')}`).join(', ')}.`;
+  const label = `${describe(name, v, empty, !!input.days[sel]?.kcalUnknown)} ${t('homeHeroDayScore').replace('{n}', String(pct))} ${pillars.map((p, i) => `${p.label} ${i === 0 && rest ? t('homeHeroRestSpoken') : p.spoken.split(', ')[1].replace(/\. .*$/, '')}`).join(', ')}.`;
   const week = input.days.map((d, i): HeroWeekDay => {
     const wv = dayValues(d, input.goals), isToday = i === n - 1, lg = long(i);
     return {
       i, short: isToday ? t('homeHeroToday') : lg.slice(0, 3), long: lg, today: isToday, values: wv, pct: scoreOf(d, wv), rest: isRest(wv),
-      empty: !wv.some(x => x > 0), met: [wv[0] >= 1, wv[1] >= 1, wv[2] >= 1],
-      label: `${lg}${isToday ? t('homeHeroTodaySuffix') : ''}. ${PILLARS.map((k, j) => `${LABEL[k]()} ${pc(wv[j])}`).join(', ')}.`,
+      empty: !wv.some(x => x > 0) && !d?.kcalUnknown, met: [wv[0] >= 1, wv[1] >= 1, wv[2] >= 1],
+      label: `${lg}${isToday ? t('homeHeroTodaySuffix') : ''}. ${PILLARS.map((k, j) => `${LABEL[k]()} ${j === 1 && d?.kcalUnknown ? t('homeHeroUnknown') : pc(wv[j])}`).join(', ')}.`,
     };
   });
   return {

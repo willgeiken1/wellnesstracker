@@ -1,3 +1,4 @@
+import { isHealthSource } from '@/data/health-store';
 import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
 import { dailyWeights } from '@/features/body/model';
@@ -6,11 +7,13 @@ import type { HealthDays } from '@/features/health/days';
 import type { OuraRecovery } from '@/features/health/oura';
 import type { Recovery } from '@/features/health/recovery';
 import { readProfile } from '@/features/onboarding/model';
-import { PlanStore } from '@/features/plans/store';
+import { weeklyTarget } from '@/features/splits/store';
 import { liftRecords } from '@/features/progress/records';
 import { dayScore } from '@/features/score/day';
 import { withDemoSleep } from '@/features/home/demo-sleep';
 import { foodDays, scoreDays } from '@/features/score/days';
+import { loadSettingsPrefs } from '@/features/settings/prefs';
+import { entryVolumeKg } from '@/features/workout/volume';
 import { t } from '@/i18n/en';
 import { fill, hm } from './format';
 import { readBodyFat, readMeasures, readPhotos } from './local';
@@ -22,6 +25,20 @@ export interface SourceInput {
   store: WorkoutStore; now: Date; demo: boolean;
   /** Read for the last 30 days, oldest first, ending today. Null when not connected or not read. */
   health: HealthDays | null; recovery: Recovery | null; ring: OuraRecovery | null;
+  /** The sleep goal in minutes from Settings › Goals; read from the saved choices when left out. */
+  sleepGoalMin?: number;
+  /** The daily training goal in minutes from Settings › Goals; read from the saved choices when left out. */
+  trainGoalMin?: number;
+}
+/** The daily training goal in minutes the person chose, or none when it isn't a usable number. */
+export function trainGoalOf(repo: Parameters<typeof loadSettingsPrefs>[0], given?: number): number | null {
+  const v = given ?? loadSettingsPrefs(repo).goals.train;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+}
+/** The sleep goal in minutes the person chose, or eight hours. */
+export function sleepGoalOf(repo: Parameters<typeof loadSettingsPrefs>[0]): number {
+  const v = loadSettingsPrefs(repo).goals.sleep;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 480;
 }
 /** The last `n` values of a 30-day list placed at the end of a 365-day list. */
 function tail(list: readonly (number | null)[] | null | undefined): Daily {
@@ -46,15 +63,20 @@ const minutesOf = (s: Row) => {
 };
 
 /** Progress from what is logged on this phone, plus steps, sleep and heart readings held in memory. Saves nothing. */
-export function buildProgress({ store, now, demo, health, recovery, ring }: SourceInput): ProgressData {
+export function buildProgress({ store, now, demo, health, recovery, ring, sleepGoalMin, trainGoalMin }: SourceInput): ProgressData {
   const repo = store.repo, unit = readProfile(repo).unit, today = addDays(dayKeyOf(now), 0);
   const days = daysEnding(today, HISTORY), index = new Map(days.map((d, i) => [d, i]));
   const base = demo ? sampleProgress(today, unit, now.getTime()) : emptyProgress(today, unit, now.getTime());
+  base.sleepGoalMin = sleepGoalMin != null && Number.isFinite(sleepGoalMin) && sleepGoalMin > 0 ? sleepGoalMin : sleepGoalOf(repo);
   const d: ProgressData = demo ? base : { ...base };
 
   /* weight */
-  const weighed = dailyWeights(repo.list('weigh_ins').filter(r => String(r.data.day) <= today));
+  const weighRows = repo.list('weigh_ins').filter(r => String(r.data.day) <= today), weighed = dailyWeights(weighRows);
   if (weighed.length) {
+    // The label under weight names where these readings came from, so a weight typed in Insight is never put down to Apple Health.
+    const shown = weighRows.filter(r => r.deleted_at === null && typeof r.data.weight_kg === 'number' && r.data.weight_kg > 0);
+    const app = shown.some(r => r.data.source === 'app'), health = shown.some(r => isHealthSource(r.data.source));
+    if (!demo && (app || health)) d.weight.from = app && health ? 'both' : app ? 'app' : 'health';
     if (demo) d.days.weight = d.days.weight.slice();
     for (const w of weighed) { const i = index.get(w.day); if (i != null) d.days.weight[i] = w.kg; }
     const last = weighed[weighed.length - 1];
@@ -96,18 +118,28 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
 
   /* health: steps and sleep from Apple Health and Oura (merged per day), HRV and resting heart rate from one source only */
   d.days.steps = tail(health?.steps);
+  d.days.active = tail(health?.activeKcal);
   d.days.sleep = tail(health?.sleepHours);
+  const fromOf = (from: ('oura' | 'apple' | null)[] | undefined, v: unknown[] | null | undefined) => {
+    if (!from || !v || from.length !== v.length) return undefined;
+    const n = Math.min(from.length, HISTORY), out: ('Oura' | 'Apple Health' | null)[] = Array(HISTORY).fill(null);
+    for (let i = 0; i < n; i++) { const f = from[from.length - n + i]; out[HISTORY - n + i] = f === 'oura' ? 'Oura' : f === 'apple' ? 'Apple Health' : null; }
+    return out;
+  };
+  { const s = fromOf(health?.sleepFrom, health?.sleepHours); if (s) d.sleepFrom = s; }
+  { const s = fromOf(health?.stepsFrom, health?.steps); if (s) d.stepsFrom = s; }
   const ouraHeart = !!ring && [...ring.hrv, ...ring.restingHeartRate].some(finite);
   d.days.hrv = tail(ouraHeart ? ring!.hrv : recovery?.hrv);
   d.days.rhr = tail(ouraHeart ? ring!.restingHeartRate : recovery?.restingHeartRate);
   d.hrvBand = band(d.days.hrv); d.rhrBand = band(d.days.rhr);
   const night = ring?.night ?? recovery?.night ?? null;
   if (night) {
-    const core = night.core + night.asleep;
-    d.night = { min: night.deep + core + night.rem + night.awake, deep: night.deep, core, rem: night.rem, awake: night.awake, bed: null, wake: null,
-      source: ring?.night ? 'Oura' : 'Apple Health', segments: null };
+    // Plain asleep from a device that records no stages stays apart: it is time asleep, not core sleep.
+    d.night = { min: night.deep + night.core + night.rem + night.asleep + night.awake, deep: night.deep, core: night.core, rem: night.rem, awake: night.awake,
+      unstaged: night.asleep, bed: null, wake: null, source: ring?.night ? 'Oura' : 'Apple Health', segments: null };
   }
-  d.sources = { oura: !!ring, apple: !!health || !!recovery, ouraSynced: null };
+  const appleHeart = !ouraHeart && !!recovery && [...(recovery.hrv ?? []), ...(recovery.restingHeartRate ?? [])].some(finite);
+  d.sources = { oura: !!ring, apple: !!health || !!recovery, ouraSynced: null, heart: ouraHeart ? 'Oura' : appleHeart ? 'Apple Health' : null };
 
   /* food */
   const byDay = new Set(repo.list('food_entries').map(r => String(r.data.day)));
@@ -116,15 +148,22 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
   const todayFood = foods[HISTORY - 1];
   let targetsToday: ReturnType<typeof foodTargets>['targets'] = null;
   try { targetsToday = foodTargets(repo, today).targets; } catch { targetsToday = null; }
-  d.food = { goalKcal: targetsToday ? Math.round(targetsToday.energy_kj / KJ) : null, eatenKcal: todayFood.logged ? Math.round(todayFood.kcal ?? 0) : null,
-    proteinG: todayFood.protein == null ? null : Math.round(todayFood.protein), proteinGoal: targetsToday ? Math.round(targetsToday.protein_g) : null };
+  d.food = { goalKcal: targetsToday ? Math.round(targetsToday.energy_kj / KJ) : null, eatenKcal: todayFood.logged && finite(todayFood.kcal) ? Math.round(todayFood.kcal) : null,
+    proteinG: todayFood.protein == null ? null : Math.round(todayFood.protein), proteinGoal: targetsToday ? Math.round(targetsToday.protein_g) : null,
+    goalByDay: foods.map(f => finite(f.goalKcal) ? f.goalKcal : null) };
 
   /* training */
   const sessions = store.trainingHistory(), active = store.active();
-  const minutes = new Map<string, number>(), names = new Map<string, string[]>();
-  for (const s of sessions) { const k = String(s.data.day); minutes.set(k, (minutes.get(k) ?? 0) + minutesOf(s)); names.set(k, [...(names.get(k) ?? []), String(s.data.name ?? '')]); }
+  const minutes = new Map<string, number>(), names = new Map<string, string[]>(), count = new Map<string, number>();
+  for (const s of sessions) { const k = String(s.data.day); minutes.set(k, (minutes.get(k) ?? 0) + minutesOf(s)); names.set(k, [...(names.get(k) ?? []), String(s.data.name ?? '')]); count.set(k, (count.get(k) ?? 0) + 1); }
+  // Cardio logged on its own sheet counts toward training minutes, as on Training.
+  const cardio = repo.list('cardio_sessions').filter(c => typeof c.data.day === 'string' && String(c.data.day) <= today);
+  for (const c of cardio) {
+    const k = String(c.data.day), min = Math.round(Number(c.data.duration_ms ?? 0) / 60000);
+    if (finite(min) && min > 0) { minutes.set(k, (minutes.get(k) ?? 0) + min); count.set(k, (count.get(k) ?? 0) + 1); }
+  }
   const activeMin = active && finite(Number(active.data.started_at)) ? Math.max(0, Math.round((now.getTime() - Number(active.data.started_at)) / 60000)) : null;
-  const firstDay = sessions.map(s => String(s.data.day)).sort()[0] ?? (active ? today : null);
+  const firstDay = [...sessions, ...cardio].map(s => String(s.data.day)).sort()[0] ?? (active ? today : null);
   d.days.training = days.map(day => firstDay && day >= firstDay ? (minutes.get(day) ?? 0) + (day === today && activeMin != null ? activeMin : 0) : null);
   const weekStart = addDays(today, -6), prevStart = addDays(today, -13);
   const volume = (from: string, to: string) => {
@@ -132,24 +171,17 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
     for (const s of sessions) {
       const day = String(s.data.day);
       if (day < from || day > to) continue;
-      for (const e of store.entries(s.id)) {
-        if (store.skipped(e.id)) continue;
-        for (const set of store.sets(e.id)) {
-          const x = set.data, v = x.left_weight_kg != null && x.right_weight_kg != null
-            ? Number(x.left_weight_kg) * Number(x.left_reps) + Number(x.right_weight_kg) * Number(x.right_reps) : Number(x.weight_kg) * Number(x.reps);
-          if (finite(v)) kg += v;
-        }
-      }
+      // Working sets only, as the workout summary counts them: warm-ups and skipped exercises add nothing.
+      for (const e of store.entries(s.id)) kg += entryVolumeKg(store, e);
     }
     return kg;
   };
-  let perWeek = 3;
-  try { perWeek = new PlanStore(repo).read().daysPerWeek; } catch { perWeek = 3; }
+  const perWeek = weeklyTarget(repo);
   const parsed = parseDay(today), monday = addDays(today, -((parsed.getDay() + 6) % 7));
   const records = (() => { try { return liftRecords(store); } catch { return []; } })();
   d.training = {
-    goalMin: null, weekVolumeKg: volume(weekStart, today), lastWeekVolumeKg: volume(prevStart, addDays(weekStart, -1)),
-    sessions: sessions.filter(s => String(s.data.day) >= weekStart).length,
+    goalMin: trainGoalOf(repo, trainGoalMin), weekVolumeKg: volume(weekStart, today), lastWeekVolumeKg: volume(prevStart, addDays(weekStart, -1)),
+    sessions: sessions.filter(s => String(s.data.day) >= weekStart).length, perDay: days.map(day => count.get(day) ?? 0),
     active: active && activeMin != null ? { name: String(active.data.name ?? t('progressWorkout')), min: activeMin } : null,
     plan: { name: null, perWeek, done: sessions.filter(s => String(s.data.day) >= monday).length }, next: null,
     records: records.map(r => ({ name: r.exercise, kg: r.unit === 'lb' ? r.weight / LB : r.weight, reps: 0, day: r.day, unit: r.unit })),

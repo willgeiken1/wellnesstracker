@@ -5,8 +5,9 @@ import { dailyWeights } from '@/features/body/model';
 import { attributedDay, foodTargets, meals as mealList, recentFoods, totals } from '@/features/food/model';
 import { drinksOn, litresOn, readWater } from '@/features/food/water';
 import type { HealthDays } from '@/features/health/days';
-import { PlanStore } from '@/features/plans/store';
-import { readScore } from '@/features/score/read';
+import { dayScore } from '@/features/score/day';
+import { lastOf, scoreDays } from '@/features/score/days';
+import { nextPlanDay } from '@/features/workout/training-data';
 import { entryVolumeKg } from '@/features/workout/volume';
 import { pluralize } from '@/i18n/en';
 import { DAYS, type ActiveWorkoutIn, type FoodDayIn, type HomeInput, type ScoreDayIn, type WaterIn } from './data';
@@ -45,7 +46,7 @@ function readFood(store: WorkoutStore, days: string[], now: Date): { food: FoodD
     }) : [];
     return {
       kcal: sum.energy_kj === null ? null : sum.energy_kj / KJ, protein: sum.protein_g, carbs: sum.carbs_g, fat: sum.fat_g,
-      goalKcal: targets ? targets.energy_kj / KJ : null, goalProtein: targets ? targets.protein_g : null, meals,
+      goalKcal: targets ? targets.energy_kj / KJ : null, goalProtein: targets ? targets.protein_g : null, meals, logged: rows.some(r => r.deleted_at === null),
     };
   });
   const today = food[food.length - 1].meals;
@@ -82,28 +83,23 @@ function readActive(store: WorkoutStore): ActiveWorkoutIn | null {
   return { name: String(session.data.name ?? ''), startedAt: started === null ? null : new Date(started), setsDone: done, setsTotal: order.length };
 }
 
-function readUpNext(store: WorkoutStore): string | null {
+function readUpNext(store: WorkoutStore, now: Date): string | null {
   try {
-    const plans = new PlanStore(store.repo), days = plans.read().days;
-    const routine = days.length ? store.templates().find(r => r.id === days[plans.nextIndex()]?.routineId) : undefined;
+    const id = nextPlanDay(store.repo, now)?.routineId;
+    const routine = id === undefined ? undefined : store.templates().find(r => r.id === id);
     if (!routine) return null;
     const n = store.templateExercises(routine.id).length;
     return `${String(routine.data.name ?? '')} · ${pluralize(n, 'exercise')}`;
   } catch { return null; }
 }
 
-/** The Insight Score for each day of the window, worked out as it stood at the end of that day. Held in memory only. */
-function readScores(store: WorkoutStore, days: string[], now: Date, health: HealthDays | null): ScoreDayIn[] {
-  const slice = (list: (number | null)[] | null | undefined, i: number) => list ? list.slice(Math.max(0, i - 6), i + 1) : null;
-  return days.map((day, i) => {
-    const [y, m, d] = day.split('-').map(Number);
-    const at = i === days.length - 1 ? now : new Date(y, m - 1, d, 23, 59);
-    const h = health ? { ...health, steps: slice(health.steps, i), sleepHours: slice(health.sleepHours, i) } : null;
-    try {
-      const s = readScore(store, at, h);
-      return { value: s.value, training: s.pillars.training, food: s.pillars.food, recovery: s.pillars.recovery };
-    } catch { return { value: null, training: null, food: null, recovery: null }; }
-  });
+/** The day score for each day of the window, from the same day-score model as Home's hero and Progress, so every
+ * surface shows the same number for a day. The tile's third pillar is the day score's Sleep. Held in memory only. */
+function readScores(store: WorkoutStore, days: string[], health: HealthDays | null): ScoreDayIn[] {
+  try {
+    return scoreDays({ store, days, steps: lastOf(health?.steps, days.length), sleepHours: lastOf(health?.sleepHours, days.length) })
+      .map(p => ({ value: dayScore(p), training: p.training, food: p.food, recovery: p.sleep }));
+  } catch { return days.map(() => ({ value: null, training: null, food: null, recovery: null })); }
 }
 
 /**
@@ -130,12 +126,13 @@ export function readAppData(store: WorkoutStore, now: Date, health: HealthDays |
   const weighIns = dailyWeights(store.repo.list('weigh_ins')).map(w => ({ day: w.day, kg: w.kg, at: null }));
   const recent = recentFoods(store.repo).slice(0, 6).map(f => ({
     name: String(f.name ?? ''), serving: num(f.amount_g) ? `${Math.round(num(f.amount_g)!)} g` : '',
-    kcal: (num(f.energy_kj) ?? 0) / KJ, protein: num(f.protein_g) ?? 0,
+    // A value the food doesn't give stays unknown, shown as a dash, never 0.
+    kcal: num(f.energy_kj) == null ? null : num(f.energy_kj)! / KJ, protein: num(f.protein_g) ?? null,
   })).filter(f => f.name);
   return {
     days, food, nextMeal, recentFoods: recent, weighIns, water: readWaterIn(store.repo, days, now),
     volumeKg: training.volumeKg, volumeByGroupKg: training.byGroup, volumeLastWeekKg: training.lastWeek, workoutsThisWeek: training.workouts,
-    active: readActive(store), upNext: readUpNext(store), score: readScores(store, days, now, health),
+    active: readActive(store), upNext: readUpNext(store, now), score: readScores(store, days, health),
     weightUnit: store.unit(),
   };
 }

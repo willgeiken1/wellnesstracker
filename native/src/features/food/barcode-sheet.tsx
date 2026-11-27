@@ -17,6 +17,7 @@ import { useFoodDay } from './selection';
 import { closeSheet, foodKey, FoodSheet } from './sheet';
 import { Caption } from './ui';
 import { showToast } from '../shell/toast';
+import { enLabel, enNum, useEnergyUnit } from './energy';
 
 const CAM_H = 420;
 const web = Platform.OS === 'web';
@@ -125,7 +126,7 @@ export function BarcodeSheet({ repo, meal: asked }: { repo: Repository; meal?: s
 }
 
 function Found({ food, kcal, mn, onAdd, onAgain, onDetails }: { food: Food; kcal: number | null; mn: string; onAdd: () => void; onAgain: () => void; onDetails: () => void }) {
-  const k = useKit(), g = typeof food.amount_g === 'number' ? food.amount_g : null;
+  const k = useKit(), u = useEnergyUnit(), g = typeof food.amount_g === 'number' ? food.amount_g : null;
   const v = (x: unknown) => typeof x === 'number' ? `${num(x)} g` : '–';
   return <View>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 16, padding: 16, borderRadius: 20, backgroundColor: k.cardBg, boxShadow: k.cardEdge }}>
@@ -136,7 +137,7 @@ function Found({ food, kcal, mn, onAdd, onAgain, onDetails }: { food: Food; kcal
       </View>
     </View>
     <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-      {([[kcal == null ? '–' : num(kcal), t('foodKcal')], [v(food.protein_g), t('foodMacroProtein')], [v(food.carbs_g), t('foodMacroCarbs')], [v(food.fat_g), t('foodMacroFat')]] as const).map(([val, label]) =>
+      {([[kcal == null ? '–' : enNum(kcal, u), enLabel(u)], [v(food.protein_g), t('foodMacroProtein')], [v(food.carbs_g), t('foodMacroCarbs')], [v(food.fat_g), t('foodMacroFat')]] as const).map(([val, label]) =>
         <View key={label} style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: 10, borderRadius: 14, backgroundColor: k.cardBg, boxShadow: k.cardEdge }}>
           <KitText weight={700} size={17} numeric>{val}</KitText>
           <KitText weight={600} size={11.5} color="text-muted">{label}</KitText>

@@ -111,6 +111,13 @@ const READERS = [
   // Setup's routine step opens the store and hands it the suggested routines. save.ts beside it names the store's
   // type only, which carries nothing at run time.
   'features/onboarding/flow/flow.tsx',
+  // Look around first hands the routines made there to the new account, on the phone, in one transaction.
+  'features/onboarding/demo-transfer.ts',
+  // The person's own export: a file made on the phone and handed to the share sheet only when they ask for it.
+  'features/progress/export.ts',
+  // Routines with Remind me on become local notifications, scheduled on the phone. plan.ts beside it is plain logic.
+  'features/reminders/plan.ts',
+  'features/reminders/sync.tsx',
 ];
 /* The sample items of "Look around first" and the leak-test rows. Both are made up. */
 const FIXTURE_READERS = ['routines.ts'];

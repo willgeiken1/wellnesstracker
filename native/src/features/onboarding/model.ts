@@ -1,6 +1,8 @@
 import type { Repository } from '../../data/repository';
 import { compareRows } from '../../data/rows';
 import { t } from '../../i18n/en';
+import { WorkoutStore } from '../../data/workout/store';
+import { displayWeight, toKg } from '../../core/workout/rules';
 export const ONBOARDING_STEPS = ['welcome', 'about', 'start'] as const;
 export type Unit = 'kg' | 'lb';
 export type Activity = 'sitting' | 'light' | 'active' | 'very';
@@ -64,6 +66,34 @@ export function saveProfile(repo:Repository,input:ProfileInput,day=today()) {
     // No physical columns exist yet; these stay local, never encoded in a wire blob.
     repo.localSave('profileExtras',{sex:input.sex,activity:input.activity});
     if(stats.weight_kg!==null)repo.save('weigh_ins',{day,weight_kg:stats.weight_kg,entered_value:Number(input.weight),entered_unit:input.unit,source:'app'});
+  });
+}
+/** Renames the saved profile and keeps every other field as it is. A profile from setup may have no birth date (About you
+ * skipped or age left blank), which the full save in saveProfile rightly refuses, so a name change goes through here.
+ * Writes nothing when there is no profile yet: a profile row marks the account as set up. */
+export function saveProfileName(repo:Repository,name:string) {
+  const current=repo.list('profile').sort(compareRows).at(-1);
+  if(!current)return;
+  repo.save('profile',{...current.data,name:name.trim()||null},current.id);
+}
+/** Changes only the profile's weight unit, which Progress, Body and new workout entries read, keeping every other
+ * field. Settings' Units page calls it with its own weight choice so the two never disagree. Without a profile row it
+ * writes nothing, because a profile row marks the account as set up. Height stays in metres, so it needs no change. */
+export function saveProfileUnit(repo:Repository,unit:Unit) {
+  const current=repo.list('profile').sort(compareRows).at(-1);
+  if(!current||current.data.weight_unit===unit)return;
+  // Weights typed but not yet logged in a workout that's going are shown in the new unit, as the same load.
+  const store=new WorkoutStore(repo),live=store.active(),entries=live?store.entries(live.id):[];
+  const before=new Map(entries.map(e=>[e.id,store.unit(e.id)]));
+  repo.atomic(()=>{
+    repo.save('profile',{...current.data,weight_unit:unit},current.id);
+    for(const e of entries){
+      const from=before.get(e.id)!,to=store.unit(e.id),drafts=repo.localGet<{weight:string;rightWeight?:string}[]>(`draft:${e.id}`);
+      if(from===to||!drafts)continue;
+      const convert=(w:string)=>w&&Number.isFinite(Number(w))?String(displayWeight(toKg(Number(w),from),to)):w;
+      repo.localSave(`draft:${e.id}`,drafts.map(d=>({...d,weight:convert(d.weight),...(d.rightWeight!==undefined?{rightWeight:convert(d.rightWeight)}:{})})));
+      drafts.forEach((_,i)=>{repo.localSave(`input:${e.id}:${i}:weight`,null);repo.localSave(`input:${e.id}:${i}:right:weight`,null);});
+    }
   });
 }
 export function finishOnboarding(repo:Repository,input:ProfileInput,template:'empty'|'fullBody',targets:Targets|null,day=today()) {

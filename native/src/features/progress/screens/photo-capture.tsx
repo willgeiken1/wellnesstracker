@@ -11,7 +11,7 @@ import { showToast } from '@/features/shell/toast';
 import { today as todayKey } from '@/features/onboarding/model';
 import { dShort, type Pose } from '../model';
 import { fill } from '../format';
-import { addPhoto } from '../local';
+import { takeInPhoto } from '../local';
 import { keepPhoto } from '../photo-file';
 import { useProgress } from '../use-progress';
 import { PhotoBox } from '../tiles/more';
@@ -35,7 +35,7 @@ function Corners({ ink }: { ink: string }) {
 export function PhotoCaptureSheet() {
   const d = useProgress(), k = useKit(), auth = useAuth(), repo = auth.repository;
   const [permission, ask] = useCameraPermissions();
-  const cam = useRef<CameraView>(null), flash = useRef(new Animated.Value(0)).current;
+  const cam = useRef<CameraView>(null), [flash] = useState(() => new Animated.Value(0));
   const [pose, setPose] = useState<Pose>('Front'), [front, setFront] = useState(true), [timer, setTimer] = useState(false), [busy, setBusy] = useState(false);
   const live = !!permission?.granted;
   const last = d.photos.length ? d.photos[d.photos.length - 1] : null;
@@ -43,6 +43,8 @@ export function PhotoCaptureSheet() {
   useEffect(() => { if (permission && !permission.granted && permission.canAskAgain) void ask(); }, [permission, ask]);
   const shoot = async () => {
     if (busy || !repo) return;
+    // Example data keeps nothing: a photo taken here would not carry to an account and could not be erased with it.
+    if (auth.demo) { showToast(t('progressPhotoDemo'), { color: 'warning' }); return; }
     if (!live || !cam.current) { if (permission?.canAskAgain) void ask(); else showToast(t('progressCameraOff'), { color: 'warning' }); return; }
     setBusy(true);
     try {
@@ -50,8 +52,7 @@ export function PhotoCaptureSheet() {
       if (!k.reduceMotion) { flash.setValue(0.9); Animated.timing(flash, { toValue: 0, duration: 450, useNativeDriver: true }).start(); }
       const shot = await cam.current.takePictureAsync({ quality: 0.85 });
       if (!shot?.uri) throw new Error('no photo');
-      const id = randomUUID(), uri = await keepPhoto(shot.uri, id);
-      addPhoto(repo, { id, day: todayKey(), kg: null, pose, uri });
+      await takeInPhoto(repo, { id: randomUUID(), day: todayKey(), kg: null, pose }, id => keepPhoto(shot.uri, id));
       router.back();
       showToast(fill(t('progressPhotoSaved'), { pose: poseWord(pose) }), { color: 'sleep' });
     } catch {
@@ -81,7 +82,7 @@ export function PhotoCaptureSheet() {
       <Corners ink={ink} />
       <View pointerEvents="none" style={{ position: 'absolute', top: 14, left: 0, right: 0, alignItems: 'center' }}>
         <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: mix(ink, 'transparent', 0.14) }}>
-          <Text style={[font(700, 12), { color: ink }]}>{!live && permission && !permission.canAskAgain ? t('progressCameraOff')
+          <Text style={[font(700, 12), { color: ink }]}>{auth.demo ? t('progressPhotoDemoShort') : !live && permission && !permission.canAskAgain ? t('progressCameraOff')
             : last ? fill(t('progressLineUp'), { day: dShort(last.day), pose: poseWord(pose).toLowerCase() }) : t('progressLineUpFirst')}</Text></View>
       </View>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: ink, opacity: flash }} />

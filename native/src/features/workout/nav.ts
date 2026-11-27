@@ -13,6 +13,9 @@ export const trainingRoutes = {
   picker: '/training/picker',
   rest: '/training/rest',
   cardio: '/training/cardio',
+  splitLibrary: '/training/split-library',
+  splitSetup: '/training/split-setup',
+  splitNew: '/training/split-new',
 } as const;
 
 export const trainingNav = {
@@ -21,9 +24,12 @@ export const trainingNav = {
   detail: (id: string) => router.push({ pathname: trainingRoutes.detail, params: { id } }),
   exercise: (name: string) => router.push({ pathname: trainingRoutes.exercise, params: { name } }),
   plan: () => router.push(trainingRoutes.plan),
-  picker: (params: { mode?: 'add' | 'replace' | 'routine' | 'browse'; entry?: string; routine?: string } = {}) => router.push({ pathname: trainingRoutes.picker, params }),
+  picker: (params: { mode?: 'add' | 'replace' | 'routine' | 'browse'; entry?: string; routine?: string; session?: string } = {}) => router.push({ pathname: trainingRoutes.picker, params }),
   rest: (entry?: string) => router.push(entry ? { pathname: trainingRoutes.rest, params: { entry } } : trainingRoutes.rest),
   cardio: () => router.push(trainingRoutes.cardio),
+  splitLibrary: () => router.push(trainingRoutes.splitLibrary),
+  splitSetup: (key: string) => router.push({ pathname: trainingRoutes.splitSetup, params: { key } }),
+  splitNew: () => router.push(trainingRoutes.splitNew),
 };
 
 /** Training's form sheets: the picker and cardio log open large, the rest timer at the design's medium height. */

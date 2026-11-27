@@ -17,8 +17,17 @@ module.exports = (context) => {
   // Design check only: a static web build (one HTML page) for side-by-side screenshots against the mockup.
   return process.env.FIDELITY_WEB ? { ...resolved, web: { ...resolved.web, output: 'single' } } : resolved;
 };
+/** Store build only: over-the-air JavaScript updates from EAS Update (production channel, set in eas.json).
+ * Updates only download code to the phone; nothing is sent from the app. The runtime version is the native
+ * fingerprint, so an update only reaches builds with the same native code. The phone-only variant keeps updates off. */
+const withUpdates = config => {
+  const projectId = config.extra?.eas?.projectId ?? base.extra?.eas?.projectId;
+  if (!projectId) return config;
+  return { ...config, runtimeVersion: { policy: 'fingerprint' },
+    updates: { ...config.updates, url: `https://u.expo.dev/${projectId}`, enabled: true, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0 } };
+};
 function build({ config }) {
-  if (process.env.APP_VARIANT !== 'freeiphone') return config;
+  if (process.env.APP_VARIANT !== 'freeiphone') return withUpdates(config);
   // Rebuild from a known schema, rather than copying future capabilities or backend extras.
   return {
     name: 'Insight Wellness (Phone)', slug: base.slug, version: base.version,
@@ -34,7 +43,7 @@ function build({ config }) {
       .map(plugin => base.plugins.find(p => (Array.isArray(p) ? p[0] : p) === (Array.isArray(plugin) ? plugin[0] : plugin)))
       .map(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-dev-client'
         ? ['expo-dev-client', { launchMode: 'most-recent', embeddedBundle: true }] : (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-sharing' ? ['expo-sharing', { ios: { enabled: false }, android: { enabled: true, singleShareMimeTypes: ['application/json', 'text/json', 'text/plain'] } }] : plugin),
-      './plugins/withPhoneOnlyBundle'],
+      './plugins/withPhoneOnlyBundle', './plugins/withNoPushEntitlement'],
     extra: { appVariant: 'freeiphone', phoneOnly: true, capabilities: { health: false, widgets: false, push: false } },
     updates: { enabled: false },
   };

@@ -1,9 +1,12 @@
 import { exerciseFor, exerciseLibrary } from '@/core/workout/library';
-import { displayWeight, plates, validateSet, type Unit } from '@/core/workout/rules';
+import { displayWeight, fromKg, plates, toKg, validateSet, type Unit } from '@/core/workout/rules';
 import type { Row } from '@/data/rows';
+import { WorkoutOptions } from '@/data/workout/options';
 import type { Draft, WorkoutStore } from '@/data/workout/store';
+import { loadSettingsPrefs } from '@/features/settings/prefs-model';
 import { clock, epley, muscleGroup } from '../training-data';
 import { tr, trCount } from '../tr';
+import { warmRamp } from '../warmups';
 
 /** The effort scale the logger offers, as on the mockup. */
 export const RPE = [6, 7, 8, 9, 10] as const;
@@ -24,6 +27,15 @@ export function exMuscles(name: string) {
   const groups = [...new Set([ex.main, ...ex.helpers].map(m => muscleGroup(m)).filter((g): g is NonNullable<typeof g> => !!g))].slice(0, 2);
   return groups.map((g, i) => i ? g.toLowerCase() : g).join(', ');
 }
+/** The bar chosen in Settings › Workout › Plates for this unit, used when the exercise has no bar of its own. */
+export function settingsBar(repo: Parameters<typeof loadSettingsPrefs>[0], unit: Unit): number | undefined {
+  const w = loadSettingsPrefs(repo).work, v = Number(unit === 'kg' ? w.barKg : w.bar);
+  return Number.isFinite(v) && v > 0 ? v : undefined;
+}
+/** The bar for an exercise: its own bar from its machine setup, or the one chosen in Settings. */
+export function barFor(store: Pick<WorkoutStore, 'preferences' | 'repo'>, name: string, unit: Unit): number | undefined {
+  return store.preferences().machine(name).bar_weight ?? settingsBar(store.repo, unit);
+}
 /** "45 + 10 each side, 45 lb bar" for the weight on a barbell. */
 export function plateText(weight: number, unit: Unit, bar?: number, available?: number[]) {
   const result = plates(weight, unit, bar, available);
@@ -40,6 +52,9 @@ export function plateText(weight: number, unit: Unit, bar?: number, available?: 
   return `${groups.join(' + ')} ${tr('trainingEachSide')}, ${barText}`;
 }
 
+/** The fields of a set the logger edits: weight and reps, and for a one-side-at-a-time exercise the right side's too. */
+export type SetField = 'weight' | 'reps' | 'rightWeight' | 'rightReps';
+export const SET_FIELDS: readonly SetField[] = ['weight', 'reps', 'rightWeight', 'rightReps'];
 export interface SetView {
   index: number; draft: Draft; done: boolean; warm: boolean; failure: boolean;
   /** The working set's number (1, 2, 3); warm-ups have none. */ num: number;
@@ -47,9 +62,11 @@ export interface SetView {
 }
 export interface ExerciseView {
   entry: Row; name: string; label: string; unit: Unit; sets: SetView[];
+  /** Logged one side at a time: each set has its own right-side weight and reps. */ unilateral: boolean;
   /** Working sets, and how many of them are checked off. */ total: number; done: number;
   all: boolean; best: { w: number; r: number; rpe: number | null } | null; prev: { w: number; r: number } | null;
   rest: number; note: string | null; barbell: boolean;
+  /** The other exercises in its superset, by label; empty when it is in none. */ superset: string[];
 }
 export interface LoggerView {
   exercises: ExerciseView[]; current: { entryId: string; index: number } | null;
@@ -58,14 +75,15 @@ export interface LoggerView {
 
 const warmOf = (d: Draft) => d.tag === 'warmup' || !!d.warmup;
 
-/** The best estimated one rep max for this exercise before this session, in the display unit. */
+/** The best estimated one rep max of this exercise's working sets before this session, in the display unit. */
 function priorBest(store: WorkoutStore, name: string, session: Row, unit: Unit) {
   const started = Number(session.data.started_at);
   let best = 0;
   for (const s of store.history()) {
     if (s.id === session.id || Number(s.data.started_at) >= started) continue;
-    for (const e of store.entries(s.id)) if (e.data.exercise === name) for (const set of store.sets(e.id)) {
-      best = Math.max(best, epley(displayWeight(Number(set.data.weight_kg), unit), Number(set.data.reps)));
+    // Warm-ups never set the bar, as the finished summary's comparison leaves them out too.
+    for (const e of store.entries(s.id)) if (e.data.exercise === name) for (const set of store.working(e)) {
+      if (!set.warmup) best = Math.max(best, epley(displayWeight(set.weight, unit), set.reps));
     }
   }
   return best;
@@ -76,14 +94,20 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
   const entries = store.entries(session.id).filter(e => !store.skipped(e.id));
   const next = store.pastMode(session.id) ? null : store.nextSet(session.id) ?? null;
   let done = 0, total = 0, volume = 0;
+  const totalUnit = store.unit();
   const exercises = entries.map((entry): ExerciseView => {
     const name = String(entry.data.exercise), unit = store.unit(entry.id), drafts = store.drafts(entry.id);
     const previous = store.previous(entry), suggestion = store.suggestion(entry), range = store.repRange(entry);
-    const prevAt = (i: number) => previous.find(s => Number(s.data.position) === i);
+    // Last time's sets line up kind by kind, warm-up with warm-up and working set with working set, so warm-ups added
+    // in front this time never shift every working set's hint along by one.
+    const prevWarm = (r: Row) => store.setTag(String(r.data.entry_id), r) === 'warmup';
+    const prevKinds = { warm: previous.filter(prevWarm), work: previous.filter(r => !prevWarm(r)) };
+    const ordinal = drafts.map((d, i) => drafts.slice(0, i).filter(x => warmOf(x) === warmOf(d)).length);
+    const prevAt = (i: number) => (warmOf(drafts[i]) ? prevKinds.warm : prevKinds.work)[ordinal[i]];
     let n = 0;
     const sets = drafts.map((draft, index): SetView => {
       const warm = warmOf(draft), p = prevAt(index);
-      const preceding = drafts.slice(0, index).reverse().find(d => d.weight !== '');
+      const preceding = drafts.slice(0, index).reverse().find(d => d.weight !== '' && warmOf(d) === warm);
       const weightHint = suggestion.jump && suggestion.weight !== null ? String(suggestion.weight)
         : p ? String(displayWeight(Number(p.data.weight_kg), unit))
           : preceding?.weight ?? (suggestion.weight === null ? '' : String(suggestion.weight));
@@ -93,26 +117,45 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
       return { index, draft, done: !!draft.setId, warm, failure: draft.tag === 'failure', num: warm ? 0 : ++n,
         weightHint, repsHint, rpe: store.repo.localGet<number>(rpeKey(entry.id, index)) ?? null, lastRpe, pr: false };
     });
-    const work = sets.filter(s => !s.warm), checked = work.filter(s => s.done);
+    // Warm-ups ramp toward the first working set's weight (Settings › Workout › Warm-up sets), as on the mockup.
+    const warmSets = sets.filter(s => s.warm), top = Number(sets.find(s => !s.warm)?.weightHint);
+    if (warmSets.length && top > 0) {
+      const ramp = warmRamp(warmSets.length, top, unit, store.preferences().exercise(name).equipment === 'barbell' ? barFor(store, name, unit) : undefined);
+      warmSets.forEach((s, i) => { const r = ramp[Math.min(i, ramp.length - 1)]; s.weightHint = String(r.weight); s.repsHint = String(r.reps); });
+    }
+    const work = sets.filter(s => !s.warm), checked = work.filter(s => s.done), one = store.isUnilateral(entry.id);
+    // A one-side set is judged by its weaker side, as it is saved and as earlier sessions' records were, so an unchanged set is never a record.
+    const result = (s: SetView) => {
+      const l = { w: +s.draft.weight, r: +s.draft.reps };
+      if (!one) return l;
+      const rt = { w: +(s.draft.rightWeight || s.draft.weight), r: +(s.draft.rightReps || s.draft.reps) };
+      return epley(rt.w, rt.r) < epley(l.w, l.r) ? rt : l;
+    };
     let best: SetView | null = null;
-    for (const s of checked) if (!best || epley(+s.draft.weight, +s.draft.reps) > epley(+best.draft.weight, +best.draft.reps)) best = s;
+    for (const s of checked) if (!best || epley(result(s).w, result(s).r) > epley(result(best).w, result(best).r)) best = s;
     const before = checked.length ? priorBest(store, name, session, unit) : 0;
-    if (best && before > 0 && epley(+best.draft.weight, +best.draft.reps) > before + 0.5) best.pr = true;
+    if (best && before > 0 && epley(result(best).w, result(best).r) > before + 0.5) best.pr = true;
     let prev: ExerciseView['prev'] = null;
     for (const p of previous) {
       const w = displayWeight(Number(p.data.weight_kg), unit), r = Number(p.data.reps);
       if (!prev || epley(w, r) > epley(prev.w, prev.r)) prev = { w, r };
     }
     done += checked.length; total += work.length;
-    volume += checked.reduce((v, s) => v + (+s.draft.weight || 0) * (+s.draft.reps || 0), 0);
+    // Drafts are in this exercise's unit; the total is in the workout's, so convert before adding.
+    const toTotal = (w: number) => unit === totalUnit ? w : fromKg(toKg(w, unit), totalUnit);
+    // A one-side set counts both sides, as Progress and the workout summary do.
+    volume += checked.reduce((v, s) => v + toTotal(+s.draft.weight || 0) * (+s.draft.reps || 0)
+      + (one ? toTotal(+(s.draft.rightWeight || s.draft.weight) || 0) * (+(s.draft.rightReps || s.draft.reps) || 0) : 0), 0);
     const opened = store.repo.localGet<boolean>(noteOpenKey(entry.id)) === true;
-    return { entry, name, label: exLabel(name), unit, sets, total: work.length, done: checked.length,
+    return { entry, name, label: exLabel(name), unit, sets, unilateral: one, total: work.length, done: checked.length,
       all: sets.length > 0 && sets.every(s => s.done),
-      best: best ? { w: +best.draft.weight, r: +best.draft.reps, rpe: best.rpe } : null, prev,
+      best: best ? { ...result(best), rpe: best.rpe } : null, prev,
       rest: store.rest(name).seconds, note: entry.data.notes != null ? String(entry.data.notes) : opened ? '' : null,
-      barbell: store.preferences().exercise(name).equipment === 'barbell' };
+      barbell: store.preferences().exercise(name).equipment === 'barbell', superset: [] };
   });
-  return { exercises, current: next ? { entryId: next.entryId, index: next.index } : null, done, total, volume, unit: store.unit() };
+  const groups = exercises.map(x => store.supersetGroup(x.entry));
+  exercises.forEach((x, i) => { if (groups[i]) x.superset = exercises.filter((y, j) => j !== i && groups[j] === groups[i]).map(y => y.label); });
+  return { exercises, current: next ? { entryId: next.entryId, index: next.index } : null, done, total, volume, unit: totalUnit };
 }
 
 /** The exercise's quiet line when closed ("Best 245 lb × 5 · RPE 8") and when open ("Quads, glutes · rest 1:30"). */
@@ -121,7 +164,9 @@ export function exerciseLines(e: ExerciseView) {
   const s1 = e.best ? (e.best.rpe != null ? tr('trainingBestRpe', { set: set(e.best.w, e.best.r), rpe: e.best.rpe }) : tr('trainingBest', { set: set(e.best.w, e.best.r) }))
     : e.prev ? tr('trainingLastTime', { set: set(e.prev.w, e.prev.r) }) : trCount('trainingSetCount', e.total);
   const muscles = exMuscles(e.name), rest = tr('trainingRestShort', { time: clock(e.rest * 1000) });
-  return { s1, s2: muscles ? `${muscles} · ${rest}` : rest.replace(/^./, c => c.toUpperCase()) };
+  // In a superset the open line names its partners in place of the muscles.
+  const lead = e.superset.length ? tr('trainingSupersetNames', { names: e.superset.join(` ${tr('trainingAnd')} `) }) : muscles;
+  return { s1, s2: lead ? `${lead} · ${rest}` : rest.replace(/^./, c => c.toUpperCase()) };
 }
 
 export type CheckResult = 'done' | 'undone' | 'invalid';
@@ -160,11 +205,16 @@ export function removeExercise(store: WorkoutStore, entryId: string) {
   const repo = store.repo, entry = repo.get('entries', entryId);
   if (!entry) return () => {};
   const rows = store.sets(entryId).map(r => ({ id: r.id, data: { ...r.data } })), drafts = store.drafts(entryId);
+  // A superset of two comes apart when one of them goes, so Undo puts the whole group back as it was.
+  const group = store.supersetGroup(entry);
+  const members = group ? store.entries(String(entry.data.session_id)).filter(e => store.supersetGroup(e) === group).map(e => e.id) : [];
   store.removeExercise(entryId);
   return () => repo.atomic(() => {
     repo.save('entries', { ...entry.data }, entry.id);
     for (const r of rows) repo.save('sets', r.data, r.id);
     repo.localSave(`draft:${entryId}`, drafts);
+    const options = new WorkoutOptions(repo);
+    for (const id of members) { const row = repo.get('entries', id); if (row && row.deleted_at === null) options.write(row, { superset_group: group }); }
     store.recompute();
   });
 }

@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Button, KitText, useKit, useSelectionHaptic } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
+import { isHealthSource } from '@/data/health-store';
 import type { Repository } from '@/data/repository';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
@@ -21,7 +22,7 @@ import {
   type FlowDraft, type Plan, type Step,
 } from './model';
 import { Frame } from './parts';
-import { addSuggestedRoutines, readSkipped, saveOnboarding, saveResumed, underThirteen } from './save';
+import { addSuggestedRoutines, isSetUp, readSkipped, saveOnboarding, saveResumed, underThirteen } from './save';
 import { BodyStep, ConnectStep, FinaleStep, GoalsStep, HabitQuiz, NameStep, RoutineStep, TargetsStep, TimeQuiz, type Link } from './steps';
 
 /** Where the flow stands. Kept above the route, so it survives the screen being drawn again. */
@@ -54,7 +55,8 @@ export function Flow({ state, setState, resume, onBlocked, onDone }: {
   const clock24 = prefs.units.clock === '24';
   const { step, d } = state;
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
-  const ready = !!repo && (!auth.session || !!auth.initialPullComplete);
+  // An account set up on this phone can finish skipped sections even with sync turned off (no pull ever completes).
+  const ready = !!repo && (!auth.session || !!auth.initialPullComplete || isSetUp(repo));
 
   const set = (patch: Partial<FlowDraft>) => setState(s => ({ ...s, d: { ...s.d, ...patch } }));
   // Choosing among tiles ticks, as the app's segments do.
@@ -92,16 +94,16 @@ export function Flow({ state, setState, resume, onBlocked, onDone }: {
     router.replace(resume ? '/' : '/auth');
   };
 
-  // Fill from Apple Health: connecting reads body weight into the app; the newest reading fills the field.
+  // Fill from Apple Health: connecting reads body weight into the Health store; the newest Health reading fills the field.
   const fill = useRef<'idle' | 'asked' | 'busy'>('idle');
   useEffect(() => {
     if (fill.current === 'asked' && apple.busy) fill.current = 'busy';
     else if (fill.current === 'busy' && !apple.busy) {
       fill.current = 'idle';
       if (apple.access !== 'asked' || !repo) return;
-      const kg = lastWeight(repo.list('weigh_ins'));
+      const kg = lastWeight(repo.list('weigh_ins').filter(r => isHealthSource(r.data.source)));
       if (!kg) { setState(s => ({ ...s, noFill: true })); return; }
-      setState(s => ({ ...s, d: { ...s.d, filled: true, t: null, weight: (s.d.unit === 'kg' ? kg : kg * KG).toFixed(1) } }));
+      setState(s => ({ ...s, d: { ...s.d, filled: true, healthKg: kg, t: null, weight: (s.d.unit === 'kg' ? kg : kg * KG).toFixed(1) } }));
     }
   }, [apple.busy, apple.access, repo, setState]);
 

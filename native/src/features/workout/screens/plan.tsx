@@ -17,6 +17,7 @@ import { alpha, font, mix, tabular, useKit } from '@/components/kit-style';
 import type { TemplateExercise, WorkoutStore } from '@/data/workout/store';
 import { showToast } from '@/features/shell/toast';
 import type { Plan } from '@/features/plans/schedule';
+import { SplitStore } from '@/features/splits/store';
 import { exLabel } from '../logger/model';
 import { trainingNav } from '../nav';
 import { startTraining } from '../start-workout';
@@ -40,6 +41,11 @@ export function writeDay(store: WorkoutStore, routineId: string, rows: TemplateE
   const clean = rows.map(r => r.superset_group && (count.get(r.superset_group) ?? 0) < 2 ? { ...r, superset_group: undefined } : r);
   store.saveTemplate(String(store.repo.get('routines', routineId)?.data.name ?? ''), clean, routineId);
 }
+/** Undo of a removed exercise: the day as it was, with the same exercise rows, so their settings (one side at a time,
+ * superset) and links from earlier workouts stay with them. */
+export function undoDay(store: WorkoutStore, routineId: string, before: TemplateExercise[]) {
+  try { writeDay(store, routineId, before); } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); }
+}
 /** Give every day without a weekday the next free one, for Fixed weekdays. Null when there are more days than weekdays. */
 export function fillWeekdays(days: string[], weekdays: Record<string, number[]>): Record<string, number[]> | null {
   if (days.length > 7) return null;
@@ -57,8 +63,13 @@ export function PlanBuilder() {
   if (!data) return <Page nav={<NavBar back={tr('trainingTitle')} title={tr('trainingPlanTitle')} />}><View /></Page>;
   const store = data.workout, saved = data.plans.read();
   const live = data.repo.list('routines').filter(r => r.deleted_at === null).map(r => r.id);
-  const base = draft ?? { mode: saved.mode, perWeek: saved.daysPerWeek, days: saved.days.length ? saved.days.map(d => d.routineId) : store.templates().map(r => r.id),
-    weekdays: Object.fromEntries(saved.days.map(d => [d.routineId, d.weekdays])) };
+  // A chosen split holds every one of its days, a day with no weekday yet included, so the builder starts from it.
+  const split = new SplitStore(data.repo).def();
+  const base = draft ?? (split
+    ? { mode: split.mode === 'weekdays' ? 'fixed' as const : 'rotation' as const, perWeek: saved.daysPerWeek, days: split.days.map(d => d.routineId),
+      weekdays: Object.fromEntries(split.days.map((d, i) => [d.routineId, split.week.map((w, wd) => w === i ? wd : -1).filter(wd => wd >= 0)])) }
+    : { mode: saved.mode, perWeek: saved.daysPerWeek, days: saved.days.length ? saved.days.map(d => d.routineId) : store.templates().map(r => r.id),
+      weekdays: Object.fromEntries(saved.days.map(d => [d.routineId, d.weekdays])) });
   const plan = { ...base, days: base.days.filter(id => live.includes(id)) };
   const set = (patch: Partial<typeof plan>) => setDraft({ ...plan, ...patch });
   const setMode = (mode: Plan['mode']) => {
@@ -70,7 +81,9 @@ export function PlanBuilder() {
     try {
       const weekdays = plan.mode === 'fixed' ? fillWeekdays(plan.days, plan.weekdays) : plan.weekdays;
       if (!weekdays) { showToast(tr('trainingPlanTooMany'), { color: 'warning' }); return; }
-      data.plans.save({ mode: plan.mode, daysPerWeek: plan.perWeek, days: plan.days.map(id => ({ routineId: id, weekdays: plan.mode === 'fixed' ? weekdays[id] ?? [] : [] })) });
+      const next: Plan = { mode: plan.mode, daysPerWeek: plan.perWeek, days: plan.days.map(id => ({ routineId: id, weekdays: plan.mode === 'fixed' ? weekdays[id] ?? [] : [] })) };
+      // With a split chosen, its days change with the plan's, so the Split screen shows what was saved here.
+      if (!new SplitStore(data.repo).applyPlan(next)) data.plans.save(next);
       router.back();
       showToast(tr('trainingPlanSaved'), { color: 'training' });
     } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); }
@@ -133,7 +146,7 @@ function DayCard({ store, id, index, open, next, weekday, onToggle, onStart }: {
     const before = rows;
     try {
       writeDay(store, id, rows.filter((_, j) => j !== i));
-      showToast(tr('trainingRemoved', { name: exLabel(before[i].exercise) }), { action: { label: tr('trainingUndo'), onAction: () => writeDay(store, id, before.map(r => ({ ...r, id: undefined }))) } });
+      showToast(tr('trainingRemoved', { name: exLabel(before[i].exercise) }), { action: { label: tr('trainingUndo'), onAction: () => undoDay(store, id, before) } });
     } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); }
   };
   return <Card style={{ padding: 0, overflow: 'hidden' }}>
@@ -161,7 +174,7 @@ function DayCard({ store, id, index, open, next, weekday, onToggle, onStart }: {
   </Card>;
 }
 
-function ExerciseRow({ row, onChange, onRemove }: { row: TemplateExercise; onChange: (p: Partial<TemplateExercise>) => void; onRemove: () => void }) {
+export function ExerciseRow({ row, onChange, onRemove }: { row: TemplateExercise; onChange: (p: Partial<TemplateExercise>) => void; onRemove: () => void }) {
   const k = useKit(), label = exLabel(row.exercise);
   const lo = row.rep_min ?? row.target_reps, hi = row.rep_max ?? row.target_reps;
   const commit = (which: 'lo' | 'hi', text: string) => {

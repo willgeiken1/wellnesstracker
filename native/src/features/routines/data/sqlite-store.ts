@@ -297,6 +297,13 @@ export function commitRoutinesState(repo: Repository, next: RoutinesState, prev:
   });
 }
 
+/** The routines this account holds now, for code that only reads them (reminders, the export, the demo hand-over).
+ *  A document still under the old key counts first, as the store takes it into the tables on its next read. Writes nothing. */
+export function peekRoutinesState(repo: Repository, legacyKey: string): RoutinesState | null {
+  const raw = repo.localGet<unknown>(legacyKey);
+  return (raw === undefined || raw === null ? null : normalize(raw)) ?? readRoutinesState(repo);
+}
+
 /* ---------- the store over the tables ---------- */
 
 export interface TablesIoOptions {

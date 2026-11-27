@@ -8,6 +8,9 @@ import { memoryRepository } from "./workout-repository";
 import { legacyV1, legacyV2 } from "../fixtures/pwa-import";
 import { pickBackup } from "../src/features/importer/files";
 import { t } from "../src/i18n/en";
+import { WorkoutStore } from "../src/data/workout/store";
+import { createPhoneBackup } from "../src/phone-only/backup";
+import { rpeKey } from "../src/features/workout/logger/model";
 jest.mock("expo-router", () => ({
   Stack: { Screen: () => null },
   router: { push: jest.fn(), replace: jest.fn() },
@@ -216,5 +219,36 @@ test("a finished import shows a result summary from the confirmed preview", asyn
     expect(repo.list("sessions").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("import-step-review")).toBeNull();
     expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();
+  } finally { alert.mockRestore(); }
+});
+test("a backup file this app saved restores its workouts and the phone-side details with them", async () => {
+  // Made-up workout on a guest's phone, saved with Save a backup file.
+  const from = memoryRepository();
+  Object.defineProperty(from, "owner", { value: "guest" });
+  // Ids as a real phone makes them, so the restore's row checks pass.
+  let n = 0;
+  const save = from.save.bind(from);
+  from.save = ((table: never, data: never, id?: string) => save(table, data, id ?? `30000000-0000-4000-8000-${String(++n).padStart(12, "0")}`)) as typeof from.save;
+  const w = new WorkoutStore(from), s = w.start(undefined, Date.now() - 86_400_000);
+  const entry = w.addExercise(s.id, "Squat", 3);
+  w.editDraft(entry.id, 0, { weight: "135", reps: "5" }); w.toggleDone(entry.id, 0);
+  w.editDraft(entry.id, 1, { weight: "145", reps: "" });
+  from.localSave(rpeKey(entry.id, 0), 8);
+  w.finish(s.id, { startedAt: Date.now() - 86_400_000, finishedAt: Date.now() - 86_400_000 + 3_600_000, notes: "" });
+  (pickBackup as jest.Mock).mockResolvedValue(JSON.parse(createPhoneBackup(from)));
+  const repo = await wrap();
+  Object.defineProperty(repo, "syncFlags", { value: { syncedV1Columns: false } });
+  const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  try {
+    await fireEvent.press(screen.getByRole("button", { name: t("importChoose") }));
+    expect(screen.getByText(t("importStepReview"))).toBeTruthy();
+    expect(repo.list("sessions")).toHaveLength(0);
+    await fireEvent.press(screen.getByRole("button", { name: t("importMerge") }));
+    await act(async () => { alert.mock.calls.at(-1)?.[2]?.[1].onPress?.(); });
+    expect(repo.list("sessions").map((r) => r.id)).toEqual([s.id]);
+    expect(repo.list("sets")).toHaveLength(1);
+    const restored = new WorkoutStore(repo);
+    expect(restored.drafts(entry.id)[1].weight).toBe("145");
+    expect(repo.localGet(rpeKey(entry.id, 0))).toBe(8);
   } finally { alert.mockRestore(); }
 });

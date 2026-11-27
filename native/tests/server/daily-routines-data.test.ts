@@ -6,6 +6,7 @@ import { SyncEngine, type Transport } from '../../src/data/sync/engine';
 import { SupabaseTransport } from '../../src/data/sync/supabase';
 import { createAccountBackup, createPhoneBackup } from '../../src/phone-only/backup';
 import { promoteDemo } from '../../src/features/onboarding/demo-transfer';
+import { createLocalRoutinesStore } from '../../src/features/routines/store';
 import { DEVICE_A, OWNER_A, OWNER_B } from '../../fixtures/sync';
 import { FIXTURE_IDS, ROUTINE_SENTINELS, routineFixtureRows } from '../../fixtures/routines';
 
@@ -224,21 +225,36 @@ test('the phone-only and account backup files hold the routine rows of that owne
   } finally { local.sqlite.close(); }
 });
 
-test('routines kept while looking around stay behind when an account is made, and the demo copy is erased', async () => {
-  // The demo's routines start from the sample state, so none of them is carried into the new account.
+test('routines made while looking around move to the new account on the phone only, and the demo copy is erased', async () => {
   const local = await localDatabase();
   try {
     const demo = repoFor(local.db, 'demo'), account = repoFor(local.db, OWNER_A);
     demo.localSave('demoSamples', []);
     seed(demo);
     promoteDemo(demo, account);
+    for (const table of routineTables) expect([table, demo.list(table, true)]).toEqual([table, []]);
+    // The person's own routines arrive in the account's tables, and none of them is queued for the server.
+    expect(account.list('daily_blocks').length).toBeGreaterThan(0);
+    expect(account.list('daily_items').length).toBeGreaterThan(0);
+    expect(account.unsyncedCount()).toBe(0);
+    expect(account.pending().filter(item => item.row.table.startsWith('daily_'))).toEqual([]);
+  } finally { local.sqlite.close(); }
+});
+
+test('the sample routines of looking around stay behind when an account is made', async () => {
+  const local = await localDatabase();
+  try {
+    const demo = repoFor(local.db, 'demo'), account = repoFor(local.db, OWNER_A);
+    demo.localSave('demoSamples', []);
+    // Opening the tab writes the sample state; nothing of the person's own is added.
+    createLocalRoutinesStore(demo).read();
+    expect(demo.list('daily_items').length).toBeGreaterThan(0);
+    promoteDemo(demo, account);
     for (const table of routineTables) {
       expect([table, demo.list(table, true)]).toEqual([table, []]);
       expect([table, account.list(table, true)]).toEqual([table, []]);
     }
-    expect(account.unsyncedCount()).toBe(0);
     expect(account.phoneOnlyRoutineCount()).toBe(0);
-    expect(account.pending().filter(item => item.row.table.startsWith('daily_'))).toEqual([]);
   } finally { local.sqlite.close(); }
 });
 

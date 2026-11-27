@@ -8,6 +8,7 @@ import { ShellChrome } from '../src/features/shell/shell';
 import { TabBarSheet } from '../src/features/shell/tab-bar-sheet';
 import { ProfileButton } from '../src/features/shell/profile-button';
 import { SHELL_PREFS_KEY, resetMemoryPrefs } from '../src/features/shell/prefs';
+import { resetToast } from '../src/features/shell/toast';
 import { setQuickActions, useQuickActions, useShellEditMode } from '../src/features/shell/registry';
 import { PAGES, type PageKey } from '../src/features/shell/pages';
 import Routines from '../src/app/(tabs)/routines';
@@ -43,6 +44,9 @@ const tab = (name: string) => screen.getByRole('tab', { name });
 beforeEach(() => {
   mockRepo = memoryRepository();
   resetMemoryPrefs();
+  // A toast left from the last test would let a "not here yet" check pass before this test's own toast shows, and that
+  // late toast could then cover the next test's.
+  resetToast();
   (router.push as jest.Mock).mockClear();
   (impactAsync as jest.Mock).mockClear();
   for (const page of PAGES) setQuickActions(page.key, null);

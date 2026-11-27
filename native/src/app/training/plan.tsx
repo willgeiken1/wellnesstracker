@@ -1,1 +1,1 @@
-export { PlanBuilder as default } from '@/features/workout/screens/plan';
+export { SplitScreen as default } from '@/features/splits/screen';

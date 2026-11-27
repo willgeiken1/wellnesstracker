@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Chip, Chips, Eyebrow, List, ListRow, SectionHeader, SegmentedControl, useKit, type IconName } from '@/components/kit';
 import { t } from '@/i18n/en';
-import { METRICS, TREND_KEYS, avg, finite, lastIndex, series, shown, type MetricKey, type ProgressData, type Range } from '../model';
+import { METRICS, TREND_KEYS, TREND_OPEN, avg, finite, lastIndex, series, shown, type MetricKey, type ProgressData, type Range } from '../model';
 import { fill, fmt, signed } from '../format';
 import { metricView, rangeLong, vText } from '../metric';
 import { useProgress } from '../use-progress';
@@ -27,9 +27,9 @@ function HeroValue({ d, mkey: key, v }: { d: ProgressData; mkey: MetricKey; v: n
 
 export function TrendScreen({ metric, range: start }: { metric?: string; range?: string }) {
   const d = useProgress();
-  const key: MetricKey = (TREND_KEYS as readonly string[]).includes(metric ?? '') ? metric as MetricKey : 'weight';
+  const key: MetricKey = (TREND_OPEN as readonly string[]).includes(metric ?? '') ? metric as MetricKey : 'weight';
   const [range, setRange] = useState<Range>(start === 'week' || start === 'month' || start === 'year' ? start : key === 'weight' ? 'month' : 'week');
-  const m = METRICS[key], mv = metricView(d, key), se = series(d, key, range), v = se.v, nn = v.filter(finite), a = avg(v);
+  const m = METRICS[key], mv = metricView(d, key, range), se = series(d, key, range), v = se.v, nn = v.filter(finite), a = avg(v);
   const best = nn.length ? (m.best === 'min' ? Math.min : Math.max)(...nn) : null, bi = best == null ? -1 : v.indexOf(best);
   const fi = v.findIndex(finite), li = lastIndex(v);
   const [sel, setSel] = useState<number | null>(null), at = sel ?? li;

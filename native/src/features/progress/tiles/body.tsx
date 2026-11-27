@@ -27,9 +27,10 @@ export function weightNow(d: ProgressData) {
 function WeightTile({ size, options, body }: TileRenderProps) {
   const d = useProgressData(), r = rangeOf(options, usePageRange()), se = series(d, 'weight', r), { w, u, done, total, frac, toGo, eta } = weightNow(d);
   if (w.kg == null) return <Empty size={size} text={t('progressWeightEmpty')} />;
-  const li = lastIndex(se.v), first = se.v.find(finite), ch = finite(se.v[li]) && finite(first) ? r1((se.v[li] as number) - first) : 0;
+  // A change needs two weigh-ins in the range; with fewer there is nothing to compare, not a change of zero.
+  const li = lastIndex(se.v), got = se.v.filter(finite), ch = got.length >= 2 && finite(se.v[li]) ? r1((se.v[li] as number) - got[0]) : null;
   const gV = w.goalKg != null ? wtV(w.goalKg, u) : null, pace = options.show !== 'change' && gV != null;
-  const chText = `${signed(ch, 1)} ${u} ${rangeWords(r)}`;
+  const chText = ch == null ? fill(t('progressNoChangeIn'), { range: rangeWords(r) }) : `${signed(ch, 1)} ${u} ${rangeWords(r)}`;
   const aria = fill(t('progressWeightAria'), { w: wtS(w.kg, u), ch: chText }) + (w.goalKg != null ? ' ' + fill(t('progressWeightAriaGoal'), { goal: wtS(w.goalKg, u), toGo: `${toGo}` }) : '') + (eta ? ' ' + fill(t('progressWeightAriaEta'), { when: dShort(eta) }) : '');
   const chart = (W: number, H: number, tk: boolean) => <Chart values={se.v} kind="line" color="recovery" mini W={W} H={H} goal={pace ? null : gV}
     project={pace && eta && gV != null ? { to: gV, label: `${wGoal(w.goalKg!, u)} ${u}`, tick: dShort(eta) } : null} ticks={tk ? shortTicks(se, r, true) : null} />;
@@ -38,7 +39,7 @@ function WeightTile({ size, options, body }: TileRenderProps) {
     <Sub style={{ marginTop: 4 }}>{pace ? goalTxt : chText}</Sub>
     <View style={{ marginTop: 'auto' }}><Chart values={se.v} kind="line" color="recovery" mini W={body.w} H={54} goal={gV} /></View></View>;
   if (size === 'M') return <View style={{ flex: 1, flexDirection: 'row', gap: 14 }} accessible accessibilityRole="image" accessibilityLabel={aria}>
-    <View style={{ width: 100 }}><Num v={wtN(w.kg, u)} unit={u} fs={28} /><Sub style={{ marginTop: 4 }}>{signed(ch, 1)} {u}</Sub>
+    <View style={{ width: 100 }}><Num v={wtN(w.kg, u)} unit={u} fs={28} /><Sub style={{ marginTop: 4 }}>{ch == null ? '–' : `${signed(ch, 1)} ${u}`}</Sub>
       {w.goalKg != null ? <><Sub style={{ marginTop: 'auto' }}>{t('progressGoal')} <B>{wGoal(w.goalKg, u)} {u}</B></Sub><Sub>{pace && eta ? fill(t('progressAround'), { when: dShort(eta) }) : `${toGo} ${u} ${t('progressToGo')}`}</Sub></>
         : <Sub wrap style={{ marginTop: 'auto' }}>{t('progressNoGoal')}</Sub>}</View>
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>{chart(body.w - 114, 112, true)}</View>
@@ -59,9 +60,9 @@ function WeightTile({ size, options, body }: TileRenderProps) {
 function BodyFatTile({ size, options, body }: TileRenderProps) {
   const d = useProgressData(), k = useKit(), log = d.bodyFat, u = d.unit, c = k.tok('recovery');
   if (!log.length) return <Empty size={size} text={t('progressFatEmpty')} />;
-  const bf = log[log.length - 1].pct, kg = d.weight.kg, fat = kg != null ? kg * bf / 100 : null, lean = kg != null && fat != null ? kg - fat : null, ch = r1(bf - log[0].pct);
+  const bf = log[log.length - 1].pct, kg = d.weight.kg, fat = kg != null ? kg * bf / 100 : null, lean = kg != null && fat != null ? kg - fat : null, ch = log.length >= 2 ? r1(bf - log[0].pct) : null;
   const since = dShort(log[0].day);
-  const aria = fill(t('progressFatAria'), { pct: fmt(bf, 1), ch: signed(ch, 1), since }) + (fat != null && lean != null ? ' ' + fill(t('progressFatAriaMass'), { fat: wtS(fat, u), lean: wtS(lean, u) }) : '');
+  const aria = (ch == null ? fill(t('progressFatAriaFirst'), { pct: fmt(bf, 1) }) : fill(t('progressFatAria'), { pct: fmt(bf, 1), ch: signed(ch, 1), since })) + (fat != null && lean != null ? ' ' + fill(t('progressFatAriaMass'), { fat: wtS(fat, u), lean: wtS(lean, u) }) : '');
   const dots = (W: number, H: number, lab: boolean) => {
     const v = log.map(x => x.pct), lo = Math.min(...v) - 0.3, hi = Math.max(...v) + 0.3, pb = lab ? 16 : 4, every = W / log.length < 46 ? 2 : 1;
     const X = (i: number) => v.length < 2 ? W / 2 : 6 + (W - 12) * i / (v.length - 1), Y = (x: number) => 6 + (H - 6 - pb) * (1 - (x - lo) / (hi - lo));
@@ -73,7 +74,7 @@ function BodyFatTile({ size, options, body }: TileRenderProps) {
   };
   const leanLead = options.show === 'lean' && lean != null;
   const lead = leanLead ? <Num v={wtN(lean!, u)} unit={u} fs={30} /> : <Num v={fmt(bf, 1)} unit="%" fs={30} />;
-  const leadS = leanLead ? (size === 'S' ? fill(t('progressLeanFat'), { pct: fmt(bf, 1) }) : t('progressLeanMass')) : `${signed(ch, 1)} ${t('progressSince')} ${since}`;
+  const leadS = leanLead ? (size === 'S' ? fill(t('progressLeanFat'), { pct: fmt(bf, 1) }) : t('progressLeanMass')) : ch == null ? t('progressFatOneReading') : `${signed(ch, 1)} ${t('progressSince')} ${since}`;
   if (size === 'S') return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>{lead}<Sub style={{ marginTop: 4 }}>{leadS}</Sub><View style={{ marginTop: 'auto' }}>{dots(body.w, 46, false)}</View></View>;
   const leanC = mix(c, k.c['surface-2'], 0.3);
   return <View style={{ flex: 1, flexDirection: 'row', gap: 16 }} accessible accessibilityRole="image" accessibilityLabel={aria}>
@@ -95,19 +96,20 @@ function MeasureTile({ size, options }: TileRenderProps) {
   if (!ms.length) return <Empty size={size} text={t('progressMeasureEmpty')} />;
   const latest = ms[ms.length - 1], at = options.cmp === 'prev' ? ms[Math.max(0, ms.length - 2)] : ms[0];
   const val = (key: MeasureKey) => { for (let i = ms.length - 1; i >= 0; i--) { const v = ms[i].cm[key]; if (finite(v)) return v; } return null; };
-  const rows = MEAS_ORDER.flatMap(key => { const v = val(key), a = at.cm[key]; return v == null ? [] : [{ key, name: measureName(key), v, dd: finite(a) ? r1(v - a) : 0 }]; });
-  const sl = (cm: number) => fmt(lenV(cm, u), 1), sd = (cm: number) => signed(lenV(cm, u), 1);
-  const aria = fill(t('progressMeasureAria'), { day: dShort(latest.day), since: dShort(at.day) }) + ' ' + rows.map(x => `${x.name} ${sl(x.v)} ${L}, ${sd(x.dd)}`).join(', ') + '.';
+  const rows = MEAS_ORDER.flatMap(key => { const v = val(key), a = at.cm[key]; return v == null ? [] : [{ key, name: measureName(key), v, dd: finite(a) ? r1(v - a) : null }]; });
+  // A measurement with no reading on the day compared against has no change to show, not a change of zero.
+  const sl = (cm: number) => fmt(lenV(cm, u), 1), sd = (cm: number | null) => cm == null ? '–' : signed(lenV(cm, u), 1);
+  const aria = fill(t('progressMeasureAria'), { day: dShort(latest.day), since: dShort(at.day) }) + ' ' + rows.map(x => `${x.name} ${sl(x.v)} ${L}, ${x.dd == null ? t('progressMeasNoThen') : sd(x.dd)}`).join(', ') + '.';
   if (size === 'S') {
     const top = rows[0];
     return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}><Num v={sl(top.v)} unit={L} fs={30} />
-      <Sub style={{ marginTop: 4 }}>{top.name}, {sd(top.dd)} {L}</Sub><Sub>{t('progressSince')} {dShort(at.day)}</Sub>
+      <Sub style={{ marginTop: 4 }}>{top.name}, {top.dd == null ? t('progressMeasNoThen') : `${sd(top.dd)} ${L}`}</Sub><Sub>{t('progressSince')} {dShort(at.day)}</Sub>
       <View style={{ marginTop: 'auto' }}>{rows.slice(1, 3).map((x, i) => <Row key={x.key} style={{ height: 22, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
         <Text style={[font(600, 12), { color: k.c.text, flex: 1 }]}>{x.name}</Text>
         <Text style={[font(700, 13, 1), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{sl(x.v)}<Text style={[font(600, 11), { color: k.c['text-muted'] }]}>{'\u200A'}{L}</Text></Text></Row>)}</View></View>;
   }
-  const max = Math.max(...rows.map(x => Math.abs(x.dd))) || 1;
-  const diverge = (dd: number) => <View style={{ height: 8, width: 96 }}>
+  const max = Math.max(...rows.map(x => Math.abs(x.dd ?? 0))) || 1;
+  const diverge = (dd: number | null) => dd == null ? <View style={{ height: 8, width: 96 }} /> : <View style={{ height: 8, width: 96 }}>
     <View style={{ position: 'absolute', left: '50%', top: -3, bottom: -3, width: 1, backgroundColor: k.c['hair-2'] }} />
     <View style={[{ position: 'absolute', top: 0, bottom: 0, borderRadius: 3, width: `${Math.max(dd ? 3 : 0, Math.abs(dd) / max * 50)}%`, backgroundColor: dd < 0 ? k.c.recovery : mix(k.c.recovery, k.c['surface-2'], 0.45) }, dd < 0 ? { right: '50%' } : { left: '50%' }]} />
   </View>;

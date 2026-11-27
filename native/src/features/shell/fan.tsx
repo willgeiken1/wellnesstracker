@@ -77,16 +77,24 @@ function Item({ action, index, count, open, x, y, from, width, color, first, onR
         <ActionIcon name={action.icon} color={ink} />
       </Reanimated.View>
     </Tappable>
+    {/* The label sits in a wide, empty box beside the button and keeps its own width inside it. Placed straight in the
+        52 pt item it was squeezed to the item's width less its offset, and every label read "Lo…" (`.lab` is nowrap). */}
+    <View testID={`fan-${action.id}-label`} pointerEvents="box-none" style={{ position: 'absolute', top: label ? 26 - label.h / 2 : 0, width: LABEL_ROOM,
+      left: place.side === 'l' && label ? place.left + label.w - LABEL_ROOM : place.left, alignItems: place.side === 'l' ? 'flex-end' : 'flex-start' }}>
     <Tappable dim="none" accessible={false} onPress={onRun} onLayout={measure} hitSlop={10}
-      style={({ pressed }) => ({ position: 'absolute', left: place.left, top: label ? 26 - label.h / 2 : 0, opacity: label ? 1 : 0,
+      style={({ pressed }) => ({ opacity: label ? 1 : 0,
         alignItems: place.side === 'l' ? 'flex-end' : 'flex-start', paddingTop: 6, paddingBottom: 7, paddingHorizontal: 12, borderRadius: 14,
         backgroundColor: colors.surface, boxShadow: `inset 0px 0px 0px ${pressed ? 1.5 : 1}px ${pressed ? colors.accent : colors.hair}, ${shell.lift}`,
         transform: [{ scale: pressed ? 1.03 : 1 }] })}>
       <ThemedText numberOfLines={1} style={{ fontFamily: tokens.font.bodyStrong, fontSize: 14, lineHeight: 16.1, color: colors.text, textAlign: place.side === 'l' ? 'right' : 'left' }}>{action.label}</ThemedText>
       <ThemedText numberOfLines={1} style={{ marginTop: 1, fontFamily: tokens.font.body, fontSize: tokens.type.caption, lineHeight: 16, color: colors['text-muted'], textAlign: place.side === 'l' ? 'right' : 'left' }}>{action.hint}</ThemedText>
     </Tappable>
+    </View>
   </Animated.View>;
 }
+
+/** Room for a label beside its button: wider than any label, so a label is never cut short. */
+export const LABEL_ROOM = 320;
 
 /** The + button's quick actions, swept up an arc from the button, with the page's name and Customize above them. */
 export function Fan({ open, width, height, plus, pageLabel, color, actions, onRun, onCustomize }: FanProps) {

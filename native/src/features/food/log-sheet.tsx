@@ -15,6 +15,8 @@ import { ActionTile, closeSheet, foodAmount, foodKcal, foodKey, FoodRow, FoodShe
 import { MealSeg, SectionLabel } from './ui';
 import { useFoodRevision } from './use-food-revision';
 import { useFoodWeightUnit } from './weight';
+import { enAmt, enLabel, enNum, useEnergyUnit } from './energy';
+const proteinNum = (g: number | null) => g == null ? '–' : num(g);
 
 type Tab = 'recent' | 'saved' | 'mine' | 'results';
 const savedKey = (c: Combo) => `meal:${c.name}`;
@@ -26,7 +28,7 @@ const lower = (s: string) => s.toLowerCase();
  */
 export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: string }) {
   useFoodRevision(repo);
-  const k = useKit(), unit = useFoodWeightUnit(repo);
+  const k = useKit(), unit = useFoodWeightUnit(repo), u = useEnergyUnit();
   const { day, today } = useFoodDay();
   const mealList = meals(repo);
   const [first] = useState(() => asked && mealList.some(m => m.id === asked) ? asked : nextMealId(dayView(repo, today, { today })));
@@ -44,7 +46,7 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
   const foodRow = (food: Food, i: number, mineFood = false) => {
     const name = String(food.name ?? ''), kcal = foodKcal(food), on = inCart(foodKey(food)), amount = foodAmount(food, unit);
     return <FoodRow key={`${foodKey(food)}-${i}`} first={i === 0} title={name} sub={foodSub(food, mineFood, unit)} kcal={kcal} on={on}
-      openLabel={`${name}${amount ? `, ${amount}` : ''}${kcal == null ? '' : `, ${num(kcal)} ${t('foodKcal')}`}. ${t('foodShowDetails')}`} onOpen={() => open(food, mineFood)} onAdd={() => toggle(food)} />;
+      openLabel={`${name}${amount ? `, ${amount}` : ''}${kcal == null ? '' : `, ${enAmt(kcal, u)}`}. ${t('foodShowDetails')}`} onOpen={() => open(food, mineFood)} onAdd={() => toggle(food)} />;
   };
 
   const tabs: [Tab, string][] = [['recent', t('foodTabRecent')], ['saved', t('foodTabSaved')], ['mine', t('foodTabMine')], ['results', t('foodTabResults')]];
@@ -57,8 +59,8 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
   else if (tab === 'saved') body = <><SectionLabel title={t('foodSavedMeals')} /><List>
     {saved.slice(0, 5).map((c, i) => {
       const kcal = comboKcal(c), on = inCart(savedKey(c)), foods = plural(c.foods.length, t('foodFood'), t('foodFoods'));
-      return <FoodRow key={c.name} first={i === 0} title={c.name} sub={`${foods} · ${num(comboProtein(c))} g ${t('foodProteinLower')}`} kcal={kcal} on={on}
-        openLabel={`${c.name}, ${foods}, ${num(kcal)} ${t('foodKcal')}`} onOpen={() => foodRoutes.saved(meal, c.name)} onAdd={() => toggleSaved(c)} />;
+      return <FoodRow key={c.name} first={i === 0} title={c.name} sub={`${foods} · ${proteinNum(comboProtein(c))} g ${t('foodProteinLower')}`} kcal={kcal} on={on}
+        openLabel={`${c.name}, ${foods}, ${enAmt(kcal, u)}`} onOpen={() => foodRoutes.saved(meal, c.name)} onAdd={() => toggleSaved(c)} />;
     })}
     <LinkRow first={!saved.length} icon="bookmark" title={fill(t('foodAllSaved'), { n: saved.length })} onPress={() => foodRoutes.saved(meal)} />
   </List></>;
@@ -77,15 +79,15 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
       accessibilityLabel={t('foodToLog')}>
       {items.map((it, i) => <View key={`${it.key}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 220, minHeight: 36, paddingLeft: 12, paddingRight: 2, borderRadius: 999, backgroundColor: k.tint(k.c.food, 0.14) }}>
         <KitText weight={600} size={13} numberOfLines={1} style={{ flexShrink: 1 }}>{it.name}</KitText>
-        <KitText weight={700} size={12.5} numeric color="text-muted">{it.kcal == null ? '–' : num(it.kcal)}</KitText>
+        <KitText weight={700} size={12.5} numeric color="text-muted">{it.kcal == null ? '–' : enNum(it.kcal, u)}</KitText>
         <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={`${t('foodRemoveWord')} ${it.name}`} onPress={() => removeCartAt(i)} hitSlop={6}
           style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={14} color={k.c['text-muted']} /></Tappable>
       </View>)}
     </ScrollView>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
       <View style={{ gap: 2, flexShrink: 1 }}>
-        <KitText weight={700} size={16} tracking={-0.01} numeric>{`${plural(items.length, t('foodFood'), t('foodFoods'))} · ${num(totals.kcal)} ${t('foodKcal')}`}</KitText>
-        <KitText weight={500} size={12.5} numeric color="text-muted">{`${num(totals.p)} g ${t('foodProteinLower')}`}</KitText>
+        <KitText weight={700} size={16} tracking={-0.01} numeric>{`${plural(items.length, t('foodFood'), t('foodFoods'))} · ${totals.kcal == null ? `– ${enLabel(u)}` : enAmt(totals.kcal, u)}`}</KitText>
+        <KitText weight={500} size={12.5} numeric color="text-muted">{`${totals.p == null ? '–' : num(totals.p)} g ${t('foodProteinLower')}`}</KitText>
       </View>
       <Button color="food" label={fill(t('foodLogInto'), { meal: lower(mealName(repo, meal)) })}
         accessibilityLabel={fill(t('foodLogNTo'), { n: plural(items.length, t('foodFood'), t('foodFoods')), meal: mealName(repo, meal) })}

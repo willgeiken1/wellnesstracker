@@ -201,7 +201,9 @@ export function hist(s: RoutinesState, i: Item, n: Now): DayState[] {
   }
   return out;
 }
-export interface Stats { pct: number; done: number; sched: number; streak: number; days: { s: number; d: number }[] }
+export interface Stats { pct: number; done: number; sched: number; streak: number; days: { s: number; d: number }[];
+  /** The first day of `days` any of the items existed on; days before it never count toward a streak or a run. */
+  from: number }
 /** Done share, counts and the streak of full days for a set of items over the last 30 days. */
 export function stats(s: RoutinesState, items: Item[], n: Now): Stats {
   let done = 0, sched = 0;
@@ -211,16 +213,19 @@ export function stats(s: RoutinesState, items: Item[], n: Now): Stats {
     days[d].s++; sched++;
     if (x === 'd') { days[d].d++; done++; }
   }));
+  // Days before the first item was added are not part of any streak: a new item starts from zero.
+  let from = HISTORY_DAYS;
+  for (const i of items) for (let k = 0; k < from; k++) if (addDays(n.day, k - (HISTORY_DAYS - 1)) >= i.created) { from = k; break; }
   let streak = 0;
-  for (let k = HISTORY_DAYS - 2; k >= 0; k--) { if (days[k].s && days[k].d < days[k].s) break; streak++; }
+  for (let k = HISTORY_DAYS - 2; k >= from; k--) { if (days[k].s && days[k].d < days[k].s) break; streak++; }
   const last = days[HISTORY_DAYS - 1];
   if (last.s && last.d === last.s) streak++;
-  return { pct: sched ? Math.round((done / sched) * 100) : 0, done, sched, streak, days };
+  return { pct: sched ? Math.round((done / sched) * 100) : 0, done, sched, streak, days, from };
 }
-/** The longest run of full days in the window. */
+/** The longest run of full days in the window, from the first day an item existed. */
 export function bestRun(st: Stats) {
   let best = 0, run = 0;
-  st.days.forEach(x => { if (!x.s || x.d >= x.s) { run++; best = Math.max(best, run); } else run = 0; });
+  st.days.forEach((x, k) => { if (k < (st.from ?? 0)) return; if (!x.s || x.d >= x.s) { run++; best = Math.max(best, run); } else run = 0; });
   return best;
 }
 
@@ -341,8 +346,9 @@ export const needsVitamin = (from: ConvertUnit, to: ConvertUnit) => (from === 'I
 
 /* ---------- the starting state and the demo ---------- */
 
+// Reminders start off, like every reminder in the app; "Remind me" turns them on per routine.
 const R = (id: string, name: string, from: number, to: number, color: RoutineColor): Routine =>
-  ({ id, name, from, to, color, days: [...ALL_DAYS], remind: true, pauses: [] });
+  ({ id, name, from, to, color, days: [...ALL_DAYS], remind: false, pauses: [] });
 /** A new person starts with three empty routines. */
 export function emptyState(): RoutinesState {
   return { v: 1, routines: [R('morning', 'Morning', 5, 11, 'warning'), R('midday', 'Midday', 12, 14, 'recovery'), R('night', 'Night', 21.5, 23, 'sleep')], hidden: [], items: [], log: {} };
@@ -351,9 +357,11 @@ export function emptyState(): RoutinesState {
 /** A sample set for Look around first: eleven items over three routines, a month of history, and today ticked up to now. */
 export function demoState(n: Now = nowOf()): RoutinesState {
   const s = emptyState(), since = addDays(n.day, -90);
+  // The sample shows reminders as someone who uses them would have them (the mockup's demo); a new person's start off.
+  s.routines = s.routines.map(r => ({ ...r, remind: true }));
   const it = (id: string, name: string, amt: number | null, unit: string, dose: string, type: ItemType, kind: ItemKind, rt: string, h: number, extra: Partial<Item> = {}): Item =>
     ({ id, name, amt, unit, dose, type, kind, routines: [rt], h, days: null, created: since, ...extra });
-  s.hidden = [{ ...R('stack', 'Supplement & enhancer stack', 15, 16, 'food'), sub: 'Its 3 items now live on their tabs' }];
+  s.hidden = [{ ...R('stack', 'Supplement & enhancer stack', 15, 16, 'food'), remind: true, sub: 'Its 3 items now live on their tabs' }];
   s.items = [
     it('vd3', 'Vitamin D3', 2000, 'IU', '2,000 IU', 'Supplement', 'dose', 'morning', 7 + 10 / 60, { left: 48, perDay: 1, sup: 'softgels' }),
     it('k2', 'Vitamin K2', 100, 'mcg', '100 mcg', 'Supplement', 'dose', 'morning', 7 + 10 / 60, { left: 52, perDay: 1, sup: 'capsules' }),

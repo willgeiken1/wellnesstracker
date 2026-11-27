@@ -17,6 +17,8 @@ export const LARGE_SHARE = 0.934;
 export const MEDIUM_SHARE = {
   'page-section': 0.252,
   'tile-edit': 0.252,
+  // The Split tile's customize sheet holds Your split and its two buttons under the sizes (v21 grid.js editExtra).
+  'split-tile-edit': 0.447,
   'home-tile-edit': 0.462,
   'rest-timer': 0.684,
   'quick-cal': 0.679,
@@ -32,13 +34,22 @@ export type MediumSheet = keyof typeof MEDIUM_SHARE;
 export const detentOf = (screenShare: number) => Math.round((screenShare / LARGE_SHARE) * 1000) / 1000;
 
 const sheet = { headerShown: false, presentation: 'formSheet', sheetGrabberVisible: true, sheetCornerRadius: SHEET_RADIUS } as const;
+/**
+ * A sheet that rests at a fixed height has its content pinned to the sheet's top and bottom. On iOS react-native-screens
+ * lays a form sheet's content out from the top with no bottom edge (so a sheet that is dragged between heights doesn't
+ * flicker), which leaves content that fills its screen with `flex: 1` (every Sheet here) with no height at all: the
+ * sheet showed its header over a blank body in release builds. A sheet with one fixed height never changes height, so
+ * pinning the bottom costs nothing. Not for `fitToContents`, which takes its height from its content.
+ */
+export const SHEET_CONTENT = { bottom: 0 } as const;
+const fixedSheet = { ...sheet, contentStyle: SHEET_CONTENT } as const;
 
 /** A large sheet: one detent at the top, the page behind becomes a card. */
-export const largeSheet: NativeStackNavigationOptions = { ...sheet, sheetAllowedDetents: [1] };
+export const largeSheet: NativeStackNavigationOptions = { ...fixedSheet, sheetAllowedDetents: [1] };
 
 /** A medium sheet at the design's height, as its only detent, so it cannot be dragged up to full height. */
 export function mediumSheet(id: MediumSheet): NativeStackNavigationOptions {
-  return { ...sheet, sheetAllowedDetents: [detentOf(MEDIUM_SHARE[id])], sheetExpandsWhenScrolledToEdge: false };
+  return { ...fixedSheet, sheetAllowedDetents: [detentOf(MEDIUM_SHARE[id])], sheetExpandsWhenScrolledToEdge: false };
 }
 
 /**
@@ -49,7 +60,7 @@ export function mediumSheet(id: MediumSheet): NativeStackNavigationOptions {
 export function copyDaySheet(meals?: unknown): NativeStackNavigationOptions {
   const n = Math.max(1, Math.round(Number(meals)) || 3);
   const pt = Math.min(0.72 * 852, MEDIUM_SHARE['copy-day'] * 852 + (n - 3) * 69);
-  return { ...sheet, sheetAllowedDetents: [detentOf(pt / 852)], sheetExpandsWhenScrolledToEdge: false };
+  return { ...fixedSheet, sheetAllowedDetents: [detentOf(pt / 852)], sheetExpandsWhenScrolledToEdge: false };
 }
 
 /** A medium sheet as tall as what it holds (the Tab bar sheet), which never needs to scroll. */
@@ -59,7 +70,8 @@ export const fittedSheet: NativeStackNavigationOptions = { ...sheet, sheetAllowe
 export const pushedScreen: NativeStackNavigationOptions = { headerShown: false };
 
 /** Customize a tile: Home's sheet is taller than the other pages' (it shows the tile's styles and sizes in a card). */
-export const tileEditSheet = (page?: unknown) => mediumSheet(page === 'home' ? 'home-tile-edit' : 'tile-edit');
+export const tileEditSheet = (page?: unknown, id?: unknown) =>
+  mediumSheet(page === 'home' ? 'home-tile-edit' : page === 'training' && id === 'split' ? 'split-tile-edit' : 'tile-edit');
 
 /**
  * The root stack's routes that open over the tabs, with the design screen each one is. Read by app/_layout.tsx, so a
@@ -68,7 +80,7 @@ export const tileEditSheet = (page?: unknown) => mediumSheet(page === 'home' ? '
 export const ROOT_ROUTES: Record<string, { mock: string; options: NativeStackNavigationOptions | ((params: Record<string, unknown> | undefined) => NativeStackNavigationOptions) }> = {
   // Home and the tile grid
   'tiles/tray': { mock: 'tile-tray', options: largeSheet },
-  'tiles/edit': { mock: 'tile-edit', options: params => tileEditSheet(params?.page) },
+  'tiles/edit': { mock: 'tile-edit', options: params => tileEditSheet(params?.page, params?.id) },
   'tiles/section': { mock: 'page-section', options: mediumSheet('page-section') },
   'tab-bar': { mock: 'tab-bar', options: fittedSheet },
   // Training
@@ -79,6 +91,9 @@ export const ROOT_ROUTES: Record<string, { mock: string; options: NativeStackNav
   'training/picker': { mock: 'exercise-picker', options: largeSheet },
   'training/rest': { mock: 'rest-timer', options: mediumSheet('rest-timer') },
   'training/cardio': { mock: 'cardio-log', options: largeSheet },
+  'training/split-library': { mock: 'split-library', options: largeSheet },
+  'training/split-setup': { mock: 'split-setup', options: largeSheet },
+  'training/split-new': { mock: 'split-new', options: largeSheet },
   // Food
   'food/meal': { mock: 'meal-detail', options: pushedScreen },
   'food/nutrition': { mock: 'nutrition', options: pushedScreen },

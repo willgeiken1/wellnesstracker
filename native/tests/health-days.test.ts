@@ -80,7 +80,7 @@ test('an earlier day that fails only loses its bar; today failing leaves the num
   const early = await readHealthDays(source('asked', {
     steps: async from => { if (from.getDate() === 11) throw new Error('made-up failure'); return 3000; },
   }), ['2026-11-11', '2026-11-12'], at(12, 15));
-  expect(early).toEqual({ steps: [null, 3000], sleepHours: [null, null], activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [null, null], bodyFat: [], bodyFatAt: null });
+  expect(early).toEqual({ steps: [null, 3000], sleepHours: [null, null], sleepFrom: [null, null], activeKcal: [0, 0], exerciseMinutes: [0, 0], waterMl: [0, 0], mindfulMinutes: [null, null], bodyFat: [], bodyFatAt: null });
   const today = await readHealthDays(source('asked', {
     steps: async from => { if (from.getDate() === 12) throw new Error('made-up failure'); return 3000; },
     sleep: async () => { throw new Error('made-up failure'); },

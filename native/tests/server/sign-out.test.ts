@@ -6,13 +6,14 @@ import { OWNER_A, OWNER_B, DEVICE_A, syntheticRow } from '../../fixtures/sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, type SignOutMarker, type SignOutStorage } from '../../src/auth/sign-out';
 
 // A small file system for the photo files kept outside the database: addresses of files that exist.
-const mockFiles=new Set<string>();
+// A file in mockStuck can't be deleted, nor can a folder holding one.
+const mockFiles=new Set<string>(),mockStuck=new Set<string>();
 jest.mock('expo-file-system',()=>{
- class Directory{uri:string;constructor(base:{uri:string},name:string){this.uri=`${base.uri}${name}/`;}get exists(){return [...mockFiles].some(f=>f.startsWith(this.uri));}delete(){for(const f of [...mockFiles])if(f.startsWith(this.uri))mockFiles.delete(f);}}
- class File{uri:string;constructor(a:string|Directory,b?:string){this.uri=typeof a==='string'?a:a.uri+b;}get exists(){return mockFiles.has(this.uri);}delete(){mockFiles.delete(this.uri);}}
+ class Directory{uri:string;constructor(base:{uri:string},name:string){this.uri=`${base.uri}${name}/`;}get exists(){return [...mockFiles].some(f=>f.startsWith(this.uri));}delete(){if([...mockStuck].some(f=>f.startsWith(this.uri)))throw new Error('synthetic delete failure');for(const f of [...mockFiles])if(f.startsWith(this.uri))mockFiles.delete(f);}}
+ class File{uri:string;constructor(a:string|Directory,b?:string){this.uri=typeof a==='string'?a:a.uri+b;}get exists(){return mockFiles.has(this.uri);}delete(){if(mockStuck.has(this.uri))throw new Error('synthetic delete failure');mockFiles.delete(this.uri);}}
  return {Directory,File,Paths:{document:{uri:'file:///docs/'}}};
 });
-beforeEach(()=>mockFiles.clear());
+beforeEach(()=>{mockFiles.clear();mockStuck.clear();});
 function journal() {
  let value:SignOutMarker|null=null;
  const storage:SignOutStorage={read:async()=>value,write:async marker=>{value={...marker};},remove:async()=>{value=null;}};
@@ -158,4 +159,35 @@ test.each([false,true])('escape removes every owner\'s photo folders only once t
  const wipeAll=()=>{if(fail)throw new Error('synthetic');};
  if(fail){await expect(escapeSignOut({wipeAll},storage,async()=>{})).rejects.toThrow();expect([...mockFiles].sort()).toEqual([...files,other].sort());}
  else {await escapeSignOut({wipeAll},storage,async()=>{});expect([...mockFiles]).toEqual([other]);}
+});
+test('a photo that cannot be deleted stops departure before the wipe, keeping every address and the marker, and a retry finishes it',async()=>{
+ const local=await localDatabase(),storage=journal();
+ const photos=['file:///docs/profile-photo/a-1.jpg','file:///docs/progress-photos/p-1.jpg','file:///docs/progress-photos/p-2.jpg'];
+ for(const f of photos)mockFiles.add(f);mockStuck.add(photos[1]);
+ local.repo.localSave('profilePhoto',photos[0]);
+ const progress=[{id:'p-1',day:'2026-11-01',kg:null,pose:'Front',uri:photos[1]},{id:'p-2',day:'2026-11-02',kg:null,pose:'Side',uri:photos[2]}];
+ local.repo.localSave('progressPhotos',progress);local.repo.putLocal(syntheticRow());
+ const wipe=jest.spyOn(local.repo,'wipe'),clear=jest.fn(async()=>{});
+ try {
+  await expect(completeSignOut(await beginSignOut(OWNER_A,storage,1234),local.repo,storage,clear)).rejects.toThrow();
+  expect(wipe).not.toHaveBeenCalled();expect(clear).not.toHaveBeenCalled();
+  expect(local.repo.localGet('progressPhotos')).toEqual(progress);expect(local.repo.unsyncedCount()).toBeGreaterThan(0);
+  expect(await storage.read()).toMatchObject({owner:OWNER_A,phase:'pending'});
+  // The other files went; the stuck one and its address stay for the retry.
+  expect([...mockFiles]).toEqual([photos[1]]);
+  mockStuck.clear();
+  expect(await recoverSignOut({forOwner:()=>local.repo},storage,clear)).toBe(OWNER_A);
+  expect(wipe).toHaveBeenCalledTimes(1);expect(clear).toHaveBeenCalledTimes(1);expect([...mockFiles]).toEqual([]);
+  expect(local.repo.localGet('progressPhotos')).toBeUndefined();expect(await storage.read()).toBeNull();
+ } finally {local.sqlite.close();}
+});
+test('a photo folder that cannot be deleted stops the escape before the session goes and keeps its marker, and a retry finishes it',async()=>{
+ const files=['file:///docs/profile-photo/a.jpg','file:///docs/progress-photos/b.jpg'];
+ for(const f of files)mockFiles.add(f);mockStuck.add(files[1]);
+ let marker=true;const storage={read:async()=>null,write:async()=>{},remove:async()=>{marker=false;}},clear=jest.fn(async()=>{});
+ await expect(escapeSignOut({wipeAll:()=>{}},storage,clear)).rejects.toThrow();
+ expect(marker).toBe(true);expect(clear).not.toHaveBeenCalled();expect(mockFiles.has(files[1])).toBe(true);
+ mockStuck.clear();
+ await escapeSignOut({wipeAll:()=>{}},storage,clear);
+ expect(marker).toBe(false);expect(clear).toHaveBeenCalledTimes(1);expect([...mockFiles]).toEqual([]);
 });

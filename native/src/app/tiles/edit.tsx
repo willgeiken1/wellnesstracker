@@ -6,7 +6,7 @@ import { tileEditSheet } from '@/features/navigation/presentation';
 export default function TileEditRoute() {
   const { page, id } = useLocalSearchParams<{ page?: string; id?: string }>();
   return <>
-    <Stack.Screen options={tileEditSheet(page)} />
+    <Stack.Screen options={tileEditSheet(page, id)} />
     <TileCustomizeSheet page={page} id={id} />
   </>;
 }

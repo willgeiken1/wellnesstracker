@@ -33,6 +33,18 @@ describe('the hero numbers', () => {
     expect(v.pillars[2].status).toBe('No sleep recorded');
     expect(v.pillars[2].missing).toBe(true);
   });
+  test('logged foods with no energy listed read as unknown, never as 0 kcal or nothing logged', () => {
+    const v = heroView(input({ trainMin: 0, kcal: null, sleepMin: null, kcalUnknown: true }));
+    expect(v.empty).toBe(false);
+    expect(v.pillars[1].arc[0][0]).toBe('–');
+    expect(v.pillars[1].missing).toBe(true);
+    expect(v.pillars[1].status).toBe("Logged foods don't list energy");
+    expect(v.pillars[1].spoken).not.toMatch(/0 kcal/);
+    expect(v.label).toMatch(/Food unknown|unknown/);
+    expect(v.label).not.toMatch(/Nothing logged yet/);
+    expect(v.week[6].empty).toBe(false);
+    expect(v.week[6].label).toMatch(/unknown/);
+  });
   test('a day with food or sleep but no training is a rest day, left out of the score', () => {
     const v = heroView(input({ trainMin: 0, kcal: 2200, sleepMin: 480 }));
     expect(v.rest).toBe(true);
@@ -71,10 +83,27 @@ describe('the hero data', () => {
     } as never;
     expect(trainingMinutes(store, days, NOW).slice(5)).toEqual([30, 24]);
   });
+  test('logged cardio counts toward the day, as Training and Progress count it', () => {
+    const days = lastWeek(NOW);
+    const cardio = [{ data: { day: days[6], duration_ms: 25 * 60000 } }, { data: { day: days[4], duration_ms: 40 * 60000 } }, { data: { day: '2020-01-01', duration_ms: 60 * 60000 } }];
+    const store = {
+      trainingHistory: () => [{ data: { day: days[6], duration_ms: 20 * 60000 } }],
+      active: () => null,
+      repo: { list: (table: string) => table === 'cardio_sessions' ? cardio : [] },
+    } as never;
+    expect(trainingMinutes(store, days, NOW).slice(4)).toEqual([40, 0, 45]);
+  });
   test('goals fall back to the defaults, and a missing reading stays missing', () => {
     const i = heroInput(null, null, 'kcal', NOW);
     expect(i.goals).toEqual(HERO_DEFAULT_GOALS);
     expect(i.days[6]).toEqual({ trainMin: 0, kcal: null, sleepMin: null });
+  });
+  test('a day with logged foods but no energy listed comes in as unknown energy', () => {
+    const data = { calories: { series: [null, null, null, null, null, null, null], logged: [false, false, false, false, false, false, true], goal: 2200 },
+      sleep: { series: [] } } as never;
+    const i = heroInput(data, null, 'kcal', NOW);
+    expect(i.days[6]).toEqual({ trainMin: 0, kcal: null, sleepMin: null, kcalUnknown: true });
+    expect(i.days[5]).toEqual({ trainMin: 0, kcal: null, sleepMin: null });
   });
   test('saved map choices come back clean', () => {
     expect(readMapPrefs(null)).toEqual(MAP_DEFAULTS);

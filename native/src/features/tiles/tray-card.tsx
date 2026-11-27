@@ -66,8 +66,8 @@ export const TrayCard = memo(function TrayCard({ cfg, def, tint, pick, onStyle, 
   };
   // With no preview the header's bottom margin and the next block's top margin collapse into the larger one, as in the design.
   const headGap = edit ? 10 : 12;
-  let firstCtl = !preview && !showStyles;
-  const seg = (label: string, children: ReactNode) => { const top = firstCtl ? Math.max(10, headGap) : 10; firstCtl = false; return <View style={[s.ctl, { marginTop: top }]}>
+  const firstCtl = !preview && !showStyles;
+  const seg = (label: string, children: ReactNode, first: boolean) => { const top = first && firstCtl ? Math.max(10, headGap) : 10; return <View style={[s.ctl, { marginTop: top }]}>
     <Text style={[s.ctlLabel, { color: colors['text-muted'] }]}>{label}</Text>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.segScroll} contentContainerStyle={[s.seg, { backgroundColor: segBg }]}
       accessibilityRole="radiogroup" accessibilityLabel={label}>{children}</ScrollView>
@@ -97,13 +97,13 @@ export const TrayCard = memo(function TrayCard({ cfg, def, tint, pick, onStyle, 
       </View> : null}
       {deep.map((v, i) => styleBtn(v.key, v.name, flat.length + i, true))}
     </View> : null}
-    {opts.map(op => <View key={op.id}>{seg(op.label, op.choices.map(c => {
+    {opts.map((op, i) => <View key={op.id}>{seg(op.label, op.choices.map(c => {
       const on = String(cur[op.id]) === String(c[0]);
       return <Tappable dim={on ? 'none' : 'row'} key={String(c[0])} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={c[1]}
         onPress={() => onOption(op.id, String(c[0]))} style={[s.segBtn, home ? s.opBtnHome : s.opBtn, on && segOn]}>
         <Text style={[home ? s.szText : s.opText, { color: on ? colors.text : colors['text-muted'] }]}>{c[2] ?? c[1]}</Text>
       </Tappable>;
-    }))}</View>)}
+    }), i === 0)}</View>)}
     {seg(t('tilesSize'), SIZES.map(z => {
       const can = ok.includes(z), on = z === pick.size;
       return <Tappable dim={on ? 'none' : 'row'} key={z} accessibilityRole="radio" disabled={!can} accessibilityState={{ selected: on, disabled: !can }}
@@ -111,7 +111,7 @@ export const TrayCard = memo(function TrayCard({ cfg, def, tint, pick, onStyle, 
         onPress={() => onSize(z)} style={[s.segBtn, s.szBtn, on && segOn, !can && { opacity: 0.3 }]}>
         <Text style={[s.szText, { color: on ? colors.text : colors['text-muted'] }, !can && { textDecorationLine: 'line-through' }]}>{z}</Text>
       </Tappable>;
-    }))}
+    }), opts.length === 0)}
   </View>;
 });
 

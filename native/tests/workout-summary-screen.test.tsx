@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { TrainingData } from '../src/features/workout/training-data';
-import { sessionResult, fullDate } from '../src/features/workout/screens/model';
+import { exerciseHistory, sessionResult, fullDate } from '../src/features/workout/screens/model';
 import { WorkoutSummary } from '../src/features/workout/screens/summary';
 import { WorkoutDetail, templateFrom } from '../src/features/workout/screens/detail';
 import { showToast } from '../src/features/shell/toast';
@@ -51,6 +51,36 @@ describe('session result', () => {
     expect(res.muscles[0]).toEqual({ m: 'Quads', sets: 4 });
     expect(res.after - res.before).toBe(45);
     expect(fullDate('2026-11-22')).toBe('Sunday, November 22');
+  });
+  test('a one-side-at-a-time lift counts both sides in the volume, and keeps the weaker side for its sets', () => {
+    mockRepository = memoryRepository();
+    const repo = mockRepository;
+    const s = repo.save('sessions', { day: '2026-11-20', name: 'Synthetic legs', started_at: Date.now() - 3_600_000, finished_at: Date.now() });
+    const e = repo.save('entries', { session_id: s.id, exercise: 'Bulgarian Split Squat', position: 0 });
+    repo.save('sets', { entry_id: e.id, position: 0, weight_kg: 20, reps: 10, left_weight_kg: 20, left_reps: 10, right_weight_kg: 20, right_reps: 10 });
+    const data = new TrainingData(mockRepository), res = sessionResult(data, s.id)!;
+    const side = data.kg(20) * 10;
+    expect(res.exercises[0].sets).toEqual([{ w: data.kg(20), r: 10, pr: false }]);
+    expect(res.exercises[0].volume).toBe(side * 2);
+    expect(res.volume).toBe(side * 2);
+    expect(exerciseHistory(data, 'Bulgarian Split Squat').at(-1)!.volume).toBe(side * 2);
+    // The Volume chart stacks one block per set, so each block carries both sides too, and the top set keeps the weaker side.
+    expect(exerciseHistory(data, 'Bulgarian Split Squat').at(-1)!.sets).toEqual([{ w: data.kg(20), r: 10, v: side * 2 }]);
+  });
+  test('a heavier single counts as a record though its estimated 1RM is lower', () => {
+    mockRepository = memoryRepository();
+    const store = new WorkoutStore(mockRepository);
+    const log = (start: number, sets: [string, string][]) => {
+      const s = store.start(undefined, start), e = store.addExercise(s.id, 'Squat', sets.length);
+      sets.forEach(([weight, reps], i) => { store.editDraft(e.id, i, { weight, reps }); store.toggleDone(e.id, i); });
+      store.finish(s.id, { startedAt: start, finishedAt: start + 45 * 60_000, notes: '' });
+      return s;
+    };
+    log(Date.now() - 7 * DAY, [['100', '10']]);
+    const today = log(Date.now() - 2 * 3_600_000, [['110', '1'], ['90', '8']]);
+    const res = sessionResult(new TrainingData(mockRepository), today.id)!;
+    expect(res.prs).toEqual([{ name: 'Squat', w: 110, r: 1, was: { w: 100, r: 10 } }]);
+    expect(res.exercises[0].sets.map(x => x.pr)).toEqual([true, false]);
   });
   test('a first time doing a lift is not a record, and an unfinished workout has no result', () => {
     const { store } = sample();
@@ -102,8 +132,8 @@ describe('past workout screen', () => {
   test('save as a template keeps the exercises and set counts; delete asks first and removes it', async () => {
     const { store, today } = sample();
     expect(templateFrom(store, today.id)).toEqual([
-      { id: undefined, exercise: 'Squat', target_sets: 2, target_reps: 5, rep_min: undefined, rep_max: undefined },
-      { id: undefined, exercise: 'Dumbbell Walking Lunge', target_sets: 2, target_reps: 10, rep_min: undefined, rep_max: undefined }]);
+      { id: undefined, exercise: 'Squat', target_sets: 2, target_reps: 5, rep_min: undefined, rep_max: undefined, superset_group: null },
+      { id: undefined, exercise: 'Dumbbell Walking Lunge', target_sets: 2, target_reps: 10, rep_min: undefined, rep_max: undefined, superset_group: null }]);
     mockParams = { id: today.id };
     await render(<WorkoutDetail />, { wrapper });
     await fireEvent.press(screen.getByRole('button', { name: 'Save as template' }));

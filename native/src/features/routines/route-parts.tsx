@@ -14,7 +14,7 @@ import { nudge, pretty, parseAmt, smallSteps, stepsFor } from './model';
 /* The frame and the small parts the Routines sheets share (`.rt-sheet` and friends in the mockup). */
 
 /** Native form sheet options for the Routines sheets: all open large. */
-export const sheetOptions: NativeStackNavigationOptions = { ...largeSheet, contentStyle: { flex: 1 } };
+export const sheetOptions: NativeStackNavigationOptions = largeSheet;
 
 /** Whether this screen was opened cold (a link or a widget), with nothing under it to go back to. */
 export function useCold() {

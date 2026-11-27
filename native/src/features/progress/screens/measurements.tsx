@@ -18,8 +18,8 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /**
  * Measurements: one stepper per tape measure and one for body fat. Save keeps today's tape readings (the last value of a
- * measure counts as today's unless changed); body fat is saved only when changed, so a smart scale's reading is never
- * copied in as a typed one, and a measure never taken is saved only once its stepper moves.
+ * measure counts as today's unless changed); body fat starts from the last typed reading and is saved only when changed, so a
+ * smart scale's reading from Apple Health is never copied in as a typed one, and a measure never taken is saved only once its stepper moves.
  */
 export function MeasurementsSheet() {
   const d = useProgress(), k = useKit(), auth = useAuth(), repo = auth.repository, u = d.unit, cm = u !== 'lb';
@@ -27,7 +27,9 @@ export function MeasurementsSheet() {
   const fat = d.bodyFat.length ? d.bodyFat[d.bodyFat.length - 1] : null;
   const [vals, setVals] = useState<Record<MeasureKey, number>>(() => Object.fromEntries(MEASURE_KEYS.map(key => [key, r1(lenV(lastCm(key) ?? START_CM[key], u))])) as Record<MeasureKey, number>);
   const [touched, setTouched] = useState<Set<string>>(new Set());
-  const [bf, setBf] = useState(fat ? r1(fat.pct) : 20);
+  // The stepper starts from the last typed reading, never from Apple Health's, so a Health reading is never saved here as one typed.
+  const typedFat = [...d.bodyFat].reverse().find(x => !x.health) ?? null;
+  const [bf, setBf] = useState(typedFat ? r1(typedFat.pct) : 20);
   const touch = (key: string) => setTouched(prev => prev.has(key) ? prev : new Set(prev).add(key));
   const save = () => {
     if (!repo) return;

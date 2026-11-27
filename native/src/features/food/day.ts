@@ -30,12 +30,14 @@ export interface FoodItem {
 }
 export interface MealView {
   id: string; name: string; icon: IconName; time: number | null;
-  kcal: number; p: number; c: number; f: number; fib: number; items: FoodItem[]; empty: boolean;
+  /** A nutrient is null when food was logged but none of it gave that nutrient, so it reads as unknown, not 0. */
+  kcal: number | null; p: number | null; c: number | null; f: number | null; fib: number | null; items: FoodItem[]; empty: boolean;
 }
 export interface Goals { kcal: number; p: number; c: number; f: number; fib: number; set: boolean }
 export interface DayView {
-  day: string; today: boolean; eaten: number; goal: number; left: number; burned: number | null;
-  p: number; c: number; f: number; fib: number; goals: Goals; meals: MealView[]; logged: number; items: FoodItem[];
+  /** eaten and left are null when food was logged but none of it gave its energy. */
+  day: string; today: boolean; eaten: number | null; goal: number; left: number | null; burned: number | null;
+  p: number | null; c: number | null; f: number | null; fib: number | null; goals: Goals; meals: MealView[]; logged: number; items: FoodItem[];
 }
 
 export function item(row: Row): FoodItem {
@@ -57,18 +59,27 @@ export function goalsFor(repo: Repository, day: string): Goals {
   return { ...g, fib: Math.round(g.kcal / 1000 * 14), set: !!targets };
 }
 
+/** A nutrient for drawing: unknown draws as nothing. */
+export const known = (v: number | null) => v ?? 0;
+/** A nutrient for reading, rounded: unknown shows as a dash. */
+export const roundOr = (v: number | null) => v == null ? '–' : String(Math.round(v));
 const sum = (items: FoodItem[], key: 'kcal' | 'p' | 'c' | 'f' | 'fib') => items.reduce((a, i) => add(a, i[key]), 0);
+/** A nutrient total: 0 with nothing logged, null when food was logged but none of it gave the nutrient. */
+/** Whether every food has protein, carbs and fat listed. A share of the calories needs that: a total that adds up only the
+ * foods that list them would lean on those foods, so a mix of known and unknown has no split. */
+export const macrosComplete = (items: readonly FoodItem[]) => items.length > 0 && items.every(i => i.p != null && i.c != null && i.f != null);
+export const nutrient = (items: FoodItem[], key: 'kcal' | 'p' | 'c' | 'f' | 'fib') => items.length && items.every(i => i[key] == null) ? null : sum(items, key);
 
 export function dayView(repo: Repository, day: string, { today = attributedDay(), burned = null }: { today?: string; burned?: number | null } = {}): DayView {
   const items = dayItems(repo, day), goals = goalsFor(repo, day);
   const views = mealList(repo).map(m => {
     const mine = items.filter(i => i.data.meal_id === m.id);
     return { id: m.id, name: m.name, icon: mealIcon(m.id), time: mine.length ? Math.min(...mine.map(i => i.at)) : null,
-      kcal: sum(mine, 'kcal'), p: sum(mine, 'p'), c: sum(mine, 'c'), f: sum(mine, 'f'), fib: sum(mine, 'fib'), items: mine, empty: !mine.length };
+      kcal: nutrient(mine, 'kcal'), p: nutrient(mine, 'p'), c: nutrient(mine, 'c'), f: nutrient(mine, 'f'), fib: nutrient(mine, 'fib'), items: mine, empty: !mine.length };
   });
-  const eaten = sum(items, 'kcal');
-  return { day, today: day === today, eaten, goal: goals.kcal, left: goals.kcal - eaten, burned,
-    p: sum(items, 'p'), c: sum(items, 'c'), f: sum(items, 'f'), fib: sum(items, 'fib'), goals, meals: views, logged: views.filter(m => !m.empty).length, items };
+  const eaten = nutrient(items, 'kcal');
+  return { day, today: day === today, eaten, goal: goals.kcal, left: eaten == null ? null : goals.kcal - eaten, burned,
+    p: nutrient(items, 'p'), c: nutrient(items, 'c'), f: nutrient(items, 'f'), fib: nutrient(items, 'fib'), goals, meals: views, logged: views.filter(m => !m.empty).length, items };
 }
 
 /** Which meal comes next: the first meal of the day with nothing logged, or dinner once every meal has food. */
@@ -82,30 +93,41 @@ export const foodsLine = (items: FoodItem[]) => items.map((i, k) => { const n = 
 
 const WD = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const parts = (day: string) => day.split('-').map(Number) as [number, number, number];
-export const weekday = (day: string) => { const [y, m, d] = parts(day); return (new Date(y, m - 1, d).getDay() + 6) % 7; };
+/** The day the person's week starts on, from Settings › Units. */
+export type WeekFirst = 'mon' | 'sun' | 'sat';
+const FIRST: Record<WeekFirst, number> = { sun: 0, mon: 1, sat: 6 };
+const firstOf = (wk: WeekFirst | undefined) => FIRST[wk ?? 'mon'] ?? 1;
+/** Where `day` falls in its week, 0 for the first day of the week the person chose. */
+export const weekday = (day: string, wk?: WeekFirst) => { const [y, m, d] = parts(day); return (new Date(y, m - 1, d).getDay() - firstOf(wk) + 7) % 7; };
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const rotate = <T,>(list: readonly T[], wk?: WeekFirst) => { const off = (firstOf(wk) + 6) % 7; return list.map((_, i) => list[(i + off) % 7]); };
+/** One letter for each day of the week, in the order the person's week runs. */
+export const weekLetters = (wk?: WeekFirst) => rotate(WD, wk);
+/** Each day's name, in the order the person's week runs. */
+export const weekNames = (wk?: WeekFirst) => rotate(DAY_NAMES, wk);
 export const fullDate = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); };
 export const shortDate = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); };
 export const weekdayName = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long' }); };
 export const monthDay = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }); };
 
-/** The Monday that starts the week holding `day`. */
-export const weekStart = (day: string) => shiftDay(day, -weekday(day));
-/** The day strip: last week and this week, Monday first. Days after today are shown but cannot be picked. */
-export function stripDays(today: string) {
-  const start = shiftDay(weekStart(today), -7);
+/** The first day of the week holding `day`: Monday unless the person chose another. */
+export const weekStart = (day: string, wk?: WeekFirst) => shiftDay(day, -weekday(day, wk));
+/** The day strip: last week and this week, from the first day of the week. Days after today are shown but cannot be picked. */
+export function stripDays(today: string, wk?: WeekFirst) {
+  const start = shiftDay(weekStart(today, wk), -7), letters = weekLetters(wk);
   return Array.from({ length: 14 }, (_, i) => {
     const day = shiftDay(start, i);
-    return { day, wd: WD[i % 7], date: parts(day)[2], today: day === today, future: day > today };
+    return { day, wd: letters[i % 7], date: parts(day)[2], today: day === today, future: day > today };
   });
 }
-/** This week, Monday to Sunday. */
-export const weekDays = (day: string) => Array.from({ length: 7 }, (_, i) => shiftDay(weekStart(day), i));
+/** The week holding `day`, from its first day. */
+export const weekDays = (day: string, wk?: WeekFirst) => Array.from({ length: 7 }, (_, i) => shiftDay(weekStart(day, wk), i));
 
 /** Calories and protein a day, for charts. Days with nothing logged are null so they draw as no reading. */
 export function daySums(repo: Repository, days: readonly string[]) {
   const rows = repo.list('food_entries'), by = new Map<string, FoodItem[]>();
   for (const r of rows) { const d = String(r.data.day); if (days.includes(d)) by.set(d, [...(by.get(d) ?? []), item(r)]); }
-  return days.map(day => { const it = by.get(day); return it?.length ? { day, kcal: sum(it, 'kcal'), p: sum(it, 'p'), meals: new Set(it.map(i => String(i.data.meal_id))).size } : { day, kcal: null, p: null, meals: 0 }; });
+  return days.map(day => { const it = by.get(day); return it?.length ? { day, kcal: nutrient(it, 'kcal'), p: nutrient(it, 'p'), meals: new Set(it.map(i => String(i.data.meal_id))).size } : { day, kcal: null, p: null, meals: 0 }; });
 }
 
 /** Days in a row with food logged (or every meal logged), counting back from today. An empty today does not break it yet. */

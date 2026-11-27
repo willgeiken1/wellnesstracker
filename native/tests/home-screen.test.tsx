@@ -8,12 +8,17 @@ import Home from '../src/app/(tabs)/index';
 import { dateLine, greeting } from '../src/features/home/hero';
 import { MINI, terrain } from '../src/features/home/contour';
 import { homeTileAction } from '../src/features/home/tiles/use-home-tiles';
+import { foodDay, pickFoodDay } from '../src/features/food/selection';
+import { redirectSystemPath } from '../src/app/+native-intent';
 import { readWaterIn } from '../src/features/home/tiles/read';
 import { addDrink, DEFAULT_CONTAINERS, litresOn, readWater, setContainers, setWaterUnit } from '../src/features/food/water';
 import { pageHandlers, useShellEdit } from '../src/features/shell/registry';
 import { showToast } from '../src/features/shell/toast';
 import { tileEdit } from '../src/features/tiles/store';
 import { resetTileStores } from '../src/features/tiles';
+import { homeTileState } from '../src/features/home/tiles/state';
+import { DEFAULT_PREFS, SETTINGS_PREFS_KEY, withPref } from '../src/features/settings/prefs';
+import { saveGoalWeight } from '../src/features/settings/goals-data';
 
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), canGoBack: () => true } }));
@@ -146,6 +151,17 @@ test('logged food and targets fill the Protein and Next tiles from real entries'
   expect(screen.getByText('Log lunch')).toBeTruthy();
 });
 
+test('Home follows the energy unit, the clock and the goal weight saved in Settings', async () => {
+  const repo = open();
+  repo.localSave(SETTINGS_PREFS_KEY, withPref(withPref(DEFAULT_PREFS, 'units.energy', 'kJ'), 'units.clock', '24'));
+  saveGoalWeight(repo, 170, 'lb');
+  await render(<Home />, { wrapper });
+  await settle();
+  const st = homeTileState()!;
+  expect(st.units).toMatchObject({ energy: 'kJ', clock: '24' });
+  expect(st.has.weightGoal).toBe(true);
+});
+
 describe('the + actions and edit mode', () => {
   test('Home gives the shell its six actions', async () => {
     open();
@@ -243,6 +259,23 @@ describe('water on Home', () => {
     expect(litresOn(readWater(repo), attributedDay())).toBe(0);
     expect(water().getByText('0')).toBeTruthy();
   });
+  test('opening the water sheet from Home is for today, even after an earlier day was picked in Food', async () => {
+    open();
+    await render(<Home />, { wrapper });
+    await settle();
+    const t0 = new Date(), earlier = `${t0.getFullYear() - 1}-01-15`;
+    act(() => { pickFoodDay(earlier); });
+    expect(foodDay()).toBe(earlier);
+    await fireEvent.press(screen.getByRole('button', { name: 'Water. Log water' }));
+    expect(router.push).toHaveBeenLastCalledWith('/food/water');
+    expect(foodDay()).toBe(attributedDay());
+    act(() => { pickFoodDay(earlier); });
+    await act(async () => { pageHandlers('home').water?.run?.(); });
+    expect(foodDay()).toBe(attributedDay());
+    act(() => { pickFoodDay(earlier); });
+    homeTileAction(memoryRepository(), null, { ql: 'water', wc: 'gone' });
+    expect(foodDay()).toBe(attributedDay());
+  });
   test('a container that is no longer on quick add opens the water sheet instead of logging', () => {
     const repo = memoryRepository();
     homeTileAction(repo, null, { ql: 'water', wc: 'gone' });
@@ -269,8 +302,27 @@ describe('logging from inside a tile', () => {
     expect(repo.list('food_entries')).toHaveLength(0);
     expect(showToast).toHaveBeenLastCalledWith('That food could not be added. Try again.', { color: 'warning' });
   });
-  test('a meal slot opens the food log', () => {
-    homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal', meal: 'x' });
+  test('logging from Home or a shortcut is for today, even with an earlier day picked in Food', async () => {
+    const today = attributedDay(), earlier = '2026-01-05';
+    pickFoodDay(earlier); expect(foodDay()).toBe(earlier);
+    homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal', meal: 'b' });
+    expect(foodDay()).toBe(today);
+    pickFoodDay(earlier);
+    homeTileAction(memoryRepository(), null, { ql: 'meal' });
+    expect(foodDay()).toBe(today);
+    pickFoodDay(earlier);
+    open();
+    await render(<Home />, { wrapper });
+    await act(async () => { pageHandlers('home').meal?.run?.(); });
+    expect(foodDay()).toBe(today);
+    pickFoodDay(earlier);
+    expect(redirectSystemPath({ path: 'insight://food/log', initial: false })).toBe('/food/log');
+    expect(foodDay()).toBe(today);
+  });
+  test('a meal slot opens the food log on that meal, not the one due next', () => {
+    homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal', meal: 'b' });
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: '/food/log', params: { meal: 'b' } });
+    homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal' });
     expect(router.push).toHaveBeenLastCalledWith('/food/log');
   });
 });

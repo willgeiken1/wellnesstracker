@@ -5,7 +5,7 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { AuthContext, AuthProvider, useAuth, type AuthState } from '../src/auth/provider';
 import { Account } from '../src/auth/screens';
 import { ThemeProvider } from '../src/design/theme-provider';
-import { AccountDeletionFailed, AccountDeletionUncertain } from '../src/auth/sign-out';
+import { AccountDeletionFailed, AccountDeletionUncertain, DepartureFailure } from '../src/auth/sign-out';
 import { OWNER_A, syntheticRow } from '../fixtures/sync';
 import { openLocalDatabase } from '../src/data/database';
 import { signOutStorage } from '../src/auth/sign-out-storage';
@@ -28,11 +28,11 @@ jest.mock('../src/data/sync/supabase',()=>({SupabaseTransport:class {
 jest.mock('expo-network',()=>({addNetworkStateListener:jest.fn(()=>({remove:jest.fn()}))}));
 jest.mock('../src/phone-only/export',()=>({exportAccountBackup:jest.fn(async()=>{}),exportPhoneBackup:jest.fn(async()=>{})}));
 
-// Photo files kept outside the database (src/auth/owner-files.ts): addresses of files that exist.
-const mockFiles=new Set<string>();
+// Photo files kept outside the database (src/core/owner-files.ts): addresses of files that exist.
+const mockFiles=new Set<string>(),mockStuck=new Set<string>();
 jest.mock('expo-file-system',()=>{
   class Directory{uri:string;constructor(base:{uri:string},name:string){this.uri=`${base.uri}${name}/`;}get exists(){return false;}delete(){}}
-  class File{uri:string;constructor(a:string|Directory,b?:string){this.uri=typeof a==='string'?a:a.uri+b;}get exists(){return mockFiles.has(this.uri);}delete(){mockFiles.delete(this.uri);}}
+  class File{uri:string;constructor(a:string|Directory,b?:string){this.uri=typeof a==='string'?a:a.uri+b;}get exists(){return mockFiles.has(this.uri);}delete(){if(mockStuck.has(this.uri))throw new Error('synthetic delete failure');mockFiles.delete(this.uri);}}
   return {Directory,File,Paths:{document:{uri:'file:///docs/'},cache:{uri:'file:///caches/'}}};
 });
 const PHOTO='file:///docs/profile-photo/fixture-1.jpg';
@@ -53,7 +53,7 @@ function clientFixture(invoke:jest.Mock,getUser:jest.Mock=jest.fn(async()=>{thro
 }
 let observed:AuthState;
 function Probe(){observed=useAuth();return null;}
-beforeEach(()=>{mockFiles.clear();mockFiles.add(PHOTO);jest.clearAllMocks();jest.spyOn(AppState,'addEventListener').mockImplementation(()=>({remove:jest.fn()}));jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);});
+beforeEach(()=>{mockFiles.clear();mockStuck.clear();mockFiles.add(PHOTO);jest.clearAllMocks();jest.spyOn(AppState,'addEventListener').mockImplementation(()=>({remove:jest.fn()}));jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);});
 async function mountProvider(invoke:jest.Mock,getUser?:jest.Mock){
   const a=fixtureRepo(OWNER_A),guest=fixtureRepo('guest');
   jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:(owner:string)=>owner===OWNER_A?a:owner==='guest'?guest:fixtureRepo(owner)} as never);
@@ -75,6 +75,21 @@ test('deleteAccount calls the server with the DELETE confirmation, then erases t
   expect(signOutStorage.remove).toHaveBeenCalled();
   // The profile photo file goes with the account, not only its address.
   expect(mockFiles.has(PHOTO)).toBe(false);
+  await view.unmount();
+});
+test('a photo that cannot be deleted stops departure before the wipe, keeping its address, and Try again finishes it',async()=>{
+  const invoke=jest.fn(async()=>({data:{ok:true},error:null})) as jest.Mock;
+  const {a,guest,view}=await mountProvider(invoke);
+  mockStuck.add(PHOTO);
+  await act(async()=>{await expect(observed.deleteAccount!()).rejects.toBeInstanceOf(DepartureFailure);});
+  // Nothing was wiped and the departure marker stays, so the photo's address can still be read and deleted later.
+  expect(a.wipe).not.toHaveBeenCalled();expect(a.localGet('profilePhoto')).toBe(PHOTO);expect(mockFiles.has(PHOTO)).toBe(true);
+  expect(signOutStorage.write).toHaveBeenCalled();expect(signOutStorage.remove).not.toHaveBeenCalled();
+  expect(observed.recovery).toBe('departure');
+  mockStuck.clear();
+  await act(async()=>{await observed.signOut();});
+  await waitFor(()=>expect(observed.repository).toBe(guest));
+  expect(a.wipe).toHaveBeenCalledTimes(1);expect(mockFiles.has(PHOTO)).toBe(false);expect(signOutStorage.remove).toHaveBeenCalled();
   await view.unmount();
 });
 test.each([

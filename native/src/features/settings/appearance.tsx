@@ -110,7 +110,7 @@ export default function Appearance() {
 
   // The home screen icon changes once, as the person leaves, and only if the icon, the palette or the look moved here.
   const latest = useRef({ icon, palette, mode }), start = useRef(`${icon}|${palette}|${mode}`);
-  latest.current = { icon, palette, mode };
+  useEffect(() => { latest.current = { icon, palette, mode }; });
   useEffect(() => () => {
     const { icon: i, palette: p, mode: m } = latest.current;
     if (`${i}|${p}|${m}` !== start.current) void applyAppIcon(i, p, m);

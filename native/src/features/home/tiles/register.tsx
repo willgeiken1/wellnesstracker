@@ -1,4 +1,5 @@
 import { router, type Href } from 'expo-router';
+import { logForToday } from '@/features/food/selection';
 import { memo, useId, useMemo } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { BarBackdrop } from '@/components/blur-bar';
@@ -8,6 +9,7 @@ import { TileIcon } from '@/features/tiles/tile-icon';
 import { showToast } from '@/features/shell/toast';
 import { implementTile, tilePage } from '@/features/tiles/registry';
 import type { TileOptionValues, TileRenderProps } from '@/features/tiles/types';
+import { SessionTile } from '@/features/workout/tiles/today';
 import { EmptyTile } from './empty';
 import { Markup } from './markup';
 import { homeTileState, tileView, useHomeTileState } from './state';
@@ -34,7 +36,8 @@ function NumbersCover({ colors, w, h }: { colors: ThemeColors; w: number; h: num
   </View>;
 }
 
-const go = (href: string) => router.push(href as unknown as Href);
+// Logging from Home is for today, whichever day Food last showed.
+const go = (href: string) => { if (href === '/food/log' || href === '/food/water') logForToday(); router.push(href as unknown as Href); };
 
 /** One Home tile in one style: drawn from Home's shared tile data, or its empty state. */
 export const HomeTileView = memo(function HomeTileView(p: TileRenderProps) {
@@ -72,7 +75,7 @@ const OPEN: Record<string, { open: Open; label?: string }> = {
   nextup: { open: () => go('/routines') },
   volume: { open: () => go('/workouts') },
   exercise: { open: () => go('/progress/trend?metric=training') },
-  active: { open: () => go('/progress/trend?metric=kcal') },
+  active: { open: () => go('/progress/trend?metric=active') },
   steps: { open: () => go('/progress/trend?metric=steps') },
   calories: { open: () => go('/food') },
   protein: { open: () => go('/food/nutrition') },
@@ -92,7 +95,11 @@ let done = false;
 export function registerHomeTiles() {
   if (done) return;
   done = true;
+  // The Workout tile reads the workout store itself, so it shows the live workout or the next one to start in every state.
+  implementTile('home', 'workout', { render: p => <SessionTile {...p} />,
+    open: () => go(homeTileState()?.data.next.activeWorkout ? '/workout' : '/workouts') });
   for (const def of tilePage('home').tiles) {
+    if (def.id === 'workout') continue;
     const o = OPEN[def.id];
     const styles = Object.fromEntries((def.versions ?? []).map(v => [v.key, { render }]));
     implementTile('home', def.id, { render, styles, ...(o ? { open: o.open, ...(o.label ? { label: o.label } : null) } : null),

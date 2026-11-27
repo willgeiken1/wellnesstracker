@@ -8,7 +8,7 @@ import type { Unit } from '@/features/onboarding/model';
  */
 export type Range = 'week' | 'month' | 'year';
 export const RANGES: readonly Range[] = ['week', 'month', 'year'];
-export type MetricKey = 'weight' | 'sleep' | 'hrv' | 'rhr' | 'steps' | 'kcal' | 'training' | 'score';
+export type MetricKey = 'weight' | 'sleep' | 'hrv' | 'rhr' | 'steps' | 'active' | 'kcal' | 'training' | 'score';
 export type Daily = (number | null)[];
 /** How many days of history each daily list holds. */
 export const HISTORY = 365;
@@ -16,6 +16,9 @@ export type Stage = 'awake' | 'rem' | 'core' | 'deep';
 export interface Night {
   /** Minutes in bed, and of each stage. */
   min: number; deep: number; rem: number; core: number; awake: number;
+  /** Minutes asleep that the source gave no stage for (a device that records no stages). They count toward time asleep,
+   * never toward a stage, so while there are any the stage breakdown is shown as unavailable. */
+  unstaged?: number;
   /** Minutes after midnight (bed may be negative: before midnight). Null when the source gives no times. */
   bed: number | null; wake: number | null;
   source: 'Oura' | 'Apple Health';
@@ -50,20 +53,29 @@ export interface ProgressData {
   wake: Daily;
   hrvBand: readonly [number, number] | null; rhrBand: readonly [number, number] | null;
   sleepGoalMin: number; stepGoal: number;
-  sources: { oura: boolean; apple: boolean; ouraSynced: string | null };
-  weight: { kg: number | null; day: string | null; time: string | null; startKg: number | null; startDay: string | null; goalKg: number | null };
+  /** heart: where the HRV and resting heart rate shown came from, which can be Apple Health even with Oura connected. */
+  sources: { oura: boolean; apple: boolean; ouraSynced: string | null; heart: 'Oura' | 'Apple Health' | null };
+  /** Where each day of `days.sleep` came from, when the health reading says (Oura, or Apple Health filling a gap). */
+  sleepFrom?: ('Oura' | 'Apple Health' | null)[];
+  /** Where each day of `days.steps` came from, when Oura's steps are among them. */
+  stepsFrom?: ('Oura' | 'Apple Health' | null)[];
+  /** `from` is where the weigh-ins shown came from: Apple Health, typed into Insight, or both; unset with none. */
+  weight: { kg: number | null; day: string | null; time: string | null; startKg: number | null; startDay: string | null; goalKg: number | null; from?: 'health' | 'app' | 'both' };
   /** Body fat readings, oldest first; `health` marks one from a smart scale through Apple Health. */
   bodyFat: { day: string; pct: number; health?: boolean }[];
   measures: Measured[];
   photos: ProgressPhoto[];
   training: {
     goalMin: number | null; weekVolumeKg: number; lastWeekVolumeKg: number; sessions: number;
+    /** Finished workouts and cardio sessions on each day of `days`, oldest first; the one going now isn't counted. */
+    perDay: readonly number[];
     active: { name: string; min: number } | null;
     plan: { name: string | null; perWeek: number; done: number };
     next: { name: string; exercises: number; estMin: number; when: string } | null;
     records: LiftBest[]; streak: number;
   };
-  food: { goalKcal: number | null; eatenKcal: number | null; proteinG: number | null; proteinGoal: number | null };
+  /** `goalByDay` is each day's own calorie target, as it stood that day (same order as `days`); unset falls back to today's. */
+  food: { goalKcal: number | null; eatenKcal: number | null; proteinG: number | null; proteinGoal: number | null; goalByDay?: (number | null)[] };
 }
 
 /* ---------- numbers ---------- */
@@ -109,11 +121,14 @@ export const METRICS: Record<MetricKey, MetricInfo> = {
   hrv: { key: 'hrv', kind: 'line', color: 'recovery', icon: 'heart', best: 'max', dec: 0, line: true, partialToday: false },
   rhr: { key: 'rhr', kind: 'line', mini: 'dots', color: 'recovery', icon: 'heart', best: 'min', dec: 0, line: true, partialToday: false },
   steps: { key: 'steps', kind: 'bar', mini: 'heat', color: 'training', icon: 'steps', best: 'max', dec: 0, line: false, partialToday: true },
+  active: { key: 'active', kind: 'bar', color: 'training', icon: 'calories', best: 'max', dec: 0, line: false, partialToday: true },
   kcal: { key: 'kcal', kind: 'bar', mini: 'dots', color: 'food', icon: 'calories', best: 'max', dec: 0, line: false, partialToday: true },
   training: { key: 'training', kind: 'bar', color: 'training', icon: 'workouts', best: 'max', dec: 0, line: false, partialToday: true, yearSum: true },
   score: { key: 'score', kind: 'bar', color: 'accent', icon: 'score', best: 'max', dec: 0, line: false, partialToday: false },
 };
 export const TREND_KEYS: readonly Exclude<MetricKey, 'score'>[] = ['weight', 'sleep', 'hrv', 'rhr', 'steps', 'kcal', 'training'];
+/** Trends a screen can open. Active energy is opened from Home's Active energy tile and is not one of Progress's own list. */
+export const TREND_OPEN: readonly Exclude<MetricKey, 'score'>[] = [...TREND_KEYS, 'active'];
 
 /** A metric's value in what the person sees: weight in their unit, the rest as stored. */
 export const shown = (key: MetricKey, v: number | null, unit: Unit) => v == null ? null : key === 'weight' && unit === 'lb' ? v * LB : v;
@@ -192,9 +207,10 @@ export interface WeekReport {
 /** This week's numbers: the last 7 days, today last. */
 export function weekReport(d: ProgressData): WeekReport {
   const days = daysEnding(d.today, 7), score = d.days.score.slice(-7), sleep = d.days.sleep.slice(-7), food = d.days.kcal.slice(-7, -1);
-  const goal = d.food.goalKcal, w = d.days.weight.slice(-8);
-  const loggedFood = food.filter(finite);
-  const onTarget = goal ? loggedFood.filter(k => k >= goal * 0.8 && k <= goal * 1.15).length : 0;
+  const w = d.days.weight.slice(-8), loggedFood = food.filter(finite);
+  // Each day is held to the calorie target it had then, so raising today's target doesn't rewrite the week, as the day scores don't.
+  const goals = d.food.goalByDay?.slice(-7, -1), goalOn = (i: number) => { const g = goals?.[i]; return finite(g) && g > 0 ? g : d.food.goalKcal; };
+  const onTarget = food.filter((k, i) => { const g = goalOn(i); return finite(k) && !!g && k >= g * 0.8 && k <= g * 1.15; }).length;
   const steps = d.days.steps.slice(-7, -1);
   const wa = w.find(finite), wb = w[lastIndex(w)];
   const t = d.training;
@@ -214,14 +230,14 @@ export function emptyProgress(today: string, unit: Unit, now = Date.now()): Prog
   const blank = (): Daily => Array(HISTORY).fill(null);
   return {
     today, now, demo: false, unit,
-    days: { weight: blank(), sleep: blank(), hrv: blank(), rhr: blank(), steps: blank(), kcal: blank(), training: blank(), score: blank() },
+    days: { weight: blank(), sleep: blank(), hrv: blank(), rhr: blank(), steps: blank(), active: blank(), kcal: blank(), training: blank(), score: blank() },
     pillars: { training: null, food: null, sleep: null }, yesterdayScore: null, weekPillars: Array.from({ length: 7 }, () => ({ training: null, food: null, sleep: null })),
     baseline: { score: null, training: null, food: null, sleep: null }, dayNotes: Array(7).fill(''),
     night: null, wake: Array(7).fill(null), hrvBand: null, rhrBand: null, sleepGoalMin: 480, stepGoal: 8000,
-    sources: { oura: false, apple: false, ouraSynced: null },
+    sources: { oura: false, apple: false, ouraSynced: null, heart: null },
     weight: { kg: null, day: null, time: null, startKg: null, startDay: null, goalKg: null },
     bodyFat: [], measures: [], photos: [],
-    training: { goalMin: null, weekVolumeKg: 0, lastWeekVolumeKg: 0, sessions: 0, active: null, plan: { name: null, perWeek: 3, done: 0 }, next: null, records: [], streak: 0 },
+    training: { goalMin: null, weekVolumeKg: 0, lastWeekVolumeKg: 0, sessions: 0, perDay: Array(HISTORY).fill(0), active: null, plan: { name: null, perWeek: 3, done: 0 }, next: null, records: [], streak: 0 },
     food: { goalKcal: null, eatenKcal: null, proteinG: null, proteinGoal: null },
   };
 }

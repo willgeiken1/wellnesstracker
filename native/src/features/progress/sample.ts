@@ -45,6 +45,8 @@ export function sampleProgress(today: string, unit: Unit, now = Date.now()): Pro
     hrv: history(today, [...gen(31, 23, 54, 6), ...hrv], [50, 51, 49, 52, 53, 52, 54, 55, 53, 54, 55, 55]),
     rhr: history(today, [...gen(41, 23, 56.5, 2.5), ...rhr], [59, 59, 58, 58, 57, 57, 56, 56, 57, 56, 56, 56]),
     steps: history(today, [...gen(51, 23, 8300, 2600).map(x => Math.round(x / 10) * 10), ...steps], [7200, 6900, 7400, 7900, 8600, 9100, 9400, 9000, 8500, 8200, 8400, 8500]),
+    // The example has no Apple Health active energy, as Home's example has none: its trend says No data.
+    active: Array(HISTORY).fill(null),
     kcal: history(today, [...gen(61, 23, 2170, 240), ...kcalWeek], [...N10, 2230, 2190]),
     // Training adds up each month, so older days carry a month's minutes spread over its sessions.
     training: history(today, [...train, ...minWeek], [...N10, 640 / 13, 760 / 15]),
@@ -66,7 +68,7 @@ export function sampleProgress(today: string, unit: Unit, now = Date.now()): Pro
   d.night = { min: 413, bed: -32, wake: 381, deep: 72, rem: 94, core: 221, awake: 26, source: 'Oura', segments: HYP };
   d.wake = [370, 405, 365, 380, 435, 460, 381];
   d.hrvBand = [46, 62]; d.rhrBand = [54, 60];
-  d.sources = { oura: true, apple: true, ouraSynced: '6:40 AM' };
+  d.sources = { oura: true, apple: true, ouraSynced: '6:40 AM', heart: 'Oura' };
   d.weight = { kg: kg(182.1), day: today, time: '6:52 AM', startKg: kg(186.4), startDay: back(49), goalKg: kg(178) };
   d.bodyFat = [[63, 19.1], [49, 18.8], [35, 18.5], [21, 18.2], [7, 17.8]].map(([b, pct]) => ({ day: back(b), pct, health: true }));
   const inch = (o: Record<string, number>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v * IN]));
@@ -79,6 +81,7 @@ export function sampleProgress(today: string, unit: Unit, now = Date.now()): Pro
     .map(([b, lb, fig], i) => ({ id: `sample-${i}`, day: back(b), kg: kg(lb), pose: 'Front' as const, uri: null, fig }));
   d.training = {
     goalMin: 60, weekVolumeKg: kg(52890), lastWeekVolumeKg: kg(64200), sessions: 4,
+    perDay: d.days.training.map((x, i) => i === d.days.training.length - 1 ? 0 : x != null && x > 0 ? 1 : 0),
     active: { name: t('progressSampleActive'), min: 24 },
     plan: { name: t('progressSamplePlan'), perWeek: 5, done: 4 },
     next: { name: t('progressSampleNext'), exercises: 6, estMin: 50, when: t('progressTomorrow') },

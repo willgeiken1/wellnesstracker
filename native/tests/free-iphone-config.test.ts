@@ -12,7 +12,9 @@ function resolve(config = base, variant?: string) {
 /** The one approved change to every variant: the app icon set from Settings, Appearance (expo-alternate-app-icons,
  * Lit Peaks in the default palette as the primary icon). Nothing else may differ from app.json. */
 const appIcons = require('../plugins/app-icons');
-const withIcons = (config: typeof base) => ({ ...config, ios: { ...config.ios, icon: appIcons.PRIMARY_ART }, plugins: [...config.plugins, appIcons.plugin] });
+const withIcons = (config: typeof base) => ({ ...config, ios: { ...config.ios, icon: appIcons.PRIMARY_ART }, plugins: [...config.plugins, appIcons.plugin],
+  // The store build takes over-the-air updates (EAS Update); the phone-only build keeps them off.
+  runtimeVersion: { policy: 'fingerprint' }, updates: { url: `https://u.expo.dev/${base.extra.eas.projectId}`, enabled: true, checkAutomatically: 'ON_LOAD', fallbackToCacheTimeout: 0 } });
 test('default configuration is deeply unchanged, including existing capabilities', () => {
   expect(resolve()).toEqual(withIcons(base));
   const future = { ...base, ios: { ...base.ios, entitlements: { 'com.apple.developer.healthkit': true, 'com.apple.security.application-groups': ['group.fixture'], 'aps-environment': 'development' } }, extra: { eas: { build: { experimental: { ios: { appExtensions: [{ targetName: 'Widgets' }] } } } } } };

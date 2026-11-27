@@ -35,7 +35,7 @@ Real-iPhone builds with HealthKit, App Groups (widgets / Live Activity snapshots
 | Typecheck / lint / unit | `npx tsc --noEmit` · `npx expo lint` · `npx jest` |
 | Dependency health | `npx expo-doctor` · `npx expo install --check` |
 | PWA + quota suite (repo root) | `npm test` (must stay green) |
-Local builds are free. **No paid EAS builds**; free-tier EAS only when the plan says so. Skills link here; do not duplicate this table.
+Local builds are free. **No paid EAS builds**; free-tier EAS only when the plan says so. Will approved one standing use: the free-tier automatic deploy on merge to main (`native/.eas/workflows/deploy-production.yml`); manual EAS runs still need his OK. Skills link here; do not duplicate this table.
 
 ## 4. Hard rules
 1. **No health data to AI.** Health/HealthKit/Health Connect/Oura values, body weight, check-in mood, energy and stress values, and anything derived never go to any AI model, Sentry or PostHog. AI payloads go through the ported `strip.ts` guard (fail-closed allowlist) with tests; the AI workout summary (Q46) sends no health values.

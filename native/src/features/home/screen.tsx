@@ -22,6 +22,7 @@ import { useTileEdit } from '@/features/tiles/use-tiles';
 import { useWorkout } from '@/features/workout/use-workout';
 import { fill } from '@/features/tiles/ui';
 import { waterAmt, waterNum } from '@/features/food/water';
+import { logForToday } from '@/features/food/selection';
 import { HomeBackdrop, HomeHero } from './hero';
 import { DAYS } from './tiles/data';
 import { registerHomeTiles } from './tiles/register';
@@ -76,8 +77,8 @@ export function Home() {
   useQuickActions('home', {
     edit: { run: () => tileEdit.set('home', true) },
     add: { run: () => tileRoutes().tray('home') },
-    water: { run: () => go('/food/water'), label: t('homeLogWater'), hint: waterHint(tiles?.data.water) },
-    meal: { run: () => go('/food/log') },
+    water: { run: () => { logForToday(); go('/food/water'); }, label: t('homeLogWater'), hint: waterHint(tiles?.data.water) },
+    meal: { run: () => { logForToday(); go('/food/log'); } },
     start: { run: () => go('/workout') },
     weigh: { run: () => go('/progress') },
   });

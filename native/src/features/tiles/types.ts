@@ -81,6 +81,8 @@ export interface TileDef {
   open?: (options: TileOptionValues) => void;
   /** A cover over the tile's figures (Hide numbers): while covered, a tap shows them instead of opening the tile. */
   cover?: TileCover;
+  /** More of the tile's own controls under its sizes in the customize sheet (the Split tile's Change split). */
+  editExtra?: (props: { close: () => void }) => ReactNode;
 }
 
 /** An outside store that says when a tile's figures are covered, what VoiceOver says then, and how a tap shows them. */
@@ -107,9 +109,18 @@ export interface TilePageConfig {
   intro?: string;
   defaults: readonly TileDefault[];
   tiles: readonly TileDef[];
+  /** Tiles that joined the starting layout after layouts were already saved on phones (see TileArrival). */
+  arrivals?: readonly TileArrival[];
   /** Home keeps its own tray copy, filter chips and tile frame; every other page uses the page variant. */
   variant?: 'page' | 'home';
 }
+
+/**
+ * A tile added to a page's starting layout in a later build. A layout saved before `rev` gets it once, on load, so an
+ * existing install has it too; a layout saved at `rev` or later is left as the person keeps it (a tile they removed stays
+ * in the tray). It goes in after `after` when that tile is on the page, otherwise first.
+ */
+export interface TileArrival { id: string; rev: number; size?: TileSize; style?: string; after?: string }
 
 /** One tile on a page: which tile, its size, style and options. */
 export interface LayoutEntry { id: string; size: TileSize; style: string; options: TileOptionValues }

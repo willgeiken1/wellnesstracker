@@ -15,6 +15,7 @@ import { MACRO_COLOR, MealSeg, PillStepper, SectionLabel, SplitBar, macroPercent
 import { useFoodRevision } from './use-food-revision';
 import { gramsOfOz, ozOf, useFoodWeightUnit, weightText, type FoodWeightUnit } from './weight';
 import { showToast } from '../shell/toast';
+import { enLabel, enNum, useEnergyUnit } from './energy';
 
 const n = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const nice = (v: number) => String(Number(v.toFixed(2)));
@@ -73,7 +74,7 @@ export function ItemSheet({ repo }: { repo: Repository }) {
 }
 
 function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
-  const { day, today } = useFoodDay();
+  const { day, today } = useFoodDay(), u = useEnergyUnit();
   const editing = !!target.entryId, inTray = !!currentCart() && !editing;
   const food = target.food, name = String(food.name ?? '');
   const unit = useFoodWeightUnit(repo), options = servingsOf(food, unit);
@@ -101,7 +102,7 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
     closeSheet(); quickAdd(repo, day, meal, food, mult);
   };
   const mn = lower(mealName(repo, meal));
-  const footer = <Button full color="food" label={editing ? t('foodSaveChanges') : fill(t('foodAddToMeal'), { meal: mn }) + kcalTail(kcal)} onPress={commit} testID="food-item-add" />;
+  const footer = <Button full color="food" label={editing ? t('foodSaveChanges') : fill(t('foodAddToMeal'), { meal: mn }) + kcalTail(kcal, u)} onPress={commit} testID="food-item-add" />;
 
   return <FoodSheet testID="food-item-sheet" footer={footer}
     header={<SheetHeader title={editing ? t('foodEditFood') : t('foodDetails')} left={t('cancel')} onLeft={() => closeSheet()} />}>
@@ -147,12 +148,12 @@ function SaveButton({ on, onPress }: { on: boolean; onPress: () => void }) {
 
 /** The energy and how it splits between protein, carbs and fat (`.fd-ikc`). */
 export function EnergyCard({ kcal, p, c, f }: { kcal: number | null; p: number | null; c: number | null; f: number | null }) {
-  const k = useKit();
+  const k = useKit(), u = useEnergyUnit();
   return <Card>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
       <View style={{ minWidth: 84 }}>
-        <KitText weight={700} size={32} lineHeight={1} tracking={-0.02} numeric>{kcal == null ? '–' : num(kcal)}</KitText>
-        <KitText weight={600} size={12} lineHeight={1.2} color="text-muted" style={{ marginTop: 4 }}>{t('foodKcal')}</KitText>
+        <KitText weight={700} size={32} lineHeight={1} tracking={-0.02} numeric>{kcal == null ? '–' : enNum(kcal, u)}</KitText>
+        <KitText weight={600} size={12} lineHeight={1.2} color="text-muted" style={{ marginTop: 4 }}>{enLabel(u)}</KitText>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: (p ?? 0) * 4, color: k.c.food }, { v: (c ?? 0) * 4, color: k.c.accent }, { v: (f ?? 0) * 9, color: k.c.sleep }]} />
@@ -199,15 +200,19 @@ function FactsPanel({ food, grams, servingText, barcode }: { food: Food; grams: 
 }
 
 /** Protein, carbs and fat with their grams and share of the calories (`.fd-leg`). */
-export function EnergyLegend({ p, c, f }: { p: number | null; c: number | null; f: number | null }) {
+export function EnergyLegend({ p, c, f, complete = true }: { p: number | null; c: number | null; f: number | null;
+  /** False when these are a day's totals and some food leaves a macro out, so they add up only part of the day. */
+  complete?: boolean }) {
+  // A share of the calories needs all three: with any unknown, no share is worked out (none is shown or spoken as 0%).
+  const whole = complete && p != null && c != null && f != null;
   const k = useKit(), [pp, pcc, pf] = macroPercents(p ?? 0, c ?? 0, f ?? 0).pc, pc = { p: pp, c: pcc, f: pf };
   const rows: [string, number | null, number, string][] = [[t('foodMacroProtein'), p, pc.p, MACRO_COLOR.p], [t('foodMacroCarbs'), c, pc.c, MACRO_COLOR.c], [t('foodMacroFat'), f, pc.f, MACRO_COLOR.f]];
-  return <View style={{ gap: 6, marginTop: 12 }} accessible accessibilityLabel={fill(t('foodSplitA11y'), { p: pc.p, c: pc.c, f: pc.f })}>
+  return <View style={{ gap: 6, marginTop: 12 }} accessible accessibilityLabel={whole ? fill(t('foodSplitA11y'), { p: pc.p, c: pc.c, f: pc.f }) : rows.map(([label, g]) => g == null ? `${label} ${t('foodUnknownLower')}` : `${label} ${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`).concat(t('foodSplitUnknownA11y')).join(', ')}>
     {rows.map(([label, g, pct, color]) => <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: k.tok(color) }} />
       <KitText weight={500} size={13} color="text-muted" style={{ flex: 1 }}>{label}</KitText>
       <KitText weight={700} size={13.5} tracking={-0.02} numeric>{g == null ? '–' : `${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`}</KitText>
-      <KitText weight={700} size={12.5} tracking={-0.02} color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null ? '' : `${pct}%`}</KitText>
+      <KitText weight={700} size={12.5} tracking={-0.02} color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null || !whole ? '' : `${pct}%`}</KitText>
     </View>)}
   </View>;
 }

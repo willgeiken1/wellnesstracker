@@ -46,5 +46,9 @@ test('both style pictures draw the sample day in the palette colours of either l
 test('the Settings rows read the real calorie target, and reminders read Off where notifications are missing', () => {
   expect(summary('goals', DEFAULT_PREFS as never, 'System', 0, false, { kcal: 2000 })).toBe('2,000 kcal');
   expect(summary('reminders', DEFAULT_PREFS as never, 'System', 0, false, { limited: true })).toBe('Off');
-  expect(summary('reminders', DEFAULT_PREFS as never, 'System', 0, false)).toBe('4 on');
+  expect(summary('reminders', DEFAULT_PREFS as never, 'System', 0, false)).toBe('0 on');
+  // The count still follows the switches once some are on.
+  expect(summary('reminders', { ...DEFAULT_PREFS, rem: { ...DEFAULT_PREFS.rem, workout: true, weekly: true, food: true, rest: true } } as never, 'System', 0, false)).toBe('4 on');
+  // The Reconnect Oura alert is not available yet (its switch shows as coming later), so a saved "on" is not counted.
+  expect(summary('reminders', { ...DEFAULT_PREFS, rem: { ...DEFAULT_PREFS.rem, workout: true, weekly: true, oura: true, rest: true } } as never, 'System', 0, false)).toBe('3 on');
 });

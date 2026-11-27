@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import { randomUUID } from 'expo-crypto';
 import { useAuth } from '@/auth/provider';
-import { dropFile, PROFILE_PHOTO_FOLDER, PROFILE_PHOTO_KEY } from '@/auth/owner-files';
+import { deleteProfilePhoto, PROFILE_PHOTO_FOLDER, PROFILE_PHOTO_KEY, PROFILE_PHOTO_LEFTOVERS_KEY } from '@/core/owner-files';
 import type { Repository } from '@/data/repository';
 import { Icon, Tappable, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
@@ -16,14 +16,42 @@ import { actionSheet } from './sheet-actions';
  * The profile photo (pages/settings.js `.st-acct .cam`, `photo`): taken or chosen from the library, cropped square and kept
  * on this phone only, as Progress photos are. The file lives in the app's Documents folder, its address in the person's
  * local storage, which is never synced, uploaded or sent anywhere. Without a photo the avatar shows the initial. Signing out
- * and deleting the account delete the file (src/auth/owner-files.ts).
+ * and deleting the account delete the file (src/core/owner-files.ts).
  */
 const KEY = PROFILE_PHOTO_KEY;
 const FOLDER = PROFILE_PHOTO_FOLDER;
 
 function storedUri(repo: Repository | null | undefined): string | null {
   if (!repo) return null;
-  try { const uri = repo.localGet<string | null>(KEY); return typeof uri === 'string' && uri ? uri : null; } catch { return null; }
+  try { return storedUriStrict(repo); } catch { return null; }
+}
+/** For a change: the kept address, or null when there is none. A record that can't be read throws, so a change never
+ * writes over an address it couldn't see (the file it names would be forgotten on the phone). */
+function storedUriStrict(repo: Repository): string | null {
+  const v = repo.localGet<unknown>(KEY);
+  if (v == null || v === '') return null;
+  if (typeof v !== 'string') throw new Error('The profile photo record could not be read');
+  return v;
+}
+/** For a change: the addresses waiting to be deleted. A list that can't be read throws rather than count as empty. */
+function leftovers(repo: Repository): string[] {
+  const v = repo.localGet<unknown>(PROFILE_PHOTO_LEFTOVERS_KEY);
+  if (v == null) return [];
+  if (!Array.isArray(v)) throw new Error('The profile photo leftovers could not be read');
+  return v.filter((u): u is string => typeof u === 'string' && !!u);
+}
+/** Notes an old photo's address as waiting to be deleted, before its own address is cleared or replaced, so the file is
+ * never forgotten while it is still on the phone. Returns every address waiting. */
+function keepForDeleting(repo: Repository, uri: string | null): string[] {
+  const before = leftovers(repo), waiting = uri && !before.includes(uri) ? [...before, uri] : before;
+  if (waiting !== before) repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, waiting);
+  return waiting;
+}
+/** Deletes the waiting files and keeps the addresses of any still there, for the next change or departure to retry. */
+function deleteWaiting(repo: Repository, waiting: string[]) {
+  if (!waiting.length) return;
+  const left = waiting.filter(u => !deleteProfilePhoto(u));
+  try { repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, left.length ? left : null); } catch { /* the list still names them all */ }
 }
 function exists(uri: string) { try { return new File(uri).exists; } catch { return false; } }
 
@@ -35,21 +63,49 @@ export function readProfilePhoto(repo: Repository | null | undefined): string | 
 
 /** Moves a photo the picker just wrote (in Caches, which iOS may clear) into the kept folder, then forgets the old one. */
 export async function saveProfilePhoto(repo: Repository, pickedUri: string): Promise<string> {
+  // Example data keeps no files: one saved there would not carry to an account, and its deletion could not find it.
+  if (repo.owner === 'demo') throw new Error('Photos are not kept with example data.');
   const dir = new Directory(Paths.document, FOLDER);
   dir.create({ intermediates: true, idempotent: true });
   const dest = new File(dir, `${randomUUID().replace(/[^a-zA-Z0-9-]/g, '')}.jpg`);
-  await new File(pickedUri).move(dest);
-  const before = storedUri(repo);
-  repo.localSave(KEY, dest.uri);
-  if (before && before !== dest.uri) dropFile(before);
+  // The new file's address is noted with the leftovers before the file exists, so if anything below fails (the move, or
+  // saving an address), signing out or deleting the account still finds and deletes it.
+  keepForDeleting(repo, dest.uri);
+  try {
+    await new File(pickedUri).move(dest);
+    const before = storedUriStrict(repo);
+    keepForDeleting(repo, before && before !== dest.uri ? before : null);
+    repo.localSave(KEY, dest.uri);
+  } catch (error) {
+    // Not kept: delete the new file now, and forget its address only once it is gone.
+    // The photo still in place (noted above as about to be replaced) comes off the list too.
+    // A record that can't be read is left as it is: the list keeps naming the new file, and departure retries it.
+    let kept: string | null = null;
+    try { kept = storedUriStrict(repo); } catch { /* unknown; nothing comes off the list for it */ }
+    const deleted = deleteProfilePhoto(dest.uri);
+    if (deleted || kept) {
+      try {
+        const rest = leftovers(repo).filter(u => u !== kept && !(deleted && u === dest.uri));
+        repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, rest.length ? rest : null);
+      } catch { /* the list still names it; it is gone */ }
+    }
+    throw error;
+  }
+  // It is the photo now: off the list, and the old ones on it are deleted (any still there stay listed).
+  try {
+    const old = leftovers(repo).filter(u => u !== dest.uri), stuck = old.filter(u => !deleteProfilePhoto(u));
+    repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, stuck.length ? stuck : null);
+  } catch { /* an unreadable list stays as it is; listed until the next change or departure */ }
   return dest.uri;
 }
 
-/** Deletes the kept file and the address; the initial shows again. */
+/** Deletes the kept file and the address; the initial shows again. A file that can't be deleted yet keeps its address
+ * among the leftovers, so the next change or departure deletes it. */
 export function removeProfilePhoto(repo: Repository) {
-  const before = storedUri(repo);
+  // Throws, changing nothing, when the address or the list can't be read.
+  const waiting = keepForDeleting(repo, storedUriStrict(repo));
   repo.localSave(KEY, null);
-  dropFile(before);
+  deleteWaiting(repo, waiting);
 }
 
 /** The current person's photo, kept up to date as it changes. Null outside an account or without one. */
@@ -97,7 +153,8 @@ export function AvatarCameraButton({ repo }: { repo: Repository }) {
   const open = () => actionSheet({ title: st('settingsPhotoTitle'), acts: [
     { label: st('settingsPhotoTake'), onPress: () => { void pick('camera'); } },
     { label: st('settingsPhotoChoose'), onPress: () => { void pick('library'); } },
-    ...(photo ? [{ label: st('settingsPhotoRemove'), destructive: true, onPress: () => { removeProfilePhoto(repo); showToast(st('settingsPhotoRemoved')); } }] : []),
+    ...(photo ? [{ label: st('settingsPhotoRemove'), destructive: true, onPress: () => {
+      try { removeProfilePhoto(repo); showToast(st('settingsPhotoRemoved')); } catch { showToast(st('settingsPhotoFailed'), { color: 'warning' }); } } }] : []),
   ] });
   const light = mode === 'light';
   return <Tappable testID="avatar-camera" accessibilityRole="button" accessibilityLabel={st('settingsPhotoChange')} onPress={open}

@@ -17,6 +17,7 @@ import { RidgeHero } from './ridge';
 import { skyTokens } from './tones';
 import { FadeUp } from './text-motion';
 import { HeroWeek } from './week';
+import { spreadAt } from './scroll-spread';
 import { revealNumbers } from '../hide-numbers';
 
 export { dateLine, greeting } from './model';
@@ -66,7 +67,8 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
   const [touched, setTouched] = useState(false);
   const [failed, setFailed] = useState(false);
   const dayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-  useEffect(() => { setSel(6); setFocus(-1); }, [dayKey]);
+  const [shownDay, setShownDay] = useState(dayKey);
+  if (shownDay !== dayKey) { setShownDay(dayKey); setSel(6); setFocus(-1); }
   const view = useMemo(() => heroView(input, sel), [input, sel]);
   // Once setup has their first name, the greeting carries it.
   const greet = name?.trim() ? t('obaGreeting').replace('{greeting}', view.greeting).replace('{name}', name.trim()) : view.greeting;
@@ -74,8 +76,9 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
   const calm = prefs.motion === 'calm';
   const build = !reduceMotion && !calm;
   const headStyle = useReveal(110, build), secStyle = useReveal(254, build);
-  // The map sinks a little as the page scrolls (12 percent of it), as if it sat further back than the tiles.
-  const mapDrift = useAnimatedStyle(() => ({ transform: [{ translateY: reduceMotion || !scrollY ? 0 : Math.max(0, scrollY.value) * 0.12 }] }));
+  // The layers trail the swipe by different shares, so the gaps between the lines open and settle with it (scroll-spread.ts).
+  const greetDrift = useAnimatedStyle(() => ({ transform: [{ translateY: scrollY ? spreadAt('greet', scrollY.value, reduceMotion) : 0 }] }));
+  const mapDrift = useAnimatedStyle(() => ({ transform: [{ translateY: scrollY ? spreadAt('map', scrollY.value, reduceMotion) : 0 }] }));
 
   // Hide numbers: a tap on the hidden food energy shows Home's numbers.
   const reveal = (pi: number) => { if (pi >= 0 && input.hide && view.pillars[pi]?.key === 'food') revealNumbers(); };
@@ -83,7 +86,9 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
 
   const head = <Animated.View style={[{ paddingRight: 56 }, headStyle]}>
     <KitText weight={600} size={11.5} lineHeight={1.2} tracking={0.14} color="text-muted" style={capitals}>{view.dateLine}</KitText>
-    <KitText weight={700} size={29} lineHeight={1.1} tracking={-0.035} accessibilityRole="header" style={{ marginTop: 5 }}>{greet}</KitText>
+    <Animated.View style={greetDrift} testID="home-hero-greeting">
+      <KitText weight={700} size={29} lineHeight={1.1} tracking={-0.035} accessibilityRole="header" style={{ marginTop: 5 }}>{greet}</KitText>
+    </Animated.View>
   </Animated.View>;
 
   // The whole hero off leaves a plain greeting.
@@ -98,11 +103,11 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
     : style === 'ridge' ? <RidgeHero view={view} width={winW} colors={c} mode={mode} reduceMotion={reduceMotion} calm={calm} labels={prefs.labels} glow={prefs.glow} onPeak={reveal} />
     : <AuroraHero view={view} width={winW} colors={c} mode={mode} sky={sky} reduceMotion={reduceMotion} calm={calm} paused={paused}
       animate={touched && !reduceMotion} levels={LEVELS[prefs.detail]} glow={prefs.glow} labels={prefs.labels}
-      focus={focus} onFocus={pi => { setTouched(true); setFocus(pi); reveal(pi); }} onTouch={() => setTouched(true)} onFail={() => setFailed(true)} />;
+      scrollY={scrollY} focus={focus} onFocus={pi => { setTouched(true); setFocus(pi); reveal(pi); }} onTouch={() => setTouched(true)} onFail={() => setFailed(true)} />;
 
   return <View testID="home-hero" style={{ paddingTop: 6, paddingBottom: 6 }}>
     {head}
-    <Animated.View style={mapDrift}>{map}</Animated.View>
+    <Animated.View style={mapDrift} testID="home-hero-map">{map}</Animated.View>
     {prefs.week ? <>
       <Animated.View style={[{ marginTop: 28, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }, secStyle]}>
         <KitText weight={700} size={16} lineHeight={1.1} tracking={-0.02} accessibilityRole="header">{t('homeHeroThisWeek')}</KitText>

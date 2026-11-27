@@ -13,6 +13,8 @@ export interface HeroLayout {
   above: string; under: string;
   /** Per screen arc (Training, Sleep, Food): where its value is centred on `above` and its goal ends on `under`, in path length. */
   valueAt: [number, number, number]; goalAt: [number, number, number];
+  /** How far along each path the screen's 12 pt margins fall: a readout stays between them. */
+  aboveSpan: [number, number]; underSpan: [number, number];
   targets: ArcTarget[];
   /** The limb's highest point: the day score's foot stands 28 pt above it. */
   apex: { x: number; y: number };
@@ -42,6 +44,7 @@ export function heroLayout(w: number, h = HERO_H): HeroLayout {
     const x0 = s[0] * w - 6, x1 = s[1] * w + 6, am = arcAt(arc, (x0 + x1) / 2);
     return { pillar: SLOT[j], x: x0, y: (am?.y ?? 0) - 29, w: x1 - x0, h: 46 };
   });
+  const EDGE = 12, aboveSpan: [number, number] = [at(L, EDGE), at(L, w - EDGE)], underSpan: [number, number] = [at(L2, EDGE), at(L2, w - EDGE)];
   const top = arc.reduce((m, p) => p.y < m.y ? p : m, { x: w / 2, y: 1e9 } as { x: number; y: number });
-  return { w, h, arc, above, under, valueAt, goalAt, targets, apex: { x: top.x, y: top.y } };
+  return { w, h, arc, above, under, valueAt, goalAt, aboveSpan, underSpan, targets, apex: { x: top.x, y: top.y } };
 }

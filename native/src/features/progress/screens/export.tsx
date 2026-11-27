@@ -5,7 +5,10 @@ import { Button, Icon, List, ListRow, SectionHeader, SegmentedControl, Sheet, Sh
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
+import { useWorkoutStore } from '@/features/workout/use-workout';
 import { EXPORT_KINDS, buildCsvs, shareExport, zip, type ExportKind, type ExportRange } from '../export';
+import { readExportReadings } from '../export-read';
+import { buildProgress } from '../source';
 import { fill } from '../format';
 import { useProgress } from '../use-progress';
 
@@ -16,6 +19,9 @@ const KINDS: Record<ExportKind, [label: Parameters<typeof t>[0], icon: string, c
 /** The share row: each opens the system share sheet, where the person picks the app. */
 const APPS: [Parameters<typeof t>[0], string, string][] = [['progressAirDrop', 'airdrop', 'recovery'], ['progressMessages', 'bubble', 'success'], ['progressMail', 'mail', 'accent'], ['progressSaveFiles', 'folder', 'water'], ['progressMore', 'more', 'text-muted']];
 
+/** The logs that come from Apple Health or Oura, read again for the whole range when the person exports. */
+const READINGS: readonly ExportKind[] = ['sleep', 'heart', 'steps'];
+
 /** A round tick for a chosen row (.pg-chk). */
 function Check({ on }: { on: boolean }) {
   const k = useKit();
@@ -25,17 +31,27 @@ function Check({ on }: { on: boolean }) {
 
 /** Export data: pick the logs and the range, then share one zip of CSV files through the share sheet. */
 export function ExportSheet() {
-  const d = useProgress(), k = useKit(), auth = useAuth(), repo = auth.repository;
+  const d = useProgress(), k = useKit(), auth = useAuth(), repo = auth.repository, store = useWorkoutStore(repo);
   const [on, setOn] = useState<Record<ExportKind, boolean>>({ weight: true, sleep: true, heart: true, steps: true, food: true, work: true, rout: false });
   const [range, setRange] = useState<ExportRange>('90'), [busy, setBusy] = useState(false);
   const kinds = EXPORT_KINDS.filter(x => on[x]);
-  const files = useMemo(() => repo && kinds.length ? buildCsvs(repo, d, kinds, range) : [], [repo, d, kinds.join(), range]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keyed on the picked kinds as text, so toggling a log off and on again reuses the files already built.
+  const kindsKey = kinds.join();
+  const files = useMemo(() => repo && kindsKey ? buildCsvs(repo, d, kindsKey.split(',') as ExportKind[], range) : [], [repo, d, kindsKey, range]);
   const bytes = useMemo(() => files.length ? zip(files).length : 0, [files]);
   const name = `insight-export-${d.today}.zip`;
   const go = async () => {
     if (!files.length || busy) return;
     setBusy(true);
-    try { await shareExport(files, name); router.back(); }
+    try {
+      // Progress holds 30 days of readings for its charts, so a longer export reads Apple Health and Oura for its range.
+      let out = files;
+      if (repo && store && !auth.demo && kinds.some(x => READINGS.includes(x))) {
+        const now = new Date();
+        out = buildCsvs(repo, buildProgress({ store, now, demo: false, ...await readExportReadings(range, now) }), kinds, range);
+      }
+      await shareExport(out, name); router.back();
+    }
     catch { showToast(t('progressExportFailed'), { color: 'warning' }); }
     finally { setBusy(false); }
   };

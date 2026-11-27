@@ -5,7 +5,7 @@ import {
   type HiddenRoutine, type Item, type ItemKind, type ItemType, type Mark, type Now, type Routine, type RoutineColor, type RoutinesState,
 } from './model';
 import { dropWhenOwnerChanges } from '@/core/session-memory';
-import { guardRoutinesStore, routineTablesIo } from './data/sqlite-store';
+import { guardRoutinesStore, peekRoutinesState, routineTablesIo } from './data/sqlite-store';
 
 /*
  * The Routines data adapter. The screens and tiles talk only to `RoutinesStore`. `createLocalRoutinesStore` keeps each
@@ -47,6 +47,8 @@ export interface RoutinesStore {
 }
 
 function onHandStep(i: Item) { return i.vial ? 1 : i.perDay ? (i.unit === 'g' ? (i.amt ?? 1) : 1) : 0; }
+/** What a day uses of a new supply, the same as a tick takes off: the dose for a powder kept in grams, otherwise one. */
+const dailyUse = (i: Pick<Item, 'unit' | 'amt'>) => i.unit === 'g' && i.amt != null && i.amt > 0 ? i.amt : 1;
 
 /** The last id handed out, so two made in the same millisecond still differ. */
 let lastId = { base: '', k: 0 };
@@ -125,14 +127,14 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
         routines: [...d.routines], h: d.time ?? first?.from ?? 9, days: null, created: nowOf(now).day, note: d.note,
         ...(d.mixed.trim() && dose ? { mixed: d.mixed.trim() } : {}),
       };
-      if (d.hand) { item.left = Math.min(MAX_ON_HAND, Number(d.hand) || 0); if (d.type === 'Peptide') item.vial = Math.max(item.left, 1); else item.perDay = 1; }
+      if (d.hand) { item.left = Math.min(MAX_ON_HAND, Number(d.hand) || 0); if (d.type === 'Peptide') item.vial = Math.max(item.left, 1); else item.perDay = dailyUse(item); }
       edit(s => { s.items.push(item); });
       return { item, undo: () => edit(s => { s.items = s.items.filter(i => i.id !== item.id); }) };
     },
     addRoutine(d) {
       const cur = read(), taken = (id: string) => cur.routines.some(x => x.id === id) || cur.hidden.some(x => x.id === id);
       const r: Routine = { id: freshId('r', clock.now(), taken), name: d.name.trim(), from: d.from, to: d.to, color: d.color,
-        days: d.days.length ? [...d.days].sort() : [...ALL_DAYS], remind: true, pauses: [] };
+        days: d.days.length ? [...d.days].sort() : [...ALL_DAYS], remind: false, pauses: [] };
       edit(s => { s.routines.push(r); s.items.forEach(i => { if (d.items.includes(i.id) && !i.routines.includes(r.id)) i.routines.push(r.id); }); });
       return r;
     },
@@ -170,6 +172,9 @@ export function createLocalRoutinesStore(repo: Repository): RoutinesStore {
     seed: repo.owner === 'demo' ? () => demoState() : undefined,
   })));
 }
+
+/** This account's routines as they are now, read without opening a store and without writing anything. */
+export const readStoredRoutines = (repo: Repository): RoutinesState | null => peekRoutinesState(repo, ROUTINES_KEY);
 
 /* ---------- the store the tab, tiles and screens share ---------- */
 

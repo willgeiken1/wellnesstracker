@@ -11,9 +11,9 @@ function storage(owner = 'edit-owner'): TileStorage & { data: Record<string, unk
 const ids = (s: TileStorage) => homeLayout(s).map(e => e.id);
 beforeEach(() => resetTileStores());
 
-test('Home starts with Next, Protein, Water, Steps and Weight, in the design\'s sizes and styles', () => {
+test('Home starts with Next, Workout, Protein, Water, Steps and Weight, in the design\'s sizes and styles', () => {
   expect(loadTileLayout(null, 'home').map(e => [e.id, e.size, e.style])).toEqual([
-    ['next', 'M', 'B'], ['protein', 'S', 'A'], ['water', 'S', 'E'], ['steps', 'S', 'A'], ['weight', 'S', 'A'],
+    ['next', 'M', 'B'], ['workout', 'M', 'A'], ['protein', 'S', 'A'], ['water', 'S', 'E'], ['steps', 'S', 'A'], ['weight', 'S', 'A'],
   ]);
   expect(HOME_TILES_KEY).toBe('tiles-home');
 });
@@ -21,12 +21,12 @@ test('Home starts with Next, Protein, Water, Steps and Weight, in the design\'s 
 test('connecting a health source adds its tiles after what is there, once, as tile ids only', () => {
   const s = storage();
   addHealthTiles(s);
-  expect(ids(s)).toEqual(['next', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful']);
+  expect(ids(s)).toEqual(['next', 'workout', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful']);
   addHealthTiles(s);
-  expect(ids(s)).toHaveLength(10);
+  expect(ids(s)).toHaveLength(11);
   // Saved where the grid reads it, so Home shows them at once and after a restart.
   resetTileStores();
-  expect(ids(s)).toEqual(['next', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful']);
+  expect(ids(s)).toEqual(['next', 'workout', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful']);
   expect(JSON.stringify(s.data[HOME_TILES_KEY])).not.toMatch(/\d{3,}/);
   expect(HEALTH_TILES).toEqual(expect.arrayContaining(RING_TILES));
 });
@@ -48,7 +48,7 @@ test('the Insight Score switch and the tile on Home are one state', () => {
   expect(tileStoreFor(s, 'home').getState().tiles.some(e => e.id === 'score')).toBe(true);
   setScoreOn(s, false);
   expect(scoreOn(s)).toBe(false);
-  expect(ids(s)).toEqual(['next', 'protein', 'water', 'steps', 'weight']);
+  expect(ids(s)).toEqual(['next', 'workout', 'protein', 'water', 'steps', 'weight']);
 });
 
 test('with no account nothing is written and nothing breaks', () => {

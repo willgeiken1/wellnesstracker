@@ -105,6 +105,14 @@ export class HeroMotion {
   }
   /** Forget the frame time, so the next frame after a pause doesn't jump. */
   rest() { this.last = 0; }
+  /** A horizontal drag starts: the turn it starts from. */
+  beginDrag() { this.dragging = true; return this.az; }
+  /** The drag's turn, held to -0.5..0.5. */
+  dragTo(az: number) { this.az = Math.max(-0.5, Math.min(0.5, az)); }
+  /** Let go: the turn eases back to 0. */
+  endDrag() { this.dragging = false; this.rest(); }
+  /** Who hears that a day change has finished. */
+  setOnSettle(fn: () => void) { this.onSettle = fn; }
 
   /** The scene's values at `now`, and whether another frame is needed. */
   frame(now: number): { f: MotionFrame; busy: boolean } {

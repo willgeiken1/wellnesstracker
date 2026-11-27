@@ -1,12 +1,13 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { signOutError } from './auth-errors';
 import { signOutUnsynced, t } from '@/i18n/en';
 import { Image, Linking, Platform, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ProgressBar, SegmentedControl, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
-import { useAuth } from '@/auth/provider';
-import { FLOZ } from '@/features/food/water';
+import { useAuth, type AuthState } from '@/auth/provider';
+import { syncedClean, syncLineKey } from '@/data/sync-line';
+import { FLOZ, readWater, setWaterUnit } from '@/features/food/water';
 import { lastWeight } from '@/features/body/model';
 import { useWorkoutStore } from '@/features/workout/use-workout';
 import { saveWorkoutRest, workoutRest } from './workout-data';
@@ -17,7 +18,7 @@ import { useTheme } from '@/design/theme-provider';
 import { showToast } from '@/features/shell/toast';
 import { useAppleHealth } from '@/features/health/use-apple-health';
 import { useOura } from '@/features/health/use-oura';
-import { readProfile, saveProfile } from '@/features/onboarding/model';
+import { readProfile, saveProfileName, saveProfileUnit } from '@/features/onboarding/model';
 import { devicePreferencesUnsaved, saveDevicePreferences, useDevicePreferences } from '@/features/onboarding/device-preferences';
 import { LEGAL_LINKS, openPage } from './links';
 import { iconArt, iconId } from './app-icon';
@@ -31,12 +32,25 @@ import { backupWhen } from './data-actions';
 import { rateInsight } from './rate';
 import { switchLock } from '@/features/privacy-lock/turn-on';
 import { useLockAvailable } from '@/features/privacy-lock/cover';
+import { OURA_ALERT_AVAILABLE, isReminderSwitch, remindersOn } from '@/features/reminders/plan';
+import { askForReminders, notificationsInBuild, notifier, type NotifyPermission } from '@/features/reminders/notifier';
+import { useReminderSync } from '@/features/reminders/sync';
+import { warmRamp } from '@/features/workout/warmups';
 
 const KG = 2.20462;
 const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return `${h} h${m ? ` ${m} m` : ''}`; };
 const mss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 const trim = (n: number, d: number) => String(+n.toFixed(d));
 /** A clock time in the person's format ("5:30 PM" or "17:30"). */
+/** Sync now: says it synced only once the run is over with everything sent; otherwise where it stands (offline, needs attention, waiting). */
+export async function syncAndSay(auth: Pick<AuthState, 'syncNow' | 'syncStatus' | 'pending' | 'conflicts'>) {
+  let done: Awaited<ReturnType<AuthState['syncNow']>>;
+  try { done = await auth.syncNow?.(); } catch { done = { status: 'attention', pending: auth.pending, conflicts: auth.conflicts }; }
+  const state = done ?? { status: auth.syncStatus, pending: auth.pending, conflicts: auth.conflicts };
+  if (syncedClean(state)) showToast(st('settingsSyncedNow'), { color: 'success' });
+  else showToast(t(syncLineKey(state)), { color: 'warning' });
+}
+
 export function clock(time: string, p: SettingsPrefs) {
   if (p.units.clock === '12') return time;
   const m = /^(\d{1,2}):(\d{2}) ?(AM|PM)$/.exec(time); if (!m) return time;
@@ -53,13 +67,32 @@ function SegRow<T extends string>({ title, sub, value, options, onChange }: { ti
 /** The "opens outside the app" mark at a row's end; it sits where a chevron would (`.chev`: 4 pt out each side). */
 const Ext = () => { const k = useKit(); return <View style={{ marginHorizontal: -4 }}><Icon name="ext" size={16} color={k.c.ghost} /></View>; };
 
+/** Disconnects Oura and says so only once it is gone; otherwise says it is still connected, with a way to try again. */
+export async function disconnectOura(ring: { disconnect: () => Promise<boolean> }): Promise<void> {
+  if (await ring.disconnect()) { showToast(st('settingsOuraDisconnected'), { color: 'warning' }); return; }
+  showToast(st('settingsOuraDisconnectFailed'), { color: 'warning', ms: 6000, action: { label: st('settingsTryAgain'), onAction: () => { void disconnectOura(ring); } } });
+}
+
 /* ---------- Goals and targets ---------- */
+/** How far a weight goal is, in its own direction: losing when the goal is under where you started (or under today's weight
+ * with no start), gaining when it is over. `left` is what remains (0 once you reach or pass it), `done` is how far you have
+ * come from the start toward it and `total` the whole distance. Null where a weight is missing. */
+export function weightGoalStatus(nowLb: number | null, startLb: number | null, goalLb: number) {
+  const from = startLb ?? nowLb, gain = from != null && goalLb > from;
+  const toward = (a: number, b: number) => gain ? b - a : a - b;
+  return {
+    left: nowLb != null ? Math.max(0, toward(nowLb, goalLb)) : null,
+    done: nowLb != null && startLb != null ? toward(startLb, nowLb) : null,
+    total: startLb != null ? toward(startLb, goalLb) : null,
+  };
+}
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const shortDay = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 export function GoalsPage() {
   const repo = useAuth().repository;
   const [p, set] = useSettingsPrefs();
   const [, bump] = useState(0);
+  const [now] = useState(() => Date.now());
   const kj = p.units.energy === 'kJ', kg = p.units.weight === 'kg', ml = p.units.water === 'ml';
   let g: GoalsData | null = null;
   try { g = repo ? readGoalsData(repo) : null; } catch { g = null; }
@@ -69,11 +102,10 @@ export function GoalsPage() {
   const sleep = Array.from({ length: 7 }, (_, i) => 390 + i * 30).map(v => ({ v, l: hm(v) }));
   const pace = (kg ? [0.1, 0.25, 0.5, 0.75].map(k => +(k * KG).toFixed(4)) : [0.25, 0.5, 1, 1.5]).map(v => ({ v, l: paceLabel(v, p) }));
   const nowLb = g?.currentKg != null ? g.currentKg * KG : null, startLb = g?.startKg != null ? g.startKg * KG : null;
-  const left = nowLb != null ? Math.max(0, nowLb - goalLb) : null;
-  const eta = left ? new Date(Date.now() + Math.round(left / p.goals.pace * 7) * 86400000) : null;
+  const { left, done: lost, total } = weightGoalStatus(nowLb, startLb, goalLb);
+  const eta = left ? new Date(now + Math.round(left / p.goals.pace * 7) * 86400000) : null;
   const foot = nowLb == null ? st('settingsPaceFootNoWeight') : !left ? st('settingsAtGoal')
     : st('settingsPaceFoot', { pace: paceLabel(p.goals.pace, p), goal: wt(goalLb, p), date: `${MONTHS[eta!.getMonth()]} ${eta!.getDate()}` });
-  const lost = nowLb != null && startLb != null ? startLb - nowLb : null, total = startLb != null ? startLb - goalLb : null;
   const hasProgress = lost != null && total != null && total > 0;
   // Minutes trained today, as Home's Insight map counts them (finished sessions and the one running now).
   const store = useWorkoutStore(repo);
@@ -83,11 +115,11 @@ export function GoalsPage() {
   return <SetPage back={st('settings')} title={st('settingsGoalsTitle')} testID="settings-goals">
     <H first>{st('settingsDailyTargets')}</H>
     <List footer={st('settingsTargetsFoot')}>
-      <ListRow title={st('settingsCalories')} sub={g ? st('settingsEatenToday', { v: kj ? `${formatNumber(g.eaten * 4.184)} kJ` : `${formatNumber(g.eaten)} kcal` }) : undefined}
+      <ListRow title={st('settingsCalories')} sub={g ? st('settingsEatenToday', { v: g.eaten == null ? (kj ? '– kJ' : '– kcal') : kj ? `${formatNumber(g.eaten * 4.184)} kJ` : `${formatNumber(g.eaten)} kcal` }) : undefined}
         right={<RowStepper label={st('settingsDailyCalories')} value={kj ? Math.round(kcal * 4.184 / 10) * 10 : kcal}
         step={kj ? 250 : 50} snap min={kj ? 4000 : 1000} max={kj ? 20000 : 5000} unit={kj ? 'kJ' : ''}
         onChange={v => { const next = kj ? Math.round(v / 4.184) : v; if (repo) save(() => saveFoodTarget(repo, 'kcal', next)); else set('goals.kcal', next); }} />} />
-      <ListRow title={st('settingsProtein')} sub={g ? st('settingsSoFarG', { v: g.proteinSoFar }) : undefined}
+      <ListRow title={st('settingsProtein')} sub={g && g.proteinSoFar != null ? st('settingsSoFarG', { v: g.proteinSoFar }) : undefined}
         right={<RowStepper label={st('settingsDailyProtein')} value={protein} step={5} min={40} max={300} unit="g"
         onChange={v => { if (repo) save(() => saveFoodTarget(repo, 'protein', v)); else set('goals.protein', v); }} />} />
       <ListRow title={st('settingsTraining')} sub={trained != null ? st('settingsMinToday', { v: trained }) : undefined} right={<RowStepper label={st('settingsDailyTraining')} value={p.goals.train} step={5} min={10} max={180} unit="min" onChange={v => set('goals.train', v)} />} />
@@ -178,7 +210,7 @@ export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
         <ListRow title={st('settingsReconnectOura')} sub={st('settingsReconnectOuraSub')} onPress={() => actionSheet({ title: st('settingsReconnectOuraQ'), message: st('settingsReconnectOuraMsg'),
           acts: [{ label: st('settingsContinueOura'), onPress: () => ring.connect() }] })} />
         <ListRow title={st('settingsDisconnectOura')} danger chevron={false} onPress={() => actionSheet({ title: st('settingsDisconnectOuraQ'), message: st('settingsDisconnectOuraMsg'),
-          acts: [{ label: st('settingsDisconnectOura'), destructive: true, onPress: () => { ring.disconnect(); showToast(st('settingsOuraDisconnected'), { color: 'warning' }); } }] })} />
+          acts: [{ label: st('settingsDisconnectOura'), destructive: true, onPress: () => { void disconnectOura(ring); } }] })} />
       </> : ouraOffered ? <ListRow title={st('settingsConnectOura')} sub={st('settingsConnectOuraSub')} onPress={() => ring.connect()} />
         /* Not offered (no account to keep Oura days in): the row is dimmed like the design's disabled rows and has no chevron. */
         : <View style={{ opacity: 0.45 }}><ListRow title={st('settingsConnectOura')} sub={st('settingsOuraNeedsAccount')} chevron={false} disabled onPress={() => {}} /></View>}</Cl>
@@ -204,7 +236,7 @@ export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
 function NameField({ repo }: { repo: NonNullable<ReturnType<typeof useAuth>['repository']> }) {
   const k = useKit();
   const [name, setName] = useState(() => { try { return readProfile(repo).name; } catch { return ''; } });
-  const commit = () => { try { saveProfile(repo, { ...readProfile(repo), name: name.trim() }); } catch { /* the profile keeps its last saved name */ } };
+  const commit = () => { try { saveProfileName(repo, name); } catch { /* the profile keeps its last saved name */ } };
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 16 }}>
     <KitText weight={600} size={15.5} style={{ width: 96 }}>{st('settingsName')}</KitText>
     <TextInput testID="settings-name" value={name} onChangeText={setName} onBlur={commit} onSubmitEditing={commit} returnKeyType="done" autoComplete="given-name"
@@ -241,7 +273,7 @@ export function AccountPage() {
     <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
       <View>
         <Avatar name={who.name || who.email} size={92} />
-        {auth.repository ? <AvatarCameraButton repo={auth.repository} /> : null}
+        {auth.repository && !auth.demo ? <AvatarCameraButton repo={auth.repository} /> : null}
       </View>
       <KitText weight={700} size={24} tracking={-0.03} style={{ marginTop: 12 }}>{who.name || who.signIn}</KitText>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
@@ -262,7 +294,7 @@ export function AccountPage() {
       <List>
         <ListRow title={st('settingsSyncAcross')} sub={p.sync.on ? st('settingsSyncAcrossOn') : st('settingsSyncAcrossOff')} toggle={p.sync.on}
           onToggle={v => { set('sync.on', v); showToast(v ? st('settingsSyncOnToast') : st('settingsSyncOffToast'), { color: v ? 'success' : 'warning' }); }} />
-        <ListRow title={st('settingsSyncNow')} chevron={false} onPress={() => { if (!p.sync.on) { showToast(st('settingsSyncFirst'), { color: 'warning' }); return; } void auth.syncNow?.(); showToast(st('settingsSyncedNow')); }} />
+        <ListRow title={st('settingsSyncNow')} chevron={false} onPress={() => { if (!p.sync.on) { showToast(st('settingsSyncFirst'), { color: 'warning' }); return; } void syncAndSay(auth); }} />
       </List>
     </> : null}
     <H>{st('settingsDevices')}</H>
@@ -284,15 +316,42 @@ export function AccountPage() {
 }
 
 /* ---------- Reminders ---------- */
-const REM_OFF: SettingsPrefs['rem'] = { cap: false, workout: false, workoutTime: '5:30 PM', rest: false, weekly: false, food: false, breakfast: false, lunch: false, dinner: false, oura: false };
+const REM_OFF: SettingsPrefs['rem'] = { v: 2, cap: false, workout: false, workoutTime: '5:30 PM', rest: false, weekly: false, food: false, breakfast: false, lunch: false, dinner: false, oura: false };
 /** `limited`: the phone-only build, which cannot send notifications. Every reminder is shown as it will be, switched off
- * and greyed out, and the hero says they come later, so no switch claims to do something it cannot. */
-export function RemindersPage({ limited = false }: { limited?: boolean }) {
+ * and greyed out, and the hero says they come later, so no switch claims to do something it cannot.
+ *
+ * Every reminder starts off. iOS is first asked for notifications when the person turns one on here: if they say no
+ * (or said no before), the switch goes back off and a note says where to allow them. Whenever iOS allows them, the
+ * reminders that are on are put on the phone's schedule again after each change (the app's root does the same from
+ * launch). The Reconnect Oura alert needs the server to notice Oura going quiet, so it shows as coming later. */
+export function RemindersPage({ limited: phoneOnly = false }: { limited?: boolean }) {
+  // A build without notifications reads as the phone-only one: nothing here could arrive.
+  const limited = phoneOnly || !notificationsInBuild();
   const [p, set] = useSettingsPrefs();
-  const r = limited ? REM_OFF : p.rem, n = (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => r[key]).length;
+  const repository = useOptionalAuth()?.repository ?? null;
+  const [perm, setPerm] = useState<NotifyPermission | null>(null);
+  const r = limited ? REM_OFF : p.rem, n = remindersOn(r);
   const times = ['6:00 AM', '7:00 AM', '12:00 PM', '5:30 PM', '7:00 PM'].map(v => ({ v, l: clock(v, p) }));
-  const tog = (title: string, key: keyof SettingsPrefs['rem'], sub?: string, value?: string) =>
-    <ListRow key={key} testID={`reminders-${key}`} title={title} sub={sub} value={value} toggle={!!r[key]} disabled={limited} onToggle={v => set(`rem.${key}`, v)} />;
+  // Reads what iOS allows (never asks), then keeps the schedule in step with the switches while it is allowed.
+  useEffect(() => {
+    if (limited) return;
+    let live = true;
+    void notifier().permission().then(s => { if (live) setPerm(s); });
+    return () => { live = false; };
+  }, [limited]);
+  useReminderSync(repository, p.rem, !limited && perm === 'granted');
+  const turn = (key: keyof SettingsPrefs['rem'], on: boolean) => {
+    set(`rem.${key}`, on);
+    if (!on || !isReminderSwitch(key)) return;
+    void (async () => {
+      const s = perm && perm !== 'undetermined' ? perm : await askForReminders();
+      setPerm(s);
+      // Without notifications in this build the choice is only kept; once iOS has said no, it would never arrive.
+      if (s === 'denied') { set(`rem.${key}`, false); showToast(st('settingsRemNeedsIos'), { color: 'warning' }); }
+    })();
+  };
+  const tog = (title: string, key: keyof SettingsPrefs['rem'], sub?: string, value?: string, later = false) =>
+    <ListRow key={key} testID={`reminders-${key}`} title={title} sub={sub} value={value} toggle={!later && !!r[key]} disabled={limited || later} onToggle={v => { if (!later) turn(key, v); }} />;
   return <SetPage back={st('settings')} title={st('settingsRemindersTitle')} testID="settings-reminders">
     <Hero icon="bell" color="danger" title={st('settingsOnlyWhatHelps')} body={limited ? st('settingsRemHeroLater') : st(r.cap ? 'settingsRemHeroCap' : 'settingsRemHero', { n })} />
     <Gap />
@@ -300,7 +359,7 @@ export function RemindersPage({ limited = false }: { limited?: boolean }) {
     <H>{st('settingsTraining')}</H>
     <List>
       {tog(st('settingsWorkoutReminder'), 'workout', st('settingsWorkoutReminderSub'))}
-      {r.workout ? <PickRow key="time" title={st('settingsTime')} value={r.workoutTime} options={times} onPick={v => set('rem.workoutTime', v)} /> : null}
+      {r.workout ? <PickRow key="time" testID="reminders-workoutTime" title={st('settingsTime')} value={r.workoutTime} options={times} onPick={v => set('rem.workoutTime', v)} /> : null}
       {tog(st('settingsRestAlert'), 'rest', st('settingsRestAlertSub'))}
     </List>
     <H>{st('settingsWeeklyReport')}</H>
@@ -313,11 +372,13 @@ export function RemindersPage({ limited = false }: { limited?: boolean }) {
       {r.food ? tog(st('settingsDinner'), 'dinner', undefined, clock('8:00 PM', p)) : null}
     </List>
     <H>{st('settingsConnectionsTitle')}</H>
-    <List>{tog(st('settingsOuraAlert'), 'oura', st('settingsOuraAlertSub'))}</List>
+    <List>{tog(st('settingsOuraAlert'), 'oura', st(OURA_ALERT_AVAILABLE || limited ? 'settingsOuraAlertSub' : 'settingsOuraAlertLater'), undefined, !OURA_ALERT_AVAILABLE)}</List>
     {limited ? null : <>
       <Gap />
       <List footer={st('settingsIosNotifFoot')}>
-        <ListRow title={st('settingsIosNotifications')} chevron={false} right={<Ext />} onPress={() => { void Linking.openSettings().catch(() => {}); }} />
+        <ListRow testID="reminders-ios" title={st('settingsIosNotifications')} chevron={false} right={<Ext />}
+          value={perm === 'granted' ? st('settingsAllowed') : perm === 'denied' ? st('settingsNotAllowed') : undefined}
+          onPress={() => { void Linking.openSettings().catch(() => {}); }} />
       </List>
     </>}
   </SetPage>;
@@ -367,17 +428,30 @@ function HidePreview({ text }: { text: string }) {
 export function UnitsPage() {
   const k = useKit();
   const [p, set] = useSettingsPrefs();
+  const repo = useOptionalAuth()?.repository ?? null;
+  // Progress, Body and Training read the weight unit from the profile, so it changes with this choice.
+  const setWeight = (v: 'lb' | 'kg') => { set('units.weight', v); if (repo) { try { saveProfileUnit(repo, v); } catch { /* the setting still changes */ } } };
   const u = p.units;
+  // The water logger keeps its own unit, so this choice changes both, and shows the one water is logged in.
+  const [rev, redraw] = useState(0);
+  let water = u.water;
+  // rev is read so the logger's unit is read again after each change (the compiler keeps only what is read).
+  try { if (repo && rev >= 0) water = readWater(repo).unit === 'ml' ? 'ml' : 'floz'; } catch { /* the saved choice */ }
+  const setWater = (v: 'floz' | 'ml') => {
+    if (!repo) { set('units.water', v); return; }
+    try { setWaterUnit(repo, v === 'ml' ? 'ml' : 'oz'); } catch { set('units.water', v); }
+    redraw(n => n + 1);
+  };
   const weeks = [{ v: 'mon' as const, l: 'Monday' }, { v: 'sun' as const, l: 'Sunday' }, { v: 'sat' as const, l: 'Saturday' }];
   const order = { mon: ['Monday', 'Sunday'], sun: ['Sunday', 'Saturday'], sat: ['Saturday', 'Friday'] }[u.week];
-  const sample = [wt(182.1, p), u.height === 'cm' ? '180 cm' : '5 ft 11 in', u.energy === 'kJ' ? '5,190 kJ' : '1,240 kcal', u.water === 'ml' ? '1,680 mL' : '57 oz',
+  const sample = [wt(182.1, p), u.height === 'cm' ? '180 cm' : '5 ft 11 in', u.energy === 'kJ' ? '5,190 kJ' : '1,240 kcal', water === 'ml' ? '1,680 mL' : '57 oz',
     u.distance === 'km' ? '5.8 km' : '3.6 mi', clock(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), p)];
   return <SetPage back={st('settings')} title={st('settingsUnitsTitle')} testID="settings-units">
     <List>
-      <SegRow title={st('settingsWeight')} value={u.weight} onChange={v => set('units.weight', v)} options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
+      <SegRow title={st('settingsWeight')} value={u.weight} onChange={setWeight} options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
       <SegRow title={st('settingsHeight')} value={u.height} onChange={v => set('units.height', v)} options={[{ value: 'ftin', label: 'ft, in' }, { value: 'cm', label: 'cm' }]} />
       <SegRow title={st('settingsEnergy')} value={u.energy} onChange={v => set('units.energy', v)} options={[{ value: 'kcal', label: 'kcal' }, { value: 'kJ', label: 'kJ' }]} />
-      <SegRow title={st('settingsWater')} value={u.water} onChange={v => set('units.water', v)} options={[{ value: 'floz', label: 'fl oz' }, { value: 'ml', label: 'mL' }]} />
+      <SegRow title={st('settingsWater')} value={water} onChange={setWater} options={[{ value: 'floz', label: 'fl oz' }, { value: 'ml', label: 'mL' }]} />
       <SegRow title={st('settingsDistance')} value={u.distance} onChange={v => set('units.distance', v)} options={[{ value: 'mi', label: 'mi' }, { value: 'km', label: 'km' }]} />
       <SegRow title={st('settingsTime')} value={u.clock} onChange={v => set('units.clock', v)} options={[{ value: '12', label: '12-hour' }, { value: '24', label: '24-hour' }]} />
       <PickRow title={st('settingsWeekStarts')} value={u.week} options={weeks} onPick={v => set('units.week', v)} />
@@ -426,9 +500,8 @@ export function WorkoutPage() {
     if (store && own) act(() => store.preferences().savePlates(u, on ? [...own, pl] : own.filter(x => x !== pl)));
   };
   const setHaptics = (v: boolean) => { set('work.haptics', v); if (store && repo) act(() => repo.localSave('haptics', v)); };
-  const top = kg ? 100 : 225, bar = kg ? +w.barKg : +w.bar, rnd = kg ? 2.5 : 5;
-  const pct = ({ 1: [0.6], 2: [0.5, 0.75], 3: [0.4, 0.6, 0.8], 4: [0.4, 0.55, 0.7, 0.85] } as Record<number, number[]>)[w.warmN] ?? [0.5, 0.75];
-  const reps = ({ 1: [5], 2: [8, 3], 3: [8, 5, 2], 4: [8, 5, 3, 1] } as Record<number, number[]>)[w.warmN] ?? [8, 3];
+  const top = kg ? 100 : 225, bar = kg ? +w.barKg : +w.bar;
+  const ramp = warmRamp(w.warmN, top, kg ? 'kg' : 'lb', bar);
   const bars = kg ? [{ v: '20', l: '20 kg barbell' }, { v: '15', l: '15 kg barbell' }, { v: '10', l: '10 kg technique bar' }]
     : [{ v: '45', l: '45 lb barbell' }, { v: '35', l: '35 lb barbell' }, { v: '33', l: '33 lb (15 kg) barbell' }, { v: '25', l: '25 lb technique bar' }];
   const training = k.c.training;
@@ -457,11 +530,11 @@ export function WorkoutPage() {
         <View style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 14, borderTopWidth: 1, borderTopColor: k.c.hair }}>
           <KitText weight={600} size={12.5} color="text-muted">{st('settingsWarmExample', { top, u })}</KitText>
           <View style={{ marginTop: 8, gap: 6 }}>
-            {pct.map((x, i) => { const v = Math.max(bar, Math.round(top * x / rnd) * rnd);
+            {ramp.map(({ pct: x, weight: v, reps: r }, i) => {
               return <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(training, 0.16) }}>
                   <KitText weight={700} size={11} color="training">{`W${i + 1}`}</KitText></View>
-                <KitText weight={700} size={14.5} numeric>{`${v === bar ? 'Bar' : `${v} ${u}`} × ${reps[i]}`}</KitText>
+                <KitText weight={700} size={14.5} numeric>{`${v === bar ? 'Bar' : `${v} ${u}`} × ${r}`}</KitText>
                 <KitText weight={500} size={12.5} color="text-muted" style={{ marginLeft: 'auto' }}>{`${Math.round(x * 100)}%`}</KitText>
               </View>; })}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

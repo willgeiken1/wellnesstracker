@@ -1,5 +1,5 @@
 import { ImportPreviewConflict } from '../features/importer/errors';
-import { commitImport, previewImport, type ImportPlan } from '../features/importer/local';
+import { commitPendingAccountImport, type ImportPlan } from '../features/importer/local';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { Alert, AppState } from 'react-native';
 import { t } from '../i18n/en';
@@ -9,6 +9,7 @@ import { getAuthClient, clearLocalSession } from './client';
 import { openLocalDatabase } from '../data/database';
 import type { Repository } from '../data/repository';
 import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
+import type { SyncState } from '../data/sync-line';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed, AccountDeletionUncertain } from './sign-out';
@@ -19,6 +20,7 @@ import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
 import { ageOn } from '../features/onboarding/model';
 import { assertDemoTransferSafe, promoteDemo } from '../features/onboarding/demo-transfer';
+import { loadSettingsPrefs } from '../features/settings/prefs';
 // Clear the hint for every resumed departure phase, before recovery can wipe/remove its marker.
 const bootSignOutStorage: typeof signOutStorage={
   async read(){const marker=await signOutStorage.read();if(marker)await lastOwnerStorage.clear();return marker;},
@@ -51,7 +53,8 @@ export interface AuthState {
   signInWithGoogle?(): Promise<GoogleSignInResult>;
   /** Using the app without an account (Skip for now, Start as a guest): data stays on this phone in the guest space. */
   guest?: boolean; continueAsGuest?(): void; exitGuest?(): void;
-  signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
+  signOut(discardUnsynced?: boolean): Promise<void>; /** Resolves with where sync stands once this run is over (nothing on a build without sync). */
+  syncNow(): Promise<SyncState | void>;
   /** Permanently deletes the signed-in account on the server, then erases this phone's copy. */
   deleteAccount?(): Promise<void>;
 }
@@ -149,7 +152,11 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   // belongs to one account. Drop it, before the screen is drawn again, whenever the account changes.
   useLayoutEffect(()=>()=>{ownerChanged();},[owner]);
   const userId=session?.user.id;
-  const engine=useMemo(()=>!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[currentRepo,client,userId,departurePending]);
+  // Settings, Sync across devices. Off means no engine at all: no debounced push, no foreground or reconnect sync,
+  // no Sync now or pull, and turning it off closes the engine, which cancels its timer and any run in flight.
+  // Edits stay in the outbox, so turning it back on makes a new engine whose first sync uploads them.
+  const syncOn=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>!currentRepo||loadSettingsPrefs(currentRepo).sync.on);
+  const engine=useMemo(()=>syncOn&&!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[syncOn,currentRepo,client,userId,departurePending]);
   const pending=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.pending().length??0);
   const conflicts=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.conflicts().length??0);
   const initialPullComplete=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.initialPullComplete??false);
@@ -184,7 +191,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   },[currentRepo,demoTarget,owner,initialPullComplete,demoTransferError,transferAttempt]);
   // A file intentionally opened while signed out follows the first account on this device.
   useEffect(()=>{let active=true;if(!currentRepo||!userId||!initialPullComplete)return;
-    void openLocalDatabase().then(database=>{if(!active||activeSession.current?.user.id!==currentRepo.owner)return;const guest=database.forOwner('guest'),plan=guest.localGet<ImportPlan>('pwaPendingAccountPlan');if(!plan)return;currentRepo.atomic(()=>{commitImport(currentRepo,previewImport(currentRepo,plan),true);guest.localSave('pwaPendingAccountPlan',null);});}).catch(()=>{/* File and guest copy remain available for an explicit retry. */});return()=>{active=false;};
+    void openLocalDatabase().then(database=>{if(!active||activeSession.current?.user.id!==currentRepo.owner)return;commitPendingAccountImport(database.forOwner('guest'),currentRepo);}).catch(()=>{/* File and guest copy remain available for an explicit retry. */});return()=>{active=false;};
   },[currentRepo,userId,initialPullComplete]);
   const authenticate=async(email:string,password:string,dob?:string,create=false,apple?:{token:string;nonce:string},join=false):Promise<string|null>=>{
     // Sign in with Apple and Continue with email may create the account, so a session's under-13 block stops them too.
@@ -294,7 +301,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       // The account is gone: there is nothing to sync, so erase this phone's copy without the unsynced check.
       await depart();
     },
-    syncNow:()=>engine?.sync()??Promise.resolve(),
+    syncNow:()=>engine?engine.sync().then(()=>({status:engine.status,pending:currentRepo?.pending().length??0,conflicts:currentRepo?.conflicts().length??0})):Promise.resolve(),
   };
   async function depart() {
       if(!bootReady||!currentRepo||departingOwner.current)throw new Error('Sign-out recovery required.');

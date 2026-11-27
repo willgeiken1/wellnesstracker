@@ -33,11 +33,13 @@ export function Onboarding() {
   const auth = useAuth(), repo = auth.repository;
   const params = useLocalSearchParams<{ resume?: string }>();
   const resume = params.resume === '1';
-  // Before the first pull an account's profile may not be on this phone yet, so "set up" can't be told.
-  const known = !!repo && (!auth.session || !!auth.initialPullComplete);
+  // Before the first pull an account's profile may not be on this phone yet, so "set up" can't be told, unless this
+  // phone already has it (sync turned off afterwards never pulls again).
+  const known = !!repo && (!auth.session || !!auth.initialPullComplete || isSetUp(repo));
   const skipped = known && repo ? readSkipped(repo) : null;
   const leave = !repo ? null
-    : !auth.session && !auth.phoneOnly ? (auth.demo ? '/sign-in' : '/auth')
+    // A guest (Skip for now, Start as a guest) sets up on this phone like a phone-only profile; the demo has no setup.
+    : !auth.session && !auth.phoneOnly && (auth.demo || !auth.guest) ? (auth.demo ? '/sign-in' : '/auth')
     : !known ? null
     : resume ? (skipped && (skipped.about || skipped.goals) ? null : '/')
     : isSetUp(repo) ? '/' : null;

@@ -38,7 +38,9 @@ export function install(window) {
   /* units follow Settings (INS.prefs): energy in kcal or kJ, weight in lb or kg, clock 12 or 24 hour. The data stays in kcal, lb and
      "h:mm AM"; only what a tile shows converts. Macros stay in grams; water keeps its own unit from the water section. */
   function PF() { return window.INS && INS.prefs; }
-  function ek(kcal) { let p = PF(); return p ? p.enParts(kcal).n : commas(kcal); }
+  /* a meal or day whose foods give no energy (or protein) reads as a dash, never 0 */
+  function ek(kcal) { if (kcal == null) return '\u2013'; let p = PF(); return p ? p.enParts(kcal).n : commas(kcal); }
+  function gq(g) { return g == null ? '\u2013' : String(Math.round(g)); }
   function eu() { let p = PF(); return p ? p.enU() : 'kcal'; }
   function isKg() { let p = PF(); return !!p && p.wtU() === 'kg'; }
   function clkS(t) { let p = PF(); return t && p ? p.clkStr(t) : t; }
@@ -366,7 +368,7 @@ export function install(window) {
       h += full(ctx, arcMeter(ctx, sid, 268, 104, 52, 12, -120, 120, fr, col));
       h += centre(ctx, 268, 102, m.isLeft ? String(p.today) : String(m.left), 'g', m.isLeft ? 'eaten' : 'to go', 20);
     }
-    return root('protein', 'A', ctx, m.aria + ' By meal: ' + p.byMeal.join(', ') + ' g.', h);
+    return root('protein', 'A', ctx, m.aria + ' By meal: ' + p.byMeal.map(gq).join(', ') + ' g.', h);
   }
 
   /* B: Goal days. One small ring per day for the last 7 days; a day that reached the goal becomes a solid raised disc. */
@@ -386,11 +388,11 @@ export function install(window) {
         s += arcPath(cx, g.cy, g.r, 0, 360, wellCol(ctx), g.sw, '', sink(sid));
         if (f > 0.01) s += arcPath(cx, g.cy, g.r, 0, 360 * f, gr, g.sw, 'round', lift(sid));
       }
-      if (L) s += txt(cx, g.cy + 4.5, String(wk.v[i]), f >= 1 ? onFill(ctx, col) : T.text, { anchor: 'middle', num: true, size: 12, weight: 600 });
+      if (L) s += txt(cx, g.cy + 4.5, gq(wk.v[i]), f >= 1 ? onFill(ctx, col) : T.text, { anchor: 'middle', num: true, size: 12, weight: 600 });
     }
     h += full(ctx, s);
     for (i = 0; i < 7; i++) h += lbl(ctx, g.x + step * i, g.ly, step, lt[i], 'center', i === 6);
-    return root('protein', 'B', ctx, m.aria + ' Goal reached on ' + wk.hit + ' of the last 7 days: ' + wk.v.join(', ') + ' g.', h);
+    return root('protein', 'B', ctx, m.aria + ' Goal reached on ' + wk.hit + ' of the last 7 days: ' + wk.v.map(gq).join(', ') + ' g.', h);
   }
 
   /* C: Goal line. The goal is a recessed groove; each day is a raised bead above or below it by how far it landed from the goal. */
@@ -404,17 +406,18 @@ export function install(window) {
     s += defs(ctx, sid, ugrad(ctx, sid + '-t', col, z.y - 6, z.y + z.h + 6) + ugrad(ctx, sid + '-p', past(ctx, col), z.y - 6, z.y + z.h + 6));
     s += '<rect x="' + R(z.x) + '" y="' + R(gy - 3) + '" width="' + R(z.w) + '" height="6" rx="3" fill="' + wellCol(ctx) + '"' + sink(sid) + '/>';
     for (i = 0; i < 7; i++) {
+      if (wk.v[i] == null) continue;
       let cx = z.x + step * (i + 0.5), y = Y(wk.v[i]);
       if (Math.abs(y - gy) > z.r + 3) s += '<line x1="' + R(cx) + '" y1="' + R(gy) + '" x2="' + R(cx) + '" y2="' + R(y) + '" stroke="' + T.muted + '" stroke-opacity="0.45" stroke-width="1.25"/>';
     }
     let ty = Y(wk.v[6]), tx = z.x + step * 6.5;
     s += '<g' + lift(sid) + '>';
-    for (i = 0; i < 7; i++) s += '<circle cx="' + R(z.x + step * (i + 0.5)) + '" cy="' + R(Y(wk.v[i])) + '" r="' + (i === 6 ? z.r + 1 : z.r) + '" fill="url(#' + sid + (i === 6 ? '-t' : '-p') + ')"/>';
+    for (i = 0; i < 7; i++) if (wk.v[i] != null) s += '<circle cx="' + R(z.x + step * (i + 0.5)) + '" cy="' + R(Y(wk.v[i])) + '" r="' + (i === 6 ? z.r + 1 : z.r) + '" fill="url(#' + sid + (i === 6 ? '-t' : '-p') + ')"/>';
     s += '</g>';
     if (!S) s += txt(z.x + z.w + 2, gy - 6, String(p.goal), T.muted, { anchor: 'end', num: true, weight: 600 });
     h += full(ctx, s);
     for (i = 0; i < 7; i++) h += lbl(ctx, z.x + step * i, z.ly, step, lt[i], 'center', i === 6);
-    return root('protein', 'C', ctx, m.aria + ' Last 7 days against the ' + p.goal + ' g goal: ' + wk.v.join(', ') + ' g.', h);
+    return root('protein', 'C', ctx, m.aria + ' Last 7 days against the ' + p.goal + ' g goal: ' + wk.v.map(gq).join(', ') + ' g.', h);
   }
 
   /* D: Timeline. Meals sit on a recessed groove of the day as raised discs sized by grams; the recessed socket after now is what is left. */
@@ -423,7 +426,7 @@ export function install(window) {
     let S = o.size === 'S', z = S ? { x: P, w: 141, cy: 128, rMax: 15 } : { x: 176, w: 166, cy: 96, rMax: 20 };
     let h0 = 6, h1 = 22, X = function (hr) { return z.x + clamp((hr - h0) / (h1 - h0), 0, 1) * z.w; };
     let left = m.left, mx = Math.max(amax(p.byMeal), left) || 1, rOf = function (g) { return Math.max(4, Math.sqrt(g / mx) * z.rMax); };
-    let items = p.byMeal.map(function (g, k) { return { g: g, r: rOf(g), x: X(meals[k] ? mealHour(meals[k].time) : 8 + k * 4), name: meals[k] ? meals[k].name : '' }; });
+    let items = p.byMeal.map(function (g, k) { return { g: g, r: rOf(g || 0), x: X(meals[k] ? mealHour(meals[k].time) : 8 + k * 4), name: meals[k] ? meals[k].name : '' }; });
     if (left > 0) items.push({ g: left, r: rOf(left), x: X(nowHour(ctx)) + rOf(left), sock: true });
     /* pack left to right without overlaps, then pull back inside the zone */
     for (i = 0; i < items.length; i++) items[i].x = Math.max(items[i].x, i ? items[i - 1].x + items[i - 1].r + items[i].r + 3 : z.x + items[i].r);
@@ -441,11 +444,11 @@ export function install(window) {
       let it = items[i];
       if (it.sock) s += '<circle cx="' + R(it.x) + '" cy="' + z.cy + '" r="' + R(it.r) + '" fill="' + wellCol(ctx) + '"' + sink(sid) + '/>';
       else s += '<circle cx="' + R(it.x) + '" cy="' + z.cy + '" r="' + R(it.r) + '" fill="url(#' + sid + '-u)"' + lift(sid) + '/>';
-      if (it.r >= 10) s += txt(it.x, z.cy + (S ? 3.5 : 4), String(it.g), it.sock ? T.muted : onFill(ctx, col), { anchor: 'middle', num: true, size: S ? 10 : 12, weight: 600 });
+      if (it.r >= 10) s += txt(it.x, z.cy + (S ? 3.5 : 4), gq(it.g), it.sock ? T.muted : onFill(ctx, col), { anchor: 'middle', num: true, size: S ? 10 : 12, weight: 600 });
     }
     h += full(ctx, s);
     if (!S) for (i = 0; i < items.length; i++) h += lbl(ctx, items[i].x - 30, z.cy + z.rMax + 8, 60, items[i].sock ? 'To go' : items[i].name, 'center', items[i].sock);
-    return root('protein', 'D', ctx, m.aria + ' Meals: ' + p.byMeal.map(function (g, k) { return (meals[k] ? meals[k].name : 'Meal ' + (k + 1)) + ' ' + g + ' g'; }).join(', ') + '.', h);
+    return root('protein', 'D', ctx, m.aria + ' Meals: ' + p.byMeal.map(function (g, k) { return (meals[k] ? meals[k].name : 'Meal ' + (k + 1)) + ' ' + gq(g) + ' g'; }).join(', ') + '.', h);
   }
 
   TS2.tiles.push({
@@ -771,8 +774,8 @@ export function install(window) {
     let left = pv ? Math.max(0, d.pGoal - d.pEaten) : Math.max(0, d.goal - d.eaten);
     return {
       d: d, pv: pv, nx: nx, left: left, u: pv ? 'g' : eu(), logged: d.meals.filter(function (x) { return x.n > 0; }).length,
-      V: function (x) { return pv ? String(Math.round(x.p)) : ek(x.kcal); },
-      W: function (x) { return pv ? Math.round(x.p) + ' grams of protein' : ek(x.kcal) + ' ' + eu(); },
+      V: function (x) { return pv ? gq(x.p) : ek(x.kcal); },
+      W: function (x) { return pv ? gq(x.p) + ' grams of protein' : ek(x.kcal) + ' ' + eu(); },
       leftTx: (pv ? Math.round(left) + ' g' : ek(left) + ' ' + eu()) + (pv ? ' protein left' : ' left')
     };
   }
@@ -820,7 +823,7 @@ export function install(window) {
     for (i = 0; i < list.length; i++) {
       let x = list[i], y = y0 + i * rh, cy = y + rh / 2;
       if (i) h += box(P, y, 326 - 44, 1, 'background:' + T.hair + ';');
-      let sub = (saved ? x.q : x.q) + ' · ' + (m.pv ? ek(x.kcal) + ' ' + eu() : Math.round(x.p) + ' g protein');
+      let sub = (saved ? x.q : x.q) + ' · ' + (m.pv ? ek(x.kcal) + ' ' + eu() : gq(x.p) + ' g protein');
       h += at(P, cy - (L ? 17 : 16), 200, esc(saved || L ? x.n : shortFood(x.n)), 'font-size:14px;line-height:18px;font-weight:600;color:' + T.text + ';');
       h += at(P, cy + (L ? 2 : 2), 200, esc(sub), 'font-size:11.5px;line-height:15px;font-weight:600;color:' + T.muted + ';');
       h += at(P + 326 - 44 - 96, cy - 10, 88, '<span style="font-family:' + FH + ';font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;color:' + T.text + '">' + m.V(x) + '</span><span style="font-size:11px;font-weight:600;color:' + T.muted + ';margin-left:3px">' + m.u + '</span>', 'text-align:right;line-height:20px;');

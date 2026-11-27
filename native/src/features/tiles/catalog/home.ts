@@ -8,7 +8,9 @@ import type { TilePageConfig } from '../types';
 const allHomeTiles: TilePageConfig = {
   id: 'home', label: 'Home', color: 'accent', variant: 'home',
   groups: [['Today', 'accent'], ['Training', 'training'], ['Food', 'food'], ['Body', 'accent-2'], ['Recovery & Sleep', 'sleep'], ['Routines', 'sleep']],
-  defaults: [['next', 'M', 'B'], ['protein', 'S', 'A'], ['water', 'S', 'E'], ['steps', 'S', 'A'], ['weight', 'S', 'A']],
+  defaults: [['next', 'M', 'B'], ['workout', 'M'], ['protein', 'S', 'A'], ['water', 'S', 'E'], ['steps', 'S', 'A'], ['weight', 'S', 'A']],
+  // The Workout tile joined Home's starting layout after the first TestFlight builds; Homes saved before then get it once.
+  arrivals: [{ id: 'workout', rev: 1, size: 'M', after: 'next' }],
   tiles: [
     {
       id: 'score', title: 'Insight Score', sub: 'Your day score and its three pillars',
@@ -57,6 +59,17 @@ const allHomeTiles: TilePageConfig = {
         { key: 'C', name: 'Clock', sizes: ['S', 'M'], render: pendingTile('home', 'nextup', 'C') },
         { key: 'D', name: 'Ruler', sizes: ['S', 'M'], render: pendingTile('home', 'nextup', 'D') },
       ],
+    },
+    {
+      // Always on Home whatever the workout's state: the one in progress with Resume, or the next plan day with Start
+      // (the design's Training "Workout in progress" tile). Drawn by the Training tab's own tile body.
+      id: 'workout', title: 'Workout', sub: 'Start your next workout, or pick up the one in progress',
+      icon: 'workouts', color: 'training', group: 'Training', sizes: ['S', 'M', 'L'], size: 'M', head: false,
+      label: 'Open your workouts',
+      options: [
+        { id: 'show', label: 'Under the timer', choices: [['next', 'Next set'], ['exs', 'Exercises']] },
+      ],
+      render: pendingTile('home', 'workout'),
     },
     {
       id: 'volume', title: 'Volume', sub: 'Weight lifted over 7, 14 or 30 days',

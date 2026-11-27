@@ -12,9 +12,11 @@ import { useLayoutMotion } from '@/components/layout-motion';
 import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
 import { useTheme } from '@/design/theme-provider';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 import { ShellToast, showToast } from '@/features/shell/toast';
 import { actionSheet } from '../action-sheet';
 import { FinishSheet } from '../finish';
+import { SetupEditor, setupLabel } from '../machine-setup';
 import { tick } from '../haptics';
 import { trainingNav } from '../nav';
 import { SheetHost } from '../primitives';
@@ -23,7 +25,7 @@ import { useWorkout } from '../use-workout';
 import { useRestLiveActivity } from '../live-activity';
 import { RestBar, JumpStrip, StatusCard, TopBar } from './chrome';
 import { FocusMode } from './focus';
-import { checkSet, deleteSet, exLabel, discardSession, loggerView, noteOpenKey, plateText, removeExercise, rpeKey, type ExerciseView, type SetView } from './model';
+import { barFor, checkSet, deleteSet, exLabel, SET_FIELDS, type SetField, discardSession, loggerView, noteOpenKey, plateText, removeExercise, rpeKey, type ExerciseView, type SetView } from './model';
 import { ExerciseFooter, ExerciseHeader, LT, NoteField, SetCard, useLoggerColors, type SetHandlers } from './parts';
 
 /** Leave the logger for the Training tab; the workout keeps going. */
@@ -61,8 +63,14 @@ export function TrainingLogger() {
   </View>;
 }
 
-function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
+/** Keeps the screen on while it is drawn; the logger draws it only while Settings > Workouts > Keep screen awake is on. */
+function StayAwake() {
   useKeepAwake('workout');
+  return null;
+}
+
+function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
+  const [{ work: { awake } }] = useSettingsPrefs();
   const insets = useSafeAreaInsets(), col = useLoggerColors(), { reduceMotion } = useTheme(), glide = useLayoutMotion();
   const past = store.pastMode(session.id), editing = session.data.finished_at != null;
   const view = loggerView(store, session);
@@ -70,6 +78,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   const [openSet, setOpenSet] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [focus, setFocus] = useState(false), [reorder, setReorder] = useState(false), [finishSheet, setFinishSheet] = useState(false);
+  const [setup, setSetup] = useState<{ name: string; title: string } | null>(null);
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null), cardY = useRef<Record<string, number>>({});
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   // The header's height: the status bar, the 44 pt bar and its 6 pt below, and the 38 pt jump strip when it shows.
@@ -87,21 +96,24 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   }, 60);
   const run = (fn: () => void) => { try { fn(); } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); } };
 
-  const key = (e: ExerciseView, s: SetView, field: 'weight' | 'reps') => `${e.entry.id}:${s.index}:${field}`;
+  const key = (e: ExerciseView, s: SetView, field: SetField) => `${e.entry.id}:${s.index}:${field}`;
   const withEdits = (e: ExerciseView, s: SetView): SetView => {
-    const w = edits[key(e, s, 'weight')], r = edits[key(e, s, 'reps')];
-    return w == null && r == null ? s : { ...s, draft: { ...s.draft, weight: w ?? s.draft.weight, reps: r ?? s.draft.reps } };
+    const changed = SET_FIELDS.filter(f => edits[key(e, s, f)] != null);
+    return changed.length ? { ...s, draft: { ...s.draft, ...Object.fromEntries(changed.map(f => [f, edits[key(e, s, f)]])) } } : s;
   };
-  const field = (e: ExerciseView, s: SetView, f: 'weight' | 'reps', v: string) => {
+  const field = (e: ExerciseView, s: SetView, f: SetField, v: string) => {
     if (s.done) setEdits(m => ({ ...m, [key(e, s, f)]: v }));
     else run(() => store.editDraft(e.entry.id, s.index, { [f]: v }));
   };
   const endEdit = (e: ExerciseView, s: SetView) => {
     if (!s.done) return;
-    const w = edits[key(e, s, 'weight')], r = edits[key(e, s, 'reps')];
-    setEdits(m => { const n = { ...m }; delete n[key(e, s, 'weight')]; delete n[key(e, s, 'reps')]; return n; });
-    if (w == null && r == null) return;
-    run(() => store.editDraft(e.entry.id, s.index, { ...(w != null && w !== s.draft.weight ? { weight: w } : {}), ...(r != null && r !== s.draft.reps ? { reps: r } : {}) }));
+    const changed = SET_FIELDS.filter(f => edits[key(e, s, f)] != null);
+    setEdits(m => { const n = { ...m }; for (const f of SET_FIELDS) delete n[key(e, s, f)]; return n; });
+    // The card hands back the set as shown, edits included, so compare with what is saved for it.
+    const saved = view.exercises.find(x => x.entry.id === e.entry.id)?.sets[s.index]?.draft ?? {};
+    const patch = Object.fromEntries(changed.filter(f => edits[key(e, s, f)] !== ((saved as Partial<Record<SetField, string>>)[f] ?? '')).map(f => [f, edits[key(e, s, f)]]));
+    if (!Object.keys(patch).length) return;
+    run(() => store.editDraft(e.entry.id, s.index, patch));
   };
   const check = (e: ExerciseView, s: SetView) => {
     const wasOpen = openId === e.entry.id;
@@ -126,7 +138,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
     const w = Number(s.draft.weight || s.weightHint);
     if (!w) return null;
     const prefs = store.preferences();
-    return plateText(w, e.unit, prefs.machine(e.name).bar_weight, prefs.plateSet(e.unit));
+    return plateText(w, e.unit, barFor(store, e.name, e.unit), prefs.plateSet(e.unit));
   };
   const handlers = (e: ExerciseView): SetHandlers => ({
     onField: (s, f, v) => field(e, s, f, v), onEnd: s => endEdit(e, s), onCheck: s => check(e, s), onTag: (s, t) => tag(e, s, t), onRpe: (s, v) => rpe(e, s, v),
@@ -149,6 +161,12 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
     { label: e.note == null ? tr('trainingAddNote') : tr('trainingRemoveNote'), run: () => e.note == null ? store.repo.localSave(noteOpenKey(e.entry.id), true) : saveNote(e, null) },
     ...(past ? [] : [{ label: tr('trainingRestFor'), run: () => trainingNav.rest(e.entry.id) }]),
     { label: tr('trainingReplace'), run: () => trainingNav.picker({ mode: 'replace', entry: e.entry.id }) },
+    // Its own bar, plate step, unit and notes, kept for every workout with this exercise.
+    { label: setupLabel(store.preferences().exercise(e.name).equipment), run: () => setSetup({ name: e.name, title: setupLabel(store.preferences().exercise(e.name).equipment) }) },
+    // Each side on its own row is set before any set is saved, as before, so a saved set never changes shape.
+    ...(store.sets(e.entry.id).length ? [] : [{ label: tr(e.unilateral ? 'bilateral' : 'unilateral'), run: () => run(() => store.setUnilateral(e.entry.id, !e.unilateral)) }]),
+    ...(store.supersetGroup(e.entry) ? [{ label: tr('trainingSupersetUnlink'), run: () => run(() => store.unlinkSuperset(e.entry.id)) }] : []),
+    ...(view.exercises.length > e.superset.length + 1 ? [{ label: tr('trainingSupersetLink'), run: () => supersetWith(e) }] : []),
     { label: tr('trainingReorderTitle'), run: () => setReorder(true) },
     { label: tr('trainingRemoveExercise'), destructive: true, run: () => run(() => {
       glide();
@@ -156,6 +174,15 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
       showToast(tr('trainingRemoved', { name: e.label }), { color: 'training', action: { label: tr('trainingUndo'), onAction: () => run(undo) } });
     }) },
   ] });
+  /** Pick a partner to alternate sets with: they join one superset, of three at most (a partner's own pair comes along when it fits). */
+  const supersetWith = (e: ExerciseView) => {
+    const groupOf = (x: ExerciseView) => { const g = store.supersetGroup(x.entry); return g ? view.exercises.filter(y => store.supersetGroup(y.entry) === g).map(y => y.entry.id) : [x.entry.id]; };
+    const mine = groupOf(e), others = view.exercises.filter(x => !mine.includes(x.entry.id));
+    actionSheet({ title: tr('supersetWith', { name: e.label }), message: tr('trainingSupersetPick'), actions: others.map(x => ({ label: x.label, run: () => run(() => {
+      const ids = [...new Set([...mine, ...groupOf(x)])];
+      store.linkSuperset(ids.length <= 3 ? ids : [e.entry.id, x.entry.id]);
+    }) })) });
+  };
   const saveNote = (e: ExerciseView, text: string | null) => run(() => {
     const row = store.repo.get('entries', e.entry.id);
     if (!row) return;
@@ -185,7 +212,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
       actions: [{ label: tr('trainingFinishWorkout'), run: go }] });
     else go();
   };
-  const addExercise = () => trainingNav.picker({ mode: 'add' });
+  const addExercise = () => trainingNav.picker({ mode: 'add', session: session.id });
   const name = String(session.data.name ?? '') || tr('trainingEmptyWorkout');
 
   // The header (`.nb.tr-nb`, with the jump strip inside it) floats over the exercises, which show faintly through it.
@@ -196,6 +223,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   </View>;
 
   return <View style={{ flex: 1, backgroundColor: col.c.bg }}>
+    {awake && <StayAwake />}
     <UnderBar bar={header} gutter={0} estimate={headerGuess} onTop={h => { headerH.current = h; }}>{top =>
     <ScrollView ref={scroll} testID="logger-exercises" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets scrollIndicatorInsets={{ top }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingTop: top, paddingBottom: 132 + insets.bottom }}>
@@ -240,6 +268,9 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
       onClose={() => { setFocus(false); setXo(null); }} onFinish={() => { setFocus(false); finish(); }}
       onField={(e, s, f, v) => field(e, s, f, v)} onTag={tag} onRpe={rpe} onLog={(e, s) => check(e, s)} />}
     <ShellToast bottom={Math.max(0, insets.bottom - 8)} />
+    <SheetHost visible={!!setup} onClose={() => setSetup(null)}>
+      {setup && <SetupEditor store={store} name={setup.name} title={setup.title} onClose={() => setSetup(null)} />}
+    </SheetHost>
     <SheetHost visible={finishSheet} onClose={() => setFinishSheet(false)}>
       {finishSheet && <FinishSheet store={store} session={session} onClose={() => setFinishSheet(false)} />}
     </SheetHost>

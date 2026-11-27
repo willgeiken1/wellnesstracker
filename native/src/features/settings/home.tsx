@@ -6,6 +6,8 @@ import Svg, { Defs, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useAuth } from '@/auth/provider';
+import { syncLineKey } from '@/data/sync-line';
+import { t } from '@/i18n/en';
 import { readGoalsData } from './goals-data';
 import { EmptyState, Icon, KitText, LargeTitle, List, ListRow, NavBar, SearchField, StackGapContext, SurfaceContext, Tappable, mix, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
@@ -17,6 +19,7 @@ import { workoutRest } from './workout-data';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { AvatarPhoto, useProfilePhoto } from './avatar-photo';
 import { GROUPS, SECTIONS, searchSettings, type SectionId } from './sections';
+import { remindersOn } from '@/features/reminders/plan';
 
 /** The version the way iOS shows it, "1.0 (1)": a zero patch number is left off ("1.0.0" reads 1.0), any other stays. */
 export function versionLabel(version: string | undefined, build: string | undefined) {
@@ -75,7 +78,7 @@ export function summary(id: SectionId, p: SettingsPrefs, theme: string, connecte
     case 'connections': return st('settingsNConnected', { n: connected });
     case 'account': return st(syncs ? 'settingsSyncOn' : 'settingsSyncOff');
     // Without notifications (the phone-only build) no reminder is on, whatever was chosen before.
-    case 'reminders': if (o.limited) return st('settingsOff'); return st('settingsNOn', { n: (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => p.rem[key]).length });
+    case 'reminders': if (o.limited) return st('settingsOff'); return st('settingsNOn', { n: remindersOn(p.rem) });
     case 'privacy': return st(p.priv.lock ? 'settingsFaceId' : 'settingsNoLock');
     case 'appearance': return theme;
     case 'units': return p.units.weight === 'lb' ? 'US' : st('settingsMetric');
@@ -101,7 +104,8 @@ export function SettingsHome() {
   let goalKcal: number | undefined;
   try { goalKcal = who.auth.repository ? readGoalsData(who.auth.repository).kcal : undefined; } catch { goalKcal = undefined; }
   const line1 = who.name ? who.signIn : who.detail;
-  const line2 = who.auth.session ? st(syncs ? 'settingsSyncedNow' : 'settingsSyncOff') : who.name ? who.detail : '';
+  // The card says where sync really stands, never "synced" while changes wait or sync is offline.
+  const line2 = who.auth.session ? syncs ? t(syncLineKey({ status: who.auth.syncStatus, pending: who.auth.pending, conflicts: who.auth.conflicts })) : st('settingsSyncOff') : who.name ? who.detail : '';
   const leave = () => router.canGoBack() ? router.back() : router.replace('/');
   return <View testID="settings-home" style={{ flex: 1, backgroundColor: k.c.bg }}>
     <UnderBar bar={<NavBar testID="settings" back={st('settingsHomeBack')} onBack={leave} title={scrolled ? st('settings') : ''} />}>{top =>

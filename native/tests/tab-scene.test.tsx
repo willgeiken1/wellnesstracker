@@ -45,13 +45,13 @@ test('the timings are the mockup\'s: a 180 ms fade after 40 ms and an 8 pt rise,
   expect(tabArrival(false, false, true)).toEqual({ fade: 200, delay: 0, rise: 0 });
 });
 
-test('a tab that opens fades in and rises on the tab spring; the one that leaves fades out in 110 ms underneath', async () => {
+test('a tab that opens fades in and rises on the tab spring; the one that leaves stays drawn underneath until the new one is in (no empty frame between them)', async () => {
   const { navigation, go } = tabs('a');
   const a = await scene(navigation, 'a', true), b = await scene(navigation, 'b');
   expect(a.opacity.value).toEqual({ delay: 40, animation: { timing: 1, config: { duration: 180, easing: 'linear' } } });
   expect(a.rise.value).toEqual({ spring: 0, config: { mass: 1, stiffness: 560, damping: 46 } });
   await go('b');
-  expect(a.opacity.value).toEqual({ timing: 0, config: { duration: 110, easing: 'linear' } });
+  expect(a.opacity.value).toEqual({ delay: 220, animation: { timing: 0, config: { duration: 0 } } });
   // b was already drawn and had never been open: its first visit only fades.
   expect(b.opacity.value).toEqual({ delay: 0, animation: { timing: 1, config: { duration: 180, easing: 'linear' } } });
   expect(b.rise.value).toBe(0);
@@ -75,7 +75,7 @@ test('under Reduce Motion a page only cross-fades: 200 ms in, nothing travels', 
   await go('b'); await go('a');
   expect(a.opacity.value).toEqual({ delay: 0, animation: { timing: 1, config: { duration: 200, easing: 'linear' } } });
   expect(a.rise.value).toBe(0);
-  expect(b.opacity.value).toEqual({ timing: 0, config: { duration: 110, easing: 'linear' } });
+  expect(b.opacity.value).toEqual({ delay: 220, animation: { timing: 0, config: { duration: 0 } } });
 });
 
 test('a page under the navigator starts unseen, so it never shows for a frame before it fades in', async () => {
@@ -90,4 +90,23 @@ test('a state change that keeps the same tab open moves nothing', async () => {
   const before = a.opacity.value;
   await go('a');
   expect(a.opacity.value).toBe(before);
+});
+
+test('the page that leaves stays drawn for the whole fade-in, and the navigator keeps it attached that long', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { TAB_SWAP } = require('../src/features/shell/tab-scene');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { FADES, tabArrival } = require('../src/components/kit-motion');
+  for (const [first, home, reduced] of [[false, false, false], [true, false, false], [false, true, false], [false, false, true]]) {
+    const m = tabArrival(first, home, reduced);
+    expect(TAB_SWAP).toBeGreaterThanOrEqual(m.delay + m.fade);
+  }
+  expect(TAB_SWAP).toBe(FADES.tabDelay + FADES.tab);
+});
+
+test('the tab pages are see-through, so a page fading in shows the one it replaces instead of a flat background', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const src: string = require('fs').readFileSync(require('path').join(__dirname, '../src/components/floating-tabs.tsx'), 'utf8');
+  expect(src).toMatch(/CLEAR_SCENE = \{ backgroundColor: 'transparent' \}/);
+  expect(src).toMatch(/sceneStyle: CLEAR_SCENE/);
 });

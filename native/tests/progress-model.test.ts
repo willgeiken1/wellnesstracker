@@ -1,9 +1,11 @@
 import { WorkoutStore } from '../src/data/workout/store';
 import { addDays, emptyProgress, goalEta, HISTORY, series, stats, weekReport, type ProgressData } from '../src/features/progress/model';
 import { buildProgress } from '../src/features/progress/source';
+import { metricView } from '../src/features/progress/metric';
 import { addPhoto, readMeasures, readPhotos, saveMeasures } from '../src/features/progress/local';
 import { fill } from '../src/features/progress/format';
 import { saveWeighIn } from '../src/features/body/model';
+import { setTargets } from '../src/features/food/model';
 import { memoryRepository } from './workout-repository';
 
 const NOW = new Date(2026, 10, 11, 12), TODAY = '2026-11-11';
@@ -71,6 +73,30 @@ describe('weekReport', () => {
   });
 });
 
+describe('weekReport against dated targets', () => {
+  test("each day is held to the calorie target it had then, so raising today's target doesn't rewrite the week", () => {
+    const d = blank();
+    d.food.goalKcal = 2600;
+    d.food.goalByDay = d.days.kcal.map(() => 2000);
+    for (let k = 1; k <= 6; k++) d.days.kcal[at(d, k)] = 2000;
+    expect(weekReport(d).onTarget).toBe(6);
+    // Without dated targets the week falls back to today's.
+    delete d.food.goalByDay;
+    expect(weekReport(d).onTarget).toBe(0);
+  });
+  test('buildProgress keeps each logged day\'s own target', () => {
+    const repo = memoryRepository();
+    repo.localSave('targetBasis', 'manual');
+    setTargets(repo as never, '2026-11-01', { energy_kj: 2000 * 4.184, protein_g: 150, carbs_g: 200, fat_g: 70 });
+    setTargets(repo as never, TODAY, { energy_kj: 2600 * 4.184, protein_g: 150, carbs_g: 200, fat_g: 70 });
+    for (let k = 1; k <= 6; k++) repo.save('food_entries', { name: 'Synthetic meal', day: addDays(TODAY, -k), energy_kj: 2000 * 4.184 });
+    const d = buildProgress({ store: new WorkoutStore(repo), now: NOW, demo: false, health: null, recovery: null, ring: null });
+    expect(d.food.goalKcal).toBe(2600);
+    expect(weekReport(d).logged).toBe(6);
+    expect(weekReport(d).onTarget).toBe(6);
+  });
+});
+
 describe('buildProgress', () => {
   const recovery = (hrv: (number | null)[], rhr: (number | null)[]) => ({ night: null, hrv, restingHeartRate: rhr, heartToday: null, vo2Max: null });
   const ring = (hrv: (number | null)[], rhr: (number | null)[]) => ({ readiness: nulls(30), sleepScore: nulls(30), hrv, restingHeartRate: rhr, night: null });
@@ -82,6 +108,28 @@ describe('buildProgress', () => {
     for (const key of ['weight', 'sleep', 'hrv', 'rhr', 'steps', 'kcal', 'training'] as const) expect(d.days[key].every(v => v === null)).toBe(true);
     expect(d.weight.kg).toBeNull();
     expect(d.food.eatenKcal).toBeNull();
+  });
+  test("weight names where its readings came from, never Apple Health for a weight typed in Insight", () => {
+    const typed = memoryRepository();
+    saveWeighIn(typed as never, 80, 'kg', '2026-11-05');
+    expect(metricView(buildProgress({ store: new WorkoutStore(typed), now: NOW, demo: false, health: null, recovery: null, ring: null }), 'weight').src).toBe('Logged in Insight');
+    const scale = memoryRepository();
+    scale.save('weigh_ins', { day: '2026-11-05', weight_kg: 80, entered_value: 80, entered_unit: 'kg', source: 'healthkit' });
+    expect(metricView(buildProgress({ store: new WorkoutStore(scale), now: NOW, demo: false, health: null, recovery: null, ring: null }), 'weight').src).toBe('Apple Health');
+    saveWeighIn(scale as never, 79.5, 'kg', '2026-11-06');
+    expect(metricView(buildProgress({ store: new WorkoutStore(scale), now: NOW, demo: false, health: null, recovery: null, ring: null }), 'weight').src).toBe('Apple Health and Insight');
+    // With no weigh-ins yet, Apple Health is named only when it is connected.
+    expect(metricView(buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: null, ring: null }), 'weight').src).toBe('Logged in Insight');
+    expect(metricView(buildProgress({ store: store(), now: NOW, demo: false, health: health(nulls(30)), recovery: null, ring: null }), 'weight').src).toBe('Apple Health');
+  });
+  test('cardio logged on its own counts toward training minutes, from its first day', () => {
+    const repo = memoryRepository();
+    repo.save('cardio_sessions', { day: '2026-11-10', kind: 'run', duration_ms: 30 * 60000, distance_m: 5000, notes: '' });
+    repo.save('cardio_sessions', { day: TODAY, kind: 'ride', duration_ms: 45 * 60000, distance_m: null, notes: '' });
+    const d = buildProgress({ store: new WorkoutStore(repo), now: NOW, demo: false, health: null, recovery: null, ring: null });
+    expect(d.days.training.at(-1)).toBe(45);
+    expect(d.days.training.at(-2)).toBe(30);
+    expect(d.days.training.at(-3)).toBeNull();
   });
   test('a missing day from Apple Health stays missing', () => {
     const steps = nulls(30); steps[29] = 5000; steps[27] = 0.5 * Number.NaN;
@@ -98,6 +146,21 @@ describe('buildProgress', () => {
     const empty = buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: apple, ring: ring(nulls(30), nulls(30)) });
     expect(empty.days.hrv.slice(-2)).toEqual([null, 45]);
     expect(empty.days.rhr.slice(-2)).toEqual([null, 60]);
+  });
+  test('heart readings are labelled by the source they came from, even with Oura connected', () => {
+    const apple = recovery([...nulls(29), 45], [...nulls(29), 60]);
+    const fromOura = buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: apple, ring: ring([...nulls(29), 30], [...nulls(29), 52]) });
+    expect(fromOura.sources.heart).toBe('Oura');
+    expect(metricView(fromOura, 'hrv').src).toBe('Oura');
+    // Oura is connected but has no heart readings, so the Apple Health ones shown are labelled Apple Health.
+    const fromApple = buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: apple, ring: ring(nulls(30), nulls(30)) });
+    expect(fromApple.sources.oura).toBe(true);
+    expect(fromApple.sources.heart).toBe('Apple Health');
+    expect(metricView(fromApple, 'hrv').src).toBe('Apple Health');
+    expect(metricView(fromApple, 'rhr').src).toBe('Apple Health');
+    expect(metricView(fromApple, 'hrv').about).toBe(metricView(buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: apple, ring: null }), 'hrv').about);
+    const none = buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: null, ring: ring(nulls(30), nulls(30)) });
+    expect(none.sources.heart).toBeNull();
   });
   test('a photo shows the weigh-in of its day or the week before, and what is kept on the phone holds no weight', () => {
     const s = store(), repo = s.repo;

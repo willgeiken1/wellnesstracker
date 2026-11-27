@@ -11,7 +11,8 @@ export function useDataActions() {
   const [, set] = useSettingsPrefs();
   const repo = auth.repository;
   const backup = repo && !auth.demo ? () => {
-    void (auth.phoneOnly ? exportPhoneBackup(repo) : exportAccountBackup(repo))
+    // A guest's data lives in the phone's guest space, as in the phone-only build, so it takes the phone backup.
+    void (auth.phoneOnly || repo.owner === 'guest' ? exportPhoneBackup(repo) : exportAccountBackup(repo))
       .then(() => { set('data.lastBackup', Date.now()); showToast(st('settingsBackupSaved')); })
       .catch(() => showToast(st('settingsBackupFailed'), { color: 'warning' }));
   } : undefined;

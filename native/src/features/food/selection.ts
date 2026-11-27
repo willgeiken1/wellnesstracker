@@ -20,6 +20,9 @@ export function pickFoodDay(day: string | null) {
   picked = next; version++; emit();
 }
 export const foodDay = () => picked ?? attributedDay();
+/** Logging opened from outside the Food tab (Home, a shortcut) is for today: a day picked earlier in Food's strip must
+ * not quietly take the food. The Food tab's own entry points keep its picked day. */
+export const logForToday = () => pickFoodDay(null);
 /** Burned calories by day. Health readings stay in memory for this session and are never saved or sent. */
 export function setBurned(next: Record<string, number>) {
   const same = Object.keys(next).length === Object.keys(burned).length && Object.entries(next).every(([k, v]) => burned[k] === v);

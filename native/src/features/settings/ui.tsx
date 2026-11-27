@@ -150,11 +150,11 @@ export function Menu<T extends string | number>({ at, title, options, value, onP
   const [height, setHeight] = useState(0);
   // What is drawn: the menu stays up while it closes.
   const [live, setLive] = useState(at);
+  if (at && at !== live) setLive(at);
   const fade = useSharedValue(0), grow = useSharedValue(0.86);
   useEffect(() => {
     const never = { reduceMotion: ReduceMotion.Never } as const;
     if (at) {
-      setLive(at);
       fade.value = withTiming(1, { duration: reduceMotion ? 0 : 160, easing: Easing.linear, ...never });
       grow.value = reduceMotion ? 1 : withTiming(1, { duration: 260, easing: EASE, ...never });
       return;

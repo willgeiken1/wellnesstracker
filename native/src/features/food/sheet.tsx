@@ -9,6 +9,7 @@ import { kcalOf, num } from './day';
 import type { Food } from './model';
 import { AddButton } from './ui';
 import { weightText, type FoodWeightUnit } from './weight';
+import { enLabel, enNum, useEnergyUnit } from './energy';
 
 /** A stable getter for the newest value, for gesture handlers that are made once. */
 export function useLatest<T>(value: T): () => T {
@@ -22,7 +23,7 @@ export function useLatest<T>(value: T): () => T {
 /** Native form sheet options: a large sheet stops just short of the top; Quick add and Copy a day are medium sheets at
  * their own heights from the design, as their only detent. */
 export function sheetOptions(size: 'large' | 'quick-cal' | 'copy-day'): NativeStackNavigationOptions {
-  return { ...(size === 'large' ? largeSheet : mediumSheet(size)), contentStyle: { flex: 1 } };
+  return size === 'large' ? largeSheet : mediumSheet(size);
 }
 /** Everything inside reads its colours as on a sheet, so cards and fields step up from the sheet in dark mode. */
 export function SheetSurface({ children }: { children: ReactNode }) {
@@ -70,10 +71,11 @@ export function NoFood() {
   </View>;
 }
 
-/** The energy on the right of a row: "280 kcal", the unit smaller. */
+/** The energy on the right of a row: "280 kcal" (or kJ, as Settings says), the unit smaller. */
 export function KcalValue({ kcal, strong }: { kcal: number | null; strong?: boolean }) {
+  const u = useEnergyUnit();
   return <KitText weight={700} size={15} tracking={-0.01} numeric color={strong ? 'text' : 'text-muted'} style={{ flexShrink: 0 }}>
-    {kcal == null ? '–' : num(kcal)}<KitText weight={600} tracking={0} size={12} color="text-muted">{` ${t('foodKcal')}`}</KitText>
+    {kcal == null ? '–' : enNum(kcal, u)}<KitText weight={600} tracking={0} size={12} color="text-muted">{` ${enLabel(u)}`}</KitText>
   </KitText>;
 }
 

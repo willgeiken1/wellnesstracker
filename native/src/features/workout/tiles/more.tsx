@@ -4,6 +4,7 @@ import { alpha, mix } from '@/components/kit-style';
 import { Tappable } from '@/components/tappable';
 import type { TileRenderProps } from '@/features/tiles';
 import { t } from '@/i18n/en';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 import { DAY_LETTERS, dayLabel, fmt, monthDay } from '../training-data';
 import { trainingNav } from '../nav';
 import { setText, weightText } from '../set-text';
@@ -249,13 +250,15 @@ export function StreakTile(p: TileRenderProps) {
 /** 11. Cardio this week. */
 export function CardioTile(p: TileRenderProps) {
   const { colors, mode, size, options } = p;
-  const data = useTrainingData();
+  const data = useTrainingData(), [{ units: { distance: distanceUnit } }] = useSettingsPrefs();
   if (!data) return null;
   const list = data.cardioWeek(), tint = colors.training;
-  const min = list.reduce((n, c) => n + c.min, 0), mi = list.reduce((n, c) => n + c.mi, 0);
+  // Distance shows in the unit from Settings; the week is kept in miles.
+  const km = distanceUnit === 'km', dist = (m: number) => km ? m * 1.609344 : m, du = t(km ? 'trainingUnitKm' : 'trainingUnitMi');
+  const min = list.reduce((n, c) => n + c.min, 0), mi = dist(list.reduce((n, c) => n + c.mi, 0));
   const lead = options.lead === 'mi';
-  const big = lead ? <N v={mi.toFixed(1)} unit={t('trainingUnitMi')} size={30} colors={colors} /> : <N v={min} unit={t('trainingUnitMin')} size={30} colors={colors} />;
-  const second = lead ? `${min} ${t('trainingUnitMin')}` : `${mi.toFixed(1)} ${t('trainingUnitMi')}`;
+  const big = lead ? <N v={mi.toFixed(1)} unit={du} size={30} colors={colors} /> : <N v={min} unit={t('trainingUnitMin')} size={30} colors={colors} />;
+  const second = lead ? `${min} ${t('trainingUnitMin')}` : `${mi.toFixed(1)} ${du}`;
   const log = <TileButton label={t('trainingLog')} icon="plus" small ghost w={76} a11y={t('trainingLogCardio')} tint={tint} colors={colors} mode={mode} onPress={() => trainingNav.cardio()} />;
   const count = tr(list.length === 1 ? 'trainingSessions_one' : 'trainingSessions_other', { n: list.length });
   if (size === 'S') return <View style={{ flex: 1 }}>
@@ -269,7 +272,7 @@ export function CardioTile(p: TileRenderProps) {
         <IconChip name="heart" color={colors.danger} size={32} icon={16} radius={10} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <T w={600} s={13.5} c={colors.text}>{c.name}</T>
-          <S colors={colors} size={11.5}>{monthDay(c.day) + (c.mi ? ` · ${c.mi.toFixed(1)} ${t('trainingUnitMi')}` : '')}</S>
+          <S colors={colors} size={11.5}>{monthDay(c.day) + (c.mi ? ` · ${dist(c.mi).toFixed(1)} ${du}` : '')}</S>
         </View>
         <N v={c.min} unit={t('trainingUnitMin')} size={14} colors={colors} />
       </View>) : <S colors={colors} lines={2}>{t('trainingNoCardioYet')}</S>}

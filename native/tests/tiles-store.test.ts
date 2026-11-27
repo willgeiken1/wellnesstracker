@@ -17,7 +17,7 @@ describe('tile layout store', () => {
   it('starts from the page defaults and saves layout only, under tiles-<page>', () => {
     const storage = fakeStorage();
     const store = createTileStore(storage, 'training');
-    expect(store.getState().tiles[0].id).toBe('session');
+    expect(store.getState().tiles.slice(0, 2).map(e => e.id)).toEqual(['split', 'session']);
     store.setSize('goal', 'M');
     const saved = storage.data[tileLayoutKey('training')] as { v: number; tiles: unknown[][] };
     expect(saved.v).toBe(1);

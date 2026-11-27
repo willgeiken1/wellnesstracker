@@ -10,9 +10,9 @@ describe('tile catalogue', () => {
     expect(tilePageIds().sort()).toEqual(['food', 'home', 'progress', 'routines', 'training']);
   });
   it('starts each page on the design default layout, in reading order', () => {
-    expect(ids('home')).toEqual(['next:M', 'protein:S', 'water:S', 'steps:S', 'weight:S']);
+    expect(ids('home')).toEqual(['next:M', 'workout:M', 'protein:S', 'water:S', 'steps:S', 'weight:S']);
     expect(defaultLayout(tilePage('home'))[0].style).toBe('B');
-    expect(ids('training')).toEqual(['session:L', 'goal:S', 'streak:S', 'week:L', 'next:M', 'e1rm:S', 'records:S', 'muscles:L', 'recent:M']);
+    expect(ids('training')).toEqual(['split:L', 'session:L', 'goal:S', 'streak:S', 'week:L', 'next:M', 'e1rm:S', 'records:S', 'muscles:L', 'recent:M']);
     expect(ids('food')).toEqual(['cal:M', 'macros:M', 'meals:L', 'water:S', 'protein:S', 'fits:M', 'week:M', 'window:S', 'streak:S', 'quick:M']);
     expect(ids('progress')).toEqual(['score:M', 'history:M', 'recovery:L', 'weight:L', 'goal:S', 'bodyfat:S', 'training:M', 'trend:S', 'records:S', 'weekly:M', 'photos:M']);
     expect(ids('routines')).toEqual(['sun:L', 'next:S', 'overview:S', 'routine:L', 'adherence:M', 'streak:S', 'supplies:S', 'peptides:M', 'week:M', 'tools:M']);
@@ -64,8 +64,8 @@ describe('tile layout edits', () => {
   it('moves a tile one place and cycles its sizes', () => {
     const base = defaultLayout(cfg);
     // one place earlier would land it back where it is (the small tiles share a row), so it moves on
-    expect(moveEntry(base, 'week', -1).map(e => e.id).slice(0, 4)).toEqual(['session', 'week', 'goal', 'streak']);
-    expect(moveEntry(base, 'session', -1).map(e => e.id)).toEqual(base.map(e => e.id));
+    expect(moveEntry(base, 'week', -1).map(e => e.id).slice(0, 5)).toEqual(['split', 'session', 'week', 'goal', 'streak']);
+    expect(moveEntry(base, 'split', -1).map(e => e.id)).toEqual(base.map(e => e.id));
     const goal = base.find(e => e.id === 'goal')!;
     expect(nextSize(cfg, goal)).not.toBe(goal.size);
   });

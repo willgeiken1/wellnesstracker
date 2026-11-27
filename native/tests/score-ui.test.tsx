@@ -10,6 +10,7 @@ import Home from '../src/app/(tabs)/index';
 import SettingsSection from '../src/app/settings/[section]';
 import { ScoreDetail } from '../src/features/score/detail';
 import { readScore } from '../src/features/score/read';
+import { weekScores } from '../src/features/score/days';
 import { SCORE_WEIGHTS_KEY } from '../src/features/score/model';
 import { appleHealth } from '../src/features/health/apple';
 import { HOME_TILES_KEY, homeLayout, scoreOn, setScoreOn } from '../src/features/home/tiles';
@@ -107,24 +108,27 @@ test('a new account with the Score on sees the tile say when it starts, and it o
   expect(jest.mocked(router.push).mock.calls).toEqual([['/score']]);
 });
 
-test('the Score tile follows the days logged, and the score shows after 7', async () => {
+test('the Score tile shows the same day score as the hero and the score screen, from the first day logged', async () => {
   const repo = open();
-  logFood(repo, [5, 4, 3, 2, 1]);
-  workout(repo);
   const view = await render(<Home />, { wrapper });
   await settle();
-  // Five food days plus today's workout: six days logged.
+  // Nothing logged yet: no score to show.
   expect(screen.getByText(t('homeEmptyScore'))).toBeTruthy();
-  logFood(repo, [6]);
+  workout(repo);
   await view.unmount();
   await render(<Home />, { wrapper });
   await settle();
-  const score = readScore(new WorkoutStore(repo), NOW, null);
-  expect(score.ready).toBe(true);
-  expect(score.value).not.toBeNull();
+  // Today's finished workout is a day score at once (the score screen's own number), not a wait for a week of logs.
+  const today = weekScores(new WorkoutStore(repo), NOW, null)[6];
+  expect(today).toBe(100);
   expect(screen.queryByText(t('homeEmptyScore'))).toBeNull();
-  expect(homeTileState()?.data.score.today).toBe(score.value);
-  expect(screen.getAllByText(String(score.value)).length).toBeGreaterThan(0);
+  expect(homeTileState()?.data.score.today).toBe(today);
+  expect(homeTileState()?.scores?.[6]).toBe(today);
+  expect(screen.getAllByText(String(today)).length).toBeGreaterThan(0);
+  logFood(repo, [5, 4, 3, 2, 1]);
+  await render(<Home />, { wrapper });
+  await settle();
+  expect(homeTileState()?.data.score.series.slice(-7)).toEqual(weekScores(new WorkoutStore(repo), NOW, null));
 });
 
 test('taking the Score tile off Home turns the Score off, and turning it on puts it first again', async () => {

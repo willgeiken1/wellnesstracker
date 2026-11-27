@@ -6,19 +6,26 @@ import { readWater, setWaterGoal } from '@/features/food/water';
 import { today } from '@/features/onboarding/model';
 
 /** Goals and targets on the app's own data: food targets (food_targets), the water goal, and the weight goal (goals, kind weight). */
-export interface GoalsData { kcal: number; protein: number; set: boolean; waterL: number; drankL: number; eaten: number; proteinSoFar: number;
+export interface GoalsData { kcal: number; protein: number; set: boolean; waterL: number; drankL: number; /** Null when food was logged without its energy. */ eaten: number | null; proteinSoFar: number | null;
   goalKg: number | null; currentKg: number | null; currentDay: string | null; startKg: number | null }
 
 const LB = 2.2046226218487757;
 
+/** The saved weight goal in kilograms, from the newest goals row of kind weight; null when none is set. */
+export function weightGoalKg(repo: Pick<Repository, 'list'>): number | null {
+  const goal = repo.list('goals').filter(r => r.deleted_at === null && r.data.kind === 'weight' && typeof r.data.target_value === 'number')
+    .sort((a, b) => b.updated_at - a.updated_at)[0];
+  if (!goal) return null;
+  const kg = goal.data.target_unit === 'lb' ? Number(goal.data.target_value) / LB : Number(goal.data.target_value);
+  return Number.isFinite(kg) && kg > 0 ? kg : null;
+}
+
 export function readGoalsData(repo: Repository, day = today()): GoalsData {
   const g = goalsFor(repo, day), v = dayView(repo, day, { today: day }), water = readWater(repo);
   const weighs = repo.list('weigh_ins'), daily = dailyWeights(weighs);
-  const goal = repo.list('goals').filter(r => r.deleted_at === null && r.data.kind === 'weight' && typeof r.data.target_value === 'number')
-    .sort((a, b) => b.updated_at - a.updated_at)[0];
-  const goalKg = goal ? (goal.data.target_unit === 'lb' ? Number(goal.data.target_value) / LB : Number(goal.data.target_value)) : null;
+  const goalKg = weightGoalKg(repo);
   const drank = (water.log[day] ?? []).reduce((a, d) => a + (Number(d.oz) || 0), 0) / 33.814;
-  return { kcal: Math.round(g.kcal), protein: Math.round(g.p), set: g.set, waterL: water.goal, drankL: drank, eaten: Math.round(v.eaten), proteinSoFar: Math.round(v.p),
+  return { kcal: Math.round(g.kcal), protein: Math.round(g.p), set: g.set, waterL: water.goal, drankL: drank, eaten: v.eaten == null ? null : Math.round(v.eaten), proteinSoFar: v.p == null ? null : Math.round(v.p),
     goalKg, currentKg: lastWeight(weighs), currentDay: daily.at(-1)?.day ?? null, startKg: daily[0]?.kg ?? null };
 }
 

@@ -155,7 +155,10 @@ export function TileGrid({ page, storage, scrollRef, stickyTop }: TileGridProps)
   }, [store, rm, haptic]);
   const customize = useCallback((id: string) => {
     tileEdit.customize(page, id);
-    const p = L.pos[id]; if (p) scrollGridTo(p.y, 70);
+    // The tile is the preview (grid.js customize): it rises to 70 pt under the top, above the sheet, and shows each change
+    // as it is made. The room below the grid that lets a low tile rise only exists from the next frame, so the scroll waits
+    // for it; scrolling at once stopped short and left a low tile under the sheet.
+    const p = L.pos[id]; if (p) requestAnimationFrame(() => requestAnimationFrame(() => scrollGridTo(p.y, 70)));
     tileRoutes().customize(page, id);
   }, [page, L, scrollGridTo]);
   const open = useCallback((id: string) => {
@@ -181,6 +184,13 @@ export function TileGrid({ page, storage, scrollRef, stickyTop }: TileGridProps)
     const e = store.getState().tiles.find(s => s.id === id); if (!e) return;
     const n = nextSize(cfg, e); if (n !== e.size) { haptic(); store.setSize(id, n); }
   }, [store, cfg, haptic]);
+  // A tile resized in its sheet moves in the reading order, so it rises back to the top above the sheet (edApply).
+  useEffect(() => {
+    const id = state.flash.resized; if (!id || customizing !== id) return;
+    const p = layoutTiles(state.tiles).pos[id]; if (!p) return;
+    const h = setTimeout(() => scrollGridTo(p.y, 70), 60);
+    return () => clearTimeout(h);
+  }, [state.flash.seq]); // eslint-disable-line react-hooks/exhaustive-deps
   // A resized tile that now runs past the bottom of the screen scrolls into view.
   useEffect(() => {
     const id = state.flash.resized; if (!id || customizing) return;

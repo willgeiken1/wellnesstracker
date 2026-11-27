@@ -47,15 +47,20 @@ describe('the CSV files', () => {
     expect(by['food-log.csv'][1]).toBe(`${TODAY},${meals(repo)[0].name},"Oats, with milk",,400,12,60,8,,,`);
     expect(by['steps.csv']).toEqual(['date,steps', `${TODAY},5000`]);
     expect(by['sleep.csv']).toHaveLength(2);
+    // The hours are time asleep (awake time left out), so the heading says so.
+    expect(by['sleep.csv'][0]).toBe('date,hours_asleep,source');
     expect(buildCsvs(repo, d, ['weight'], 'all')[0].csv).toContain('2026-08-01,Weight,82');
   });
   test('HRV names its kind by source, so Apple Health and Oura numbers are never read as the same thing', () => {
     const d = emptyProgress(TODAY, 'kg');
     d.days.hrv[HISTORY - 1] = 44; d.days.rhr[HISTORY - 1] = 58;
-    d.sources = { oura: false, apple: true, ouraSynced: null };
+    d.sources = { oura: false, apple: true, ouraSynced: null, heart: 'Apple Health' };
     expect(lines(buildCsvs(memoryRepository(), d, ['heart'], '30')[0].csv)[0]).toBe('date,hrv_sdnn_ms,resting_heart_rate_bpm,source');
-    d.sources = { oura: true, apple: false, ouraSynced: null };
+    d.sources = { oura: true, apple: false, ouraSynced: null, heart: 'Oura' };
     expect(lines(buildCsvs(memoryRepository(), d, ['heart'], '30')[0].csv)[0]).toBe('date,hrv_rmssd_ms,resting_heart_rate_bpm,source');
+    // Oura connected but the readings are Apple Health's: they export as Apple's kind of HRV.
+    d.sources = { oura: true, apple: true, ouraSynced: null, heart: 'Apple Health' };
+    expect(lines(buildCsvs(memoryRepository(), d, ['heart'], '30')[0].csv)[0]).toBe('date,hrv_sdnn_ms,resting_heart_rate_bpm,source');
   });
   test('nothing is exported as a day score or a photo', () => {
     const files = buildCsvs(memoryRepository(), emptyProgress(TODAY, 'kg'), EXPORT_KINDS, 'all');

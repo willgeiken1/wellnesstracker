@@ -1,5 +1,5 @@
 import {
-  MAX_ON_HAND, addDays, clock, convert, demoState, emptyState, hist, markOf, nowOf, peptides, rById, rItems, stats, todayItems, weekData, weekdayOf,
+  MAX_ON_HAND, addDays, bestRun, daysLeft, supplies, clock, convert, demoState, emptyState, hist, markOf, nowOf, peptides, rById, rItems, stats, todayItems, weekData, weekdayOf,
   type Item, type RoutinesState,
 } from '../src/features/routines/model';
 import { createRoutinesStore, type NewItem } from '../src/features/routines/store';
@@ -78,6 +78,14 @@ describe('routines store', () => {
     expect(store.read().items.some(i => i.id === item.id)).toBe(false);
   });
 
+  it('counts a powder in grams by its dose: 300 g at 5 g a day lasts 60 days', () => {
+    const store = createRoutinesStore(memory(() => demoState()).io);
+    const { item } = store.addItem(draft({ name: 'Synthetic powder', amt: 5, unit: 'g', hand: '300' }));
+    expect(item).toMatchObject({ left: 300, perDay: 5 });
+    expect(daysLeft(item)).toBe(60);
+    expect(supplies(store.read()).find(x => x.i.id === item.id)!.days).toBe(60);
+  });
+
   it('adds a check item at a time of its own, with no amount', () => {
     const store = createRoutinesStore(memory(() => demoState()).io);
     const { item } = store.addItem(draft({ name: ' Journal ', type: '', kind: 'check', amt: 5, unit: 'mg', time: 20, routines: [] }));
@@ -87,7 +95,7 @@ describe('routines store', () => {
   it('adds a routine with its items, and reorders the list', () => {
     const store = createRoutinesStore(memory(() => demoState()).io);
     const r = store.addRoutine({ name: 'Afternoon', from: 15, to: 17, days: [5, 1, 2], color: 'food', items: ['fish'] });
-    expect(rById(store.read(), r.id)).toMatchObject({ name: 'Afternoon', days: [1, 2, 5], remind: true });
+    expect(rById(store.read(), r.id)).toMatchObject({ name: 'Afternoon', days: [1, 2, 5], remind: false });
     expect(store.read().items.find(i => i.id === 'fish')!.routines).toEqual(['midday', r.id]);
     store.reorder([r.id, 'night']);
     expect(store.read().routines.map(x => x.id)).toEqual([r.id, 'night', 'morning', 'midday']);
@@ -155,6 +163,24 @@ describe('routine weekdays', () => {
     expect(st.pct).toBe(100);
     expect(st.done).toBe(st.sched);
     expect(st.streak).toBe(29); // Every day before today; today, a Sunday, has nothing due.
+  });
+
+  it('starts a new item\'s streak and best run at zero: days before it existed never count', () => {
+    const today = nowOf().day, n = nowOf();
+    const s = weekdayState({ created: today });
+    s.log = {};
+    rById(s, 'night')!.days = [0, 1, 2, 3, 4, 5, 6]; rById(s, 'morning')!.days = [0, 1, 2, 3, 4, 5, 6];
+    expect(stats(s, s.items, n).streak).toBe(0);
+    expect(bestRun(stats(s, s.items, n))).toBe(0);
+    (s.log[today] ??= {}).zn = 'd';
+    expect(stats(s, s.items, n).streak).toBe(1);
+    expect(bestRun(stats(s, s.items, n))).toBe(1);
+    // Added three days ago and kept every day since: a 3-day streak, not 30.
+    const t = weekdayState({ created: addDays(today, -2) });
+    rById(t, 'morning')!.days = [0, 1, 2, 3, 4, 5, 6];
+    t.log = {}; for (let k = 0; k < 3; k++) (t.log[addDays(today, -k)] ??= {}).zn = 'd';
+    expect(stats(t, t.items, n).streak).toBe(3);
+    expect(bestRun(stats(t, t.items, n))).toBe(3);
   });
 
   it('makes an item due on any day one of its routines runs, and pauses still count', () => {

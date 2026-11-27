@@ -6,8 +6,16 @@ import type { TilePageConfig } from '../types';
 export const trainingTiles: TilePageConfig = {
   id: 'training', label: 'Training', color: 'training',
   groups: [['Today', 'training'], ['This week', 'training'], ['Progress', 'training'], ['History', 'training']],
-  defaults: [['session', 'L'], ['goal', 'S'], ['streak', 'S'], ['week', 'L'], ['next', 'M'], ['e1rm', 'S'], ['records', 'S'], ['muscles', 'L'], ['recent', 'M']],
+  defaults: [['split', 'L'], ['session', 'L'], ['goal', 'S'], ['streak', 'S'], ['week', 'L'], ['next', 'M'], ['e1rm', 'S'], ['records', 'S'], ['muscles', 'L'], ['recent', 'M']],
+  // The Split tile joined the top of Training after layouts were saved (Insight Mockup v21).
+  arrivals: [{ id: 'split', rev: 1, size: 'L' }],
   tiles: [
+    {
+      id: 'split', title: 'Split', sub: "Today's split day and this week, with a Change button. Picks your first split.",
+      icon: 'sp-split', color: 'training', group: 'Today', sizes: ['S', 'M', 'L'], size: 'L', head: false,
+      label: 'Open your split',
+      render: pendingTile('training', 'split'),
+    },
     {
       id: 'session', title: 'Workout in progress', sub: 'Live timer, sets done and the next set',
       icon: 'timer', color: 'training', group: 'Today', sizes: ['S', 'M', 'L'], size: 'L', head: false,

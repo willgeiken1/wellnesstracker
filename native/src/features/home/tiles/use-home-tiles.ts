@@ -7,6 +7,7 @@ import type { Repository } from '@/data/repository';
 import { addWater } from '@/features/food/actions';
 import { attributedDay, deleteFood, recentFoods, saveFood } from '@/features/food/model';
 import { quickContainers, readWater } from '@/features/food/water';
+import { logForToday } from '@/features/food/selection';
 import { appleHealth } from '@/features/health/apple';
 import type { HealthDays } from '@/features/health/days';
 import type { OuraRecovery } from '@/features/health/oura';
@@ -21,6 +22,7 @@ import { readHealthDetail } from './health-detail';
 import { readAppData, windowDays } from './read';
 import { buildState, setHomeTileState, type HomeTileState } from './state';
 import { DEFAULT_UNITS } from './studio';
+import { weightGoalKg } from '@/features/settings/goals-data';
 
 /** Daily goals the tiles measure against until the app keeps its own for these readings. */
 export const HOME_GOALS: HomeInput['goals'] = { steps: STEP_GOAL, exercise: 30, active: 500, sleepHours: 8, mindful: 10 };
@@ -34,8 +36,20 @@ export function pickRecovery(oura: OuraRecovery | null, apple: RecoveryRead): Re
 
 /** Last night's stages and bedtimes come from Apple Health; with Oura as the sleep source they would describe another night's
  * reading, so they are left out and the tile says why. */
-export function detailFor(detail: HealthDetailIn | null, ouraSleep: boolean): HealthDetailIn | null {
-  return detail && ouraSleep ? { ...detail, night: null, bedtimes: null } : detail;
+export function detailFor(detail: HealthDetailIn | null, ouraSleep: boolean, ouraSteps = false): HealthDetailIn | null {
+  if (!detail || (!ouraSleep && !ouraSteps)) return detail;
+  return { ...detail, ...(ouraSleep ? { night: null, bedtimes: null } : {}), ...(ouraSteps ? { stepsHourly: null } : {}) };
+}
+
+const named = (from: 'oura' | 'apple' | null | undefined) => from === 'oura' ? 'Oura' : from === 'apple' ? 'Apple Health' : null;
+
+/** Where today's steps and last night's sleep came from, read from the day the tile shows rather than from which
+ * services are connected, so a day filled from the other source is labelled by it. Apple Health's hourly steps and
+ * last night's stages describe Apple Health's reading, so they are left out when the shown total is Oura's. */
+export function todaySources(health: Pick<HealthDays, 'stepsFrom' | 'sleepFrom'> | null, oura: boolean, appleAccess: string | null) {
+  const steps = named(health?.stepsFrom?.at(-1)) ?? (appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura');
+  const sleep = named(health?.sleepFrom?.at(-1)) ?? (oura ? 'Oura' : 'Apple Health');
+  return { steps, sleep, ouraSteps: steps === 'Oura', ouraSleep: sleep === 'Oura' };
 }
 
 /** Today's finer Apple Health readings, read when Home comes to the front and when the app is reopened. Memory only. */
@@ -64,10 +78,13 @@ export function homeTileAction(repo: Repository | null, nextMeal: HomeInput['nex
   if (data.ql === 'water') {
     const c = repo ? quickContainers(readWater(repo)).find(x => x.id === data.wc) : undefined;
     if (repo && c) addWater(repo, attributedDay(), { c });
-    else router.push('/food/water' as unknown as Href);
+    else { logForToday(); router.push('/food/water' as unknown as Href); }
     return;
   }
-  if (data.ql === 'meal' || !repo || !nextMeal) { router.push('/food/log' as unknown as Href); return; }
+  // A meal slot opens the log on that meal, not the one due next (breakfast tapped after breakfast is still breakfast).
+  if (data.ql === 'meal') logForToday();
+  if (data.ql === 'meal' && data.meal) { router.push({ pathname: '/food/log', params: { meal: String(data.meal) } } as unknown as Href); return; }
+  if (data.ql === 'meal' || !repo || !nextMeal) { logForToday(); router.push('/food/log' as unknown as Href); return; }
   if (data.ql !== 'food') return;
   const wanted = String(data.food ?? '').trim().toLowerCase();
   const food = recentFoods(repo).find(f => String(f.name ?? '').trim().toLowerCase() === wanted);
@@ -112,23 +129,24 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
   const repo = store?.repo ?? null;
   // The Apple read is a new object on each draw until it lands, so only its parts are watched.
   const appleAccess = apple.access, appleRecovery = apple.recovery;
-  const hide = useSettingsPrefs()[0].priv.hide;
+  const prefs = useSettingsPrefs()[0], hide = prefs.priv.hide, sleepGoal = prefs.goals.sleep, energy = prefs.units.energy, clock = prefs.units.clock;
   const state = useMemo(() => {
     if (!reader) return null;
     const now = new Date(minute * 60_000);
+    const today = todaySources(health, !!oura, appleAccess);
     const app = readAppData(reader, now, health);
     const recovery = pickRecovery(oura, { access: appleAccess, recovery: appleRecovery });
     const input: HomeInput = {
-      now, ...app, weightGoalKg: null,
+      now, ...app, weightGoalKg: weightGoalKg(reader.repo),
       health: health ? { steps: health.steps, activeKcal: health.activeKcal, exerciseMinutes: health.exerciseMinutes, sleepHours: health.sleepHours, mindfulMinutes: health.mindfulMinutes } : null,
-      detail: detailFor(detailRaw, !!oura), recovery,
-      sources: { activity: appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura', sleep: oura ? 'Oura' : 'Apple Health', body: 'Apple Health' },
-      goals: HOME_GOALS,
+      detail: detailFor(detailRaw, today.ouraSleep, today.ouraSteps), recovery,
+      sources: { activity: appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura', steps: today.steps, sleep: today.sleep, body: 'Apple Health' },
+      goals: { ...HOME_GOALS, sleepHours: Number.isFinite(sleepGoal) && sleepGoal > 0 ? sleepGoal / 60 : HOME_GOALS.sleepHours },
     };
     const nextMeal = input.nextMeal;
     const scores = weekScores(reader, now, health);
-    return { ...buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit }, data => homeTileAction(repo, nextMeal, data), hide), scores };
-  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide]);
+    return { ...buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit, energy: energy === 'kJ' ? 'kJ' : 'kcal', clock: clock === '24' ? '24' : '12' }, data => homeTileAction(repo, nextMeal, data), hide), scores };
+  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide, sleepGoal, energy, clock]);
   useEffect(() => { setHomeTileState(state); }, [state]);
   return state;
 }

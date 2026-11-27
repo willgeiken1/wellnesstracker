@@ -1,9 +1,12 @@
-import { displayWeight, fromKg, localDay, weekOf, type Unit } from '../../core/workout/rules';
+import { displayWeight, fromKg, localDay, toKg, weekOf, type Unit } from '../../core/workout/rules';
 import type { Repository } from '../../data/repository';
 import type { Row } from '../../data/rows';
 import { WorkoutOptions } from '../../data/workout/options';
 import { WorkoutStore, type Draft } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
+import { SplitStore, weeklyTarget } from '../splits/store';
+import { entryVolume, entryVolumeKg } from './volume';
+import { loadSettingsPrefs, SETTINGS_PREFS_KEY, withPref } from '../settings/prefs-model';
 
 /** The ten muscle groups the Training tab counts, and the library muscles each one gathers. */
 export const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'] as const;
@@ -62,6 +65,20 @@ const sessionName = (s: Row, fallback: string) => String(s.data.name ?? '') || f
  * Everything the Training tab and its tiles read, worked out once from the workout, plan and cardio data.
  * Weights come back in the person's unit (lb or kg); minutes count strength sessions and logged cardio.
  */
+/**
+ * The routine a saved plan has next. A chosen split decides it (a weekday split, a picked starting day, a skipped or swapped day
+ * included), so Home, the Split screen and the Training tiles all name the same day; otherwise the plan's own rotation cursor.
+ */
+export function nextPlanDay(repo: Repository, now: Date, plans = new PlanStore(repo)): { index: number; routineId: string } | null {
+  const p = plans.read();
+  if (!p.days.length) return null;
+  const ids = p.days.map(d => d.routineId);
+  const split = new SplitStore(repo).view(now);
+  const splitNext = split ? split.days[split.now.kind === 'live' ? split.now.then[0] ?? -1 : split.now.focus]?.routineId : undefined;
+  const index = splitNext && ids.includes(splitNext) ? ids.indexOf(splitNext) : plans.nextIndex();
+  return ids[index] === undefined ? null : { index, routineId: ids[index] };
+}
+
 export class TrainingData {
   readonly workout: WorkoutStore;
   readonly plans: PlanStore;
@@ -82,8 +99,9 @@ export class TrainingData {
   }
   kg(kg: number) { return displayWeight(kg, this.unit); }
 
-  goalMin() { const g = this.repo.localGet<number>('training.goalMin'); return typeof g === 'number' && g > 0 ? g : 60; }
-  setGoalMin(min: number) { this.repo.localSave('training.goalMin', Math.max(5, Math.min(600, Math.round(min)))); }
+  /** The daily training goal in minutes: the one set in Settings, so Training, Home and Settings agree. */
+  goalMin() { return loadSettingsPrefs(this.repo).goals.train; }
+  setGoalMin(min: number) { this.repo.localSave(SETTINGS_PREFS_KEY, withPref(loadSettingsPrefs(this.repo), 'goals.train', Math.max(10, Math.min(180, Math.round(min))))); }
   planName() { return this.repo.localGet<string>('plans:name') || ''; }
 
   live(): LiveView | null {
@@ -94,14 +112,17 @@ export class TrainingData {
       const exercises: LiveExercise[] = [], matrix: LiveView['matrix'] = [], groups: number[] = [];
       let volume = 0;
       for (const e of entries) {
-        const w = workingDrafts(this.workout.drafts(e.id));
+        const w = workingDrafts(this.workout.drafts(e.id)), from = this.workout.unit(e.id), one = this.workout.isUnilateral(e.id);
         if (!w.length) continue;
+        const inUnit = (v: number) => from === this.unit ? v : fromKg(toKg(v, from), this.unit);
         const done = w.filter(d => d.setId).length;
         exercises.push({ entryId: e.id, name: String(e.data.exercise), done, total: w.length });
         groups.push(w.length);
         for (const d of w) {
           matrix.push(d.setId ? 1 : 0);
-          if (d.setId) volume += (Number(d.weight) || 0) * (Number(d.reps) || 0);
+          // A draft is in its exercise's unit; the volume is in the profile's. A one-side set counts both sides.
+          if (d.setId) volume += inUnit(Number(d.weight) || 0) * (Number(d.reps) || 0)
+            + (one ? inUnit(Number(d.rightWeight || d.weight) || 0) * (Number(d.rightReps || d.reps) || 0) : 0);
         }
       }
       const at = matrix.indexOf(0);
@@ -114,7 +135,9 @@ export class TrainingData {
         if (entry && d) {
           const prev = this.workout.previous(entry)[slot.index];
           const pw = prev ? this.kg(Number(prev.data.weight_kg)) : 0, pr = prev ? Number(prev.data.reps) : 0;
-          const weight = d.weight !== '' ? Number(d.weight) : pw, reps = d.reps !== '' ? Number(d.reps) : pr;
+          // The draft is in the exercise's unit; the tile shows the profile's, like the last-time weight.
+          const from = this.workout.unit(slot.entryId);
+          const weight = d.weight !== '' ? (from === this.unit ? Number(d.weight) : displayWeight(toKg(Number(d.weight), from), this.unit)) : pw, reps = d.reps !== '' ? Number(d.reps) : pr;
           const setNo = workingDrafts(this.workout.drafts(slot.entryId).slice(0, slot.index + 1)).length || slot.index + 1;
           next = { name: String(entry.data.exercise), set: setNo, weight, reps, same: !!prev && weight === pw && reps === pr };
         }
@@ -129,7 +152,8 @@ export class TrainingData {
   history() { return this.memo('history', () => this.workout.history().filter(s => !this.workout.pastMode(s.id) || this.repo.localGet(`pastWorkout:${s.id}`) !== true)); }
   minutes(s: Row) { return Math.round(Number(s.data.duration_ms ?? 0) / 60000); }
   sessionSets(s: Row) { return this.workout.entries(s.id).flatMap(e => this.workout.working(e).filter(w => !w.warmup && w.reps > 0)); }
-  sessionVolume(s: Row) { return this.sessionSets(s).reduce((n, w) => n + fromKg(w.weight, this.unit) * w.reps, 0); }
+  /** Working volume of a finished session in the profile unit; a one-side set counts both sides. */
+  sessionVolume(s: Row) { return this.workout.entries(s.id).reduce((n, e) => n + fromKg(entryVolumeKg(this.workout, e), this.unit), 0); }
   cardioRows() { return this.memo('cardio', () => this.repo.list('cardio_sessions').sort((a, b) => String(b.data.day).localeCompare(String(a.data.day)) || b.updated_at - a.updated_at)); }
 
   /** Training minutes by day: finished sessions, logged cardio and, today, the workout going now. */
@@ -170,7 +194,7 @@ export class TrainingData {
       const p = this.plans.read(), live = this.live(), liveRow = live ? this.workout.active() : undefined;
       const templates = this.workout.templates();
       const ids = p.days.length ? p.days.map(d => d.routineId) : templates.map(r => r.id);
-      const nextIndex = p.days.length ? this.plans.nextIndex() : 0;
+      const nextIndex = p.days.length ? nextPlanDay(this.repo, new Date(this.now), this.plans)?.index ?? this.plans.nextIndex() : 0;
       const days: PlanDayView[] = ids.map((routineId, index) => {
         const r = this.repo.get('routines', routineId);
         const ex = this.workout.templateExercises(routineId).map(e => {
@@ -184,7 +208,9 @@ export class TrainingData {
       });
       let next = days.find(d => d.kind === 'next') ?? null;
       if (next && live && next.kind === 'next' && days.length > 1 && liveRow?.data.routine_id === next.routineId) next = days[(next.index + 1) % days.length];
-      return { mode: p.mode, perWeek: p.days.length ? p.daysPerWeek : Math.max(1, Math.min(7, p.daysPerWeek)), days, next };
+      // The week's target is the chosen split's (the same as the score's), and the plan's only when no split is chosen.
+      const target = weeklyTarget(this.repo);
+      return { mode: p.mode, perWeek: Math.max(1, Math.min(7, Math.round(target) || 3)), days, next };
     });
   }
   /** About how long a plan day takes: its own past sessions, or three minutes a set. */
@@ -232,11 +258,13 @@ export class TrainingData {
     return this.memo(`lift:${lift}`, () => {
       const names = liftNames(lift), out: { day: string; weight: number; reps: number; est: number; volume: number }[] = [];
       for (const s of this.history().slice().reverse()) {
-        const sets = this.workout.entries(s.id).filter(e => names.includes(String(e.data.exercise).toLowerCase())).flatMap(e => this.workout.working(e)).filter(w => !w.warmup && w.reps > 0);
+        const entries = this.workout.entries(s.id).filter(e => names.includes(String(e.data.exercise).toLowerCase()));
+        const sets = entries.flatMap(e => this.workout.working(e)).filter(w => !w.warmup && w.reps > 0);
         if (!sets.length) continue;
         const best = sets.slice().sort((a, b) => epley(b.weight, b.reps) - epley(a.weight, a.reps))[0];
+        // Volume counts both sides of a one-arm or one-leg set, as the workout summary does.
         out.push({ day: String(s.data.day), weight: this.kg(best.weight), reps: best.reps, est: this.kg(epley(best.weight, best.reps)),
-          volume: sets.reduce((n, w) => n + fromKg(w.weight, this.unit) * w.reps, 0) });
+          volume: entries.reduce((n, e) => n + entryVolume(this.workout, e, kg => fromKg(kg, this.unit)), 0) });
       }
       return out;
     });
@@ -252,7 +280,8 @@ export class TrainingData {
       const ex = prefs.exercise(String(e.data.exercise));
       const sets = this.workout.working(e).filter(w => !w.warmup && w.reps > 0);
       if (!sets.length) continue;
-      const v = measure === 'lb' ? sets.reduce((n, w) => n + fromKg(w.weight, this.unit) * w.reps, 0) : sets.length;
+      // Volume counts both sides of a one-arm or one-leg set, as the workout summary does.
+      const v = measure === 'lb' ? entryVolume(this.workout, e, kg => fromKg(kg, this.unit)) : sets.length;
       const main = muscleGroup(ex.main);
       if (main) out.set(main, out.get(main)! + v);
       if (both) for (const h of new Set(ex.helpers.map(muscleGroup).filter((g): g is MuscleGroup => !!g && g !== main))) out.set(h, out.get(h)! + v / 2);

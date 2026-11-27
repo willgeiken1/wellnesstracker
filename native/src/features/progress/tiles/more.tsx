@@ -15,7 +15,7 @@ import { B, Cols, Figure, HM, Hair, Head, IconTile, K, NoData, Num, PhotoBack, R
 function TrainingTile({ size, options, body }: TileRenderProps) {
   const d = useProgressData(), k = useKit(), T0 = d.training, r = rangeOf(options, usePageRange()), se = series(d, 'training', r), mins = sum(se.v), yr = r === 'year', u = d.unit;
   if (!se.v.some(finite)) return <View style={{ flex: 1 }}><NoData fs={size === 'S' ? 24 : 28} text={t('progressNoData')} /><Sub wrap style={{ marginTop: 6 }}>{t('progressTrainingEmpty')}</Sub></View>;
-  const going = T0.active ? 1 : 0, sess = se.v.slice(0, going ? -1 : undefined).filter(x => finite(x) && x > 0).length;
+  const going = T0.active ? 1 : 0, sess = sum(T0.perDay.slice(-(r === 'week' ? 7 : 30)));
   const vol = wtV(T0.weekVolumeKg, u), lastV = wtV(T0.lastWeekVolumeKg, u), vd = T0.lastWeekVolumeKg > 0 ? Math.round((T0.weekVolumeKg / T0.lastWeekVolumeKg - 1) * 100) : null;
   const aria = fill(t('progressTrainingAria'), { range: rangeShort(r), min: fmt(mins), sess }) + ' ' + fill(t('progressVolumeAria'), { vol: `${fmt(vol)} ${u}` }) + (vd != null ? ' ' + fill(t('progressVolumePctAria'), { pct: signed(vd) }) : '');
   const volLead = options.lead === 'vol';
@@ -56,9 +56,10 @@ export function whenWord(key: MetricKey, r: string) {
   return t(r === 'year' ? 'progressThisMonth' : key === 'steps' || key === 'kcal' || key === 'training' ? 'progressTodaySoFar' : key === 'sleep' ? 'progressLastNight' : key === 'weight' ? 'today' : 'progressThisMorning');
 }
 function TrendTile({ size, options, body }: TileRenderProps) {
-  const d = useProgressData(), k = useKit(), key = (options.metric ?? 'steps') as MetricKey, m = METRICS[key], mv = metricView(d, key), r = rangeOf(options, usePageRange());
+  const d = useProgressData(), k = useKit(), key = (options.metric ?? 'steps') as MetricKey, m = METRICS[key], r = rangeOf(options, usePageRange()), mv = metricView(d, key, r);
   const se = series(d, key, r), li = lastIndex(se.v), now = se.v[li], S0 = stats(se.v), col = k.tok(m.color);
-  const when = whenWord(key, r), vt = (x: number | null) => vText(d, key, x);
+  // An older reading, when today (or this month) has none yet, is labelled with its own date, never as today's.
+  const when = finite(now) && li !== se.v.length - 1 ? se.labels[li] : whenWord(key, r), vt = (x: number | null) => vText(d, key, x);
   const aria = `${mv.short}, ${vt(now)}, ${when.toLowerCase()}. ${fill(t('progressRangeAvg'), { range: rangeShort(r), v: vt(S0.avg) })}`;
   const kind = size === 'S' ? (m.mini ?? m.kind) : m.kind;
   const ch = (W: number, H: number, tk: boolean) => <Chart values={se.v} kind={kind} color={m.color} mini W={W} H={H} partial={se.partial} band={mv.band}

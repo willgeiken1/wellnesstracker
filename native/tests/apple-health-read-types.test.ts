@@ -38,10 +38,13 @@ test('Apple Health is asked to read only the types Insight shows, and never to w
   }
 });
 
-test('the text on Apple\'s permission sheet names every type that is read', () => {
+test('the text on Apple\'s permission sheet names every type that is read, and says nothing is written', () => {
   const plugin = config.expo.plugins.find(entry => Array.isArray(entry) && entry[0] === '@kingstinct/react-native-healthkit') as [string, { NSHealthShareUsageDescription: string; NSHealthUpdateUsageDescription: unknown }];
   for (const name of Object.values(SHOWN)) expect(plugin[1].NSHealthShareUsageDescription).toContain(name);
-  expect(plugin[1].NSHealthUpdateUsageDescription).toBe(false);
+  // Apple rejects a build whose HealthKit code has no write purpose string (ITMS-90683), even though the app never writes:
+  // the string is there and says so, and no write access is ever asked for (see the toShare check above).
+  expect(typeof plugin[1].NSHealthUpdateUsageDescription).toBe('string');
+  expect(plugin[1].NSHealthUpdateUsageDescription).toMatch(/does not write anything to Apple Health/);
 });
 
 test('workouts come back grouped, in minutes without pauses, with measured calories and the recording app', async () => {

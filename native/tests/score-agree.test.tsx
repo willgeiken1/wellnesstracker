@@ -103,6 +103,26 @@ describe('one day score on Home and Progress', () => {
     expect(weekScores(store, now, h)).toEqual(progress);
   });
 
+  test('Home\'s Insight Score and This week tiles read the same day score as the hero and Progress', () => {
+    const now = new Date(2026, 10, 20, 15), repo = memoryRepository(), store = new WorkoutStore(repo);
+    person(repo, now);
+    const h = health([7, null, 6, 8, 5, 7.5, 6.5], [4000, 12000, null, 8000, 0, 9000, 3000]);
+    const tiles = readAppData(store, now, h).score;
+    const progress = buildProgress({ store, now, demo: false, health: h, recovery: null, ring: null });
+    expect(tiles.slice(-7).map(d => d.value)).toEqual(weekScores(store, now, h));
+    expect(tiles.slice(-7).map(d => d.value)).toEqual(progress.days.score.slice(-7));
+    const today = tiles[tiles.length - 1];
+    expect([today.training, today.food, today.recovery]).toEqual([progress.pillars.training, progress.pillars.food, progress.pillars.sleep]);
+  });
+  test('a first finished workout, with no food or health readings, gives the score tile today\'s score at once', () => {
+    const now = new Date(2026, 10, 20, 15), repo = memoryRepository(), store = new WorkoutStore(repo), t0 = new Date(2026, 10, 20, 9).getTime();
+    const s = repo.save('sessions', { name: 'Legs', day: dayKey(now), started_at: t0, finished_at: t0 + 3_600_000, duration_ms: 3_600_000 });
+    repo.save('sets', { entry_id: repo.save('entries', { session_id: s.id, exercise: 'Squat', position: 0 }).id, position: 0, weight_kg: 100, reps: 5 });
+    const score = readAppData(store, now, null).score;
+    expect(score[score.length - 1].value).toBe(weekScores(store, now, null)[6]);
+    expect(score[score.length - 1].value).toBe(100);
+  });
+
   test('for the sample data, Home\'s week is Progress\'s last seven days of score history', async () => {
     const { db, repo: account, sqlite } = await localDatabase();
     try {

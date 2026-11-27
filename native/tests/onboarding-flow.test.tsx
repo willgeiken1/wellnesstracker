@@ -6,10 +6,11 @@ import { ThemeProvider, useTheme } from '../src/design/theme-provider';
 import { t } from '../src/i18n/en';
 import { estimateTargets } from '../src/features/onboarding/model';
 import {
-  blankDraft, heightLabel, heightOptions, markSkip, nextOf, prevOf, routinePlan, skipTarget, slotLabel, suggest, switchUnit, withKcal, withMacro, type FlowDraft,
+  allOwn, blankDraft, heightLabel, heightOptions, markSkip, nextOf, prevOf, routinePlan, skipTarget, slotLabel, suggest, switchUnit, withKcal, withMacro, type FlowDraft,
 } from '../src/features/onboarding/flow/model';
 import { ONBOARDING_TIPS, addSuggestedRoutines, isSetUp, saveOnboarding, saveResumed } from '../src/features/onboarding/flow/save';
 import { Onboarding, OnboardingDraftProvider } from '../src/features/onboarding/screen';
+import { TargetsStep } from '../src/features/onboarding/flow/steps';
 import { ROUTINES_KEY, createRoutinesStore, type RoutinesStore } from '../src/features/routines/store';
 import type { RoutinesState } from '../src/features/routines/model';
 import { applyAppIcon } from '../src/features/settings/app-icon';
@@ -23,7 +24,7 @@ jest.mock('expo-router', () => ({
 jest.mock('../src/auth/client', () => ({ getAuthClient: () => null }));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 const mockHealth = { access: 'ask' as 'ask' | 'asked' | 'unavailable', busy: false, added: null, failed: false, connect: jest.fn() };
-jest.mock('../src/features/health/use-apple-health', () => ({ useAppleHealth: () => mockHealth }));
+jest.mock('../src/features/health/use-apple-health', () => ({ useAppleHealth: () => ({ ...mockHealth }) }));
 const mockRing = { state: 'off' as 'off' | 'on' | 'unavailable', busy: false, failed: false, connect: jest.fn(), refresh: jest.fn(), disconnect: jest.fn() };
 jest.mock('../src/features/health/use-oura', () => ({ useOura: () => mockRing }));
 let mockStore: RoutinesStore;
@@ -72,8 +73,8 @@ describe('targets', () => {
   });
   test('moving calories keeps protein, sets fat to 25 percent and gives carbs the rest; a macro moves calories', () => {
     const base = suggest(basics(), 'maintain', fallback, DAY);
-    expect(withKcal(base, 2420)).toEqual({ ...base, kcal: 2420, f: 67, c: 289 });
-    expect(withMacro(base, 'p', 180)).toEqual({ ...base, p: 180, kcal: Math.round((180 * 4 + 279 * 4 + 66 * 9) / 10) * 10 });
+    expect(withKcal(base, 2420)).toEqual({ ...base, kcal: 2420, f: 67, c: 289, own: { kcal: true, f: true } });
+    expect(withMacro(base, 'p', 180)).toEqual({ ...base, p: 180, kcal: Math.round((180 * 4 + 279 * 4 + 66 * 9) / 10) * 10, own: { p: true } });
   });
 });
 
@@ -148,6 +149,54 @@ describe('what setup saves', () => {
     expect(repo.localGet('targetBasis')).toBe('manual');
     expect(repo.localGet('targetPlan')).toBe('cut');
   });
+  test('a weight filled from Apple Health is not saved again as a typed weigh-in, and targets worked out from it are not saved', () => {
+    const repo = memoryRepository();
+    // Made-up reading, kept the way the Apple Health import keeps it.
+    const reading = repo.save('weigh_ins', { day: '2026-11-25', weight_kg: 82.6, source: 'healthkit' });
+    const d = switchUnit({ ...basics({ weight: (82.6 * 2.2046226218487757).toFixed(1), filled: true, healthKg: 82.6 }), goals: { train: false, eat: true, sleep: false, routines: false } }, 'kg');
+    saveOnboarding(repo, { ...d, t: suggest(d, 'maintain', fallback, DAY) }, DAY);
+    expect(repo.list('weigh_ins')).toEqual([reading]);
+    expect(repo.list('food_targets')).toEqual([]);
+    expect(loadSettingsPrefs(repo).goals).toMatchObject({ kcal: 2200 });
+    expect(repo.localGet('targetBasis')).toBe('estimated');
+    expect(repo.localGet('onboardingGoals')).toMatchObject({ eat: true });
+    expect(repo.list('profile')[0].data).toMatchObject({ weight_unit: 'kg', height_m: 1.8034 });
+  });
+  test('a weight typed over the Health one, and targets changed by hand, are the person\'s own and are saved', () => {
+    const repo = memoryRepository();
+    const typed = basics({ filled: true, healthKg: null });
+    saveOnboarding(repo, { ...typed, t: suggest(typed, 'maintain', fallback, DAY) }, DAY);
+    expect(repo.list('weigh_ins').map(r => r.data)).toEqual([expect.objectContaining({ day: DAY, entered_value: 182.1, source: 'app' })]);
+    expect(repo.list('food_targets')).toHaveLength(1);
+    // With the weight from Apple Health, targets are saved only once every number is the person's own.
+    const other = memoryRepository(), filled = basics({ filled: true, healthKg: 82.6 });
+    const own = withMacro(withMacro(withMacro(suggest(filled, 'maintain', fallback, DAY), 'p', 150), 'c', 250), 'f', 70);
+    expect(allOwn(own)).toBe(true);
+    saveOnboarding(other, { ...filled, t: own, edited: true }, DAY);
+    expect(other.list('weigh_ins')).toEqual([]);
+    expect(other.list('food_targets')[0].data).toMatchObject({ protein_g: 150, carbs_g: 250, fat_g: 70, energy_kj: own.kcal * 4.184 });
+    expect(other.localGet('targetBasis')).toBe('manual');
+  });
+  test('with the weight from Apple Health, changing one target does not save the others that rest on it', () => {
+    const filled = basics({ filled: true, healthKg: 82.6 }), est = suggest(filled, 'maintain', fallback, DAY);
+    // Calories by hand: protein is still the estimate from the Health weight, and carbs follow it.
+    const kcal = withKcal(est, 2400);
+    expect(allOwn(kcal)).toBe(false);
+    const one = memoryRepository();
+    saveOnboarding(one, { ...filled, t: kcal, edited: true }, DAY);
+    expect(one.list('food_targets')).toEqual([]);
+    expect(one.localGet('targetBasis')).toBe('estimated');
+    // One macro by hand: the other two are still the estimate, and calories follow all three.
+    const two = memoryRepository();
+    saveOnboarding(two, { ...filled, t: withMacro(est, 'p', 160), edited: true }, DAY);
+    expect(two.list('food_targets')).toEqual([]);
+    // Protein, then calories: fat follows calories and carbs follow both, so every number is the person's own.
+    expect(allOwn(withKcal(withMacro(est, 'p', 160), 2400))).toBe(true);
+    // A typed weight makes the estimate the person's own basics, so a single change is saved as before.
+    const typed = memoryRepository(), mine = basics({ filled: true, healthKg: null });
+    saveOnboarding(typed, { ...mine, t: withKcal(suggest(mine, 'maintain', fallback, DAY), 2400), edited: true }, DAY);
+    expect(typed.list('food_targets')[0].data).toMatchObject({ energy_kj: 2400 * 4.184 });
+  });
   test('a skipped section writes nothing, but a profile row still marks the account as set up', () => {
     const repo = memoryRepository();
     saveOnboarding(repo, { ...basics({ name: '' }), skipped: { about: true, goals: true }, t: suggest(basics(), 'maintain', fallback, DAY) }, DAY);
@@ -180,7 +229,7 @@ describe('what setup saves', () => {
     const s = mockStore.read();
     // The new account's empty Morning and Night take the suggested windows; Midday is left as it was.
     expect(s.routines.map(r => [r.id, r.name, r.from, r.to, r.color, r.days, r.remind])).toEqual([
-      ['morning', 'Morning', 7.5, 8.5, 'warning', [0, 1, 2, 3, 4, 5, 6], false], ['midday', 'Midday', 12, 14, 'recovery', [0, 1, 2, 3, 4, 5, 6], true],
+      ['morning', 'Morning', 7.5, 8.5, 'warning', [0, 1, 2, 3, 4, 5, 6], false], ['midday', 'Midday', 12, 14, 'recovery', [0, 1, 2, 3, 4, 5, 6], false],
       ['night', 'Night', 21.5, 22.5, 'sleep', [0, 1, 2, 3, 4, 5, 6], false]]);
     expect(s.items.map(i => i.name)).toEqual(['Glass of water', 'Ten minutes outside', 'Read, 15 minutes']);
     expect(s.items.every(i => i.kind === 'check' && i.type === 'Other' && i.amt === null)).toBe(true);
@@ -254,7 +303,7 @@ describe('the flow', () => {
     title('obbRoutineTitle');
     await act(async () => { fireEvent.press(screen.getByTestId('onboarding-continue')); await new Promise(r => setTimeout(r, 30)); });
     title('obbFinaleTitle');
-    expect(repo.localGet<RoutinesState>(ROUTINES_KEY)!.routines.map(r => [r.name, r.from, r.remind])).toEqual([['Morning', 6.5, false], ['Midday', 12, true], ['Night', 20.5, false]]);
+    expect(repo.localGet<RoutinesState>(ROUTINES_KEY)!.routines.map(r => [r.name, r.from, r.remind])).toEqual([['Morning', 6.5, false], ['Midday', 12, false], ['Night', 20.5, false]]);
     expect(mockStore.read().items.map(i => i.name)).toEqual(['Glass of water', 'Screens off']);
     expect(screen.getByRole('progressbar', { name: 'Setup progress, 100 percent' })).toBeTruthy();
     await press('onboarding-finish');
@@ -263,6 +312,55 @@ describe('the flow', () => {
     expect(repo.localGet('profileExtras')).toEqual({ sex: '', activity: 'active' });
     expect(repo.localGet(ONBOARDING_TIPS)).toBe('1');
     expect(router.replace).toHaveBeenLastCalledWith('/');
+  });
+
+  /** Opens setup on About you's body step and fills the weight from a made-up Apple Health reading. */
+  async function fillFromHealth(repo: ReturnType<typeof memoryRepository>) {
+    const value = auth(repo);
+    // A fresh auth value draws the flow again, as the app's provider does when Health finishes reading.
+    const tree = () => <AuthContext.Provider value={{ ...value }}><OnboardingDraftProvider><ThemeProvider repository={repo}><Onboarding /></ThemeProvider></OnboardingDraftProvider></AuthContext.Provider>;
+    const view = await render(tree());
+    await fireEvent.changeText(screen.getByLabelText(t('obbFirstName')), 'Sam'); await press('onboarding-continue');
+    // A newer typed weight is not a Health reading, so it never fills the field.
+    repo.save('weigh_ins', { day: '2026-11-25', weight_kg: 90, entered_value: 90, entered_unit: 'kg', source: 'app' });
+    await press('onboarding-health-fill');
+    expect(mockHealth.connect).toHaveBeenCalled();
+    Object.assign(mockHealth, { busy: true }); await view.rerender(tree());
+    const reading = repo.save('weigh_ins', { day: '2026-11-24', weight_kg: 82.6, source: 'healthkit' });
+    Object.assign(mockHealth, { busy: false, access: 'asked' }); await view.rerender(tree());
+    expect(screen.getByLabelText(t('obbWeightLb'))).toHaveProp('value', '182.1');
+    await fireEvent.changeText(screen.getByLabelText(t('obbAgeYears')), '34');
+    return reading;
+  }
+  const finishFromBody = async () => {
+    await press('onboarding-continue');
+    await press('onboarding-skip'); await press('onboarding-continue'); await press('onboarding-skip');
+    await press('onboarding-finish');
+  };
+  test('Fill from Apple Health fills the newest Health reading, which Open Insight leaves in the Health store', async () => {
+    const repo = memoryRepository(), reading = await fillFromHealth(repo);
+    await finishFromBody();
+    expect(repo.list('weigh_ins').filter(r => r.data.source === 'app').map(r => r.data.day)).toEqual(['2026-11-25']);
+    expect(repo.list('weigh_ins')).toContainEqual(reading);
+    expect(repo.list('profile')[0].data).toMatchObject({ name: 'Sam' });
+  });
+  test('a weight typed over the one filled from Apple Health is saved as typed', async () => {
+    const repo = memoryRepository();
+    await fillFromHealth(repo);
+    await fireEvent.changeText(screen.getByLabelText(t('obbWeightLb')), '180');
+    await finishFromBody();
+    expect(repo.list('weigh_ins').filter(r => r.data.source === 'app' && r.data.day !== '2026-11-25').map(r => r.data))
+      .toEqual([expect.objectContaining({ entered_value: 180, entered_unit: 'lb', source: 'app' })]);
+  });
+
+  test('with the weight from Apple Health, a partly changed target says it will not be kept until all four are set', async () => {
+    const filled = basics({ filled: true, healthKg: 82.6 }), est = suggest(filled, 'maintain', fallback, DAY), noop = () => {};
+    const step = (tl: typeof est) => <ThemeProvider><TargetsStep eyebrow="" d={{ ...filled, t: tl, edited: true }} est onPlan={noop} onKcal={noop} onMacro={noop} onReset={noop} /></ThemeProvider>;
+    const view = await render(step(withKcal(est, 2400)));
+    expect(screen.getByText(t('obbNoteHealthKeep'))).toBeTruthy();
+    await view.rerender(step(withMacro(withMacro(withMacro(est, 'p', 150), 'c', 250), 'f', 70)));
+    expect(screen.getByText(t('obbNoteYours'))).toBeTruthy();
+    expect(screen.queryByText(t('obbNoteHealthKeep'))).toBeNull();
   });
 
   test('Not now skips About you and Goals; Back then passes over them', async () => {
@@ -365,6 +463,19 @@ describe('no second setup', () => {
     saveOnboarding(repo, { ...basics(), skipped: { about: false, goals: true } });
     jest.mocked(useLocalSearchParams).mockReturnValue({ resume: '1' });
     await open(auth(repo));
+    title('obbGoalsTitle');
+    await press('onboarding-goal-train'); await press('onboarding-continue');
+    title('obbTargetsTitle');
+    await press('onboarding-continue');
+    expect(repo.list('food_targets')).toHaveLength(1);
+    expect(repo.localGet('onboardingSkipped')).toEqual({ about: false, goals: false });
+    expect(router.replace).toHaveBeenLastCalledWith('/');
+  });
+  test('with sync turned off (no pull ever completes) an account set up here still finishes its skipped sections', async () => {
+    const repo = memoryRepository();
+    saveOnboarding(repo, { ...basics(), skipped: { about: false, goals: true } });
+    jest.mocked(useLocalSearchParams).mockReturnValue({ resume: '1' });
+    await open(auth(repo, { initialPullComplete: false }));
     title('obbGoalsTitle');
     await press('onboarding-goal-train'); await press('onboarding-continue');
     title('obbTargetsTitle');

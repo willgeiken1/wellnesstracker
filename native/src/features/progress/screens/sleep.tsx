@@ -18,10 +18,11 @@ const ORDER: Stage[] = ['deep', 'rem', 'core', 'awake'];
 function Hypnogram({ night, sel, onSel }: { night: Night; sel: number | null; onSel: (i: number) => void }) {
   const k = useKit(), segs = night.segments!, W = 329, H = 150, lanes: Stage[] = ['awake', 'rem', 'core', 'deep'], lh = 30, x0 = 46, PW = W - x0, tot = segs.reduce((a, s) => a + s[1], 0), start = night.bed ?? 0;
   const [w, setW] = useState(W);
-  let acc = 0, prevY: number | null = null;
+  const laneY = (st: Stage) => lanes.indexOf(st) * lh + 5;
+  const starts = segs.reduce<number[]>((a, _s, i) => [...a, i ? a[i - 1] + segs[i - 1][1] : 0], []);
   const blocks = segs.map(([st, min], i) => {
-    const x = x0 + PW * acc / tot, bw = PW * min / tot, y = lanes.indexOf(st) * lh + 5, link = prevY != null ? <Line key={`l${i}`} x1={x} x2={x} y1={Math.min(prevY, y) + 10} y2={Math.max(prevY, y) + 10} stroke={k.c['hair-2']} strokeWidth={1} /> : null;
-    prevY = y; acc += min;
+    const acc = starts[i], prevY = i ? laneY(segs[i - 1][0]) : null;
+    const x = x0 + PW * acc / tot, bw = PW * min / tot, y = laneY(st), link = prevY != null ? <Line key={`l${i}`} x1={x} x2={x} y1={Math.min(prevY, y) + 10} y2={Math.max(prevY, y) + 10} stroke={k.c['hair-2']} strokeWidth={1} /> : null;
     return <G key={i}>{link}<Rect x={x} y={y} width={Math.max(2, bw - 0.6)} height={20} rx={4} fill={k.tok(STAGES[st][1])} opacity={sel == null || sel === i ? 1 : 0.35} /></G>;
   });
   /* inner ticks on whole even hours that sit well inside the night, as on a clock face */
@@ -44,7 +45,7 @@ export function SleepScreen() {
   const d = useProgress(), k = useKit(), S = d.night, goal = d.sleepGoalMin;
   const [seg, setSeg] = useState<number | null>(null), [night, setNight] = useState(6);
   const sw = d.days.sleep.slice(-7), wake = d.wake.slice(-7), days = Array.from({ length: 7 }, (_, i) => addDays(d.today, i - 6));
-  const hrv = d.days.hrv[d.days.hrv.length - 1], rhr = d.days.rhr[d.days.rhr.length - 1], src = S?.source ?? (d.sources.oura || d.demo ? 'Oura' : 'Apple Health');
+  const hrv = d.days.hrv[d.days.hrv.length - 1], rhr = d.days.rhr[d.days.rhr.length - 1], src = S?.source ?? (d.sources.oura || d.demo ? 'Oura' : 'Apple Health'), heartSrc = d.demo || d.sources.heart === 'Oura' ? 'Oura' : 'Apple Health';
   const A0 = -180, A1 = 540, pos = (m: number) => `${(m - A0) / (A1 - A0) * 100}%` as const;
   const win = sw.map((h, i) => { const wk = wake[i]; return finite(h) && finite(wk) ? { bed: wk - Math.round(h * 60), wake: wk, h } : finite(h) ? { bed: null, wake: null, h } : null; });
   const dayName = (i: number) => i === 6 ? t('progressLastNight') : fill(t('progressMorning'), { day: weekday(days[i]) });
@@ -72,7 +73,7 @@ export function SleepScreen() {
     </View>
     {S ? <Card>
       {S.segments ? <>{segRead()}<Hypnogram night={S} sel={seg} onSel={setSeg} /></> : <Cap>{t('progressNoStages')}</Cap>}
-      {S.deep || S.rem || S.core ? <>
+      {!S.unstaged && (S.deep || S.rem || S.core) ? <>
         <View style={{ flexDirection: 'row', height: 10, marginTop: 16, borderRadius: 7, overflow: 'hidden', gap: 2, backgroundColor: k.c['surface-2'] }}>{ORDER.map(st => <View key={st} style={{ width: `${S[st] / S.min * 100}%`, backgroundColor: k.tok(STAGES[st][1]) }} />)}</View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, marginTop: 16 }}>{ORDER.map((st, i) => <View key={st} style={{ width: '50%', flexDirection: 'row', gap: 10, paddingLeft: i % 2 ? 8 : 0, paddingRight: i % 2 ? 0 : 8 }}>
           <View style={{ width: 10, height: 10, borderRadius: 3, marginTop: 5, backgroundColor: k.tok(STAGES[st][1]) }} />
@@ -106,7 +107,7 @@ export function SleepScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><View style={{ width: 14, height: 8, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: mix(k.c.sleep, 'transparent', 0.55) }} /><Cap size={11.5}>{fill(t('progressHoursFromBed'), { n: goal / 60 })}</Cap></View>
       </View>
     </Card>
-    <SectionHeader title={t('progressHeart')} aside={fill(t('progressFromSrcCap'), { src })} />
+    <SectionHeader title={t('progressHeart')} aside={fill(t('progressFromSrcCap'), { src: heartSrc })} />
     <List>{[hrRow('hrv', finite(hrv) ? hrv : null, d.hrvBand, 'ms'), hrRow('rhr', finite(rhr) ? rhr : null, d.rhrBand, 'bpm')]}</List>
     <SectionHeader title={t('progressSources')} />
     <List>

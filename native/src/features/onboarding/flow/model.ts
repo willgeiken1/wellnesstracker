@@ -19,7 +19,12 @@ export type SexChoice = '' | 'female' | 'male' | 'none';
 export type GoalId = 'train' | 'eat' | 'sleep' | 'routines';
 export type HabitId = 'water' | 'stretch' | 'outside' | 'read' | 'screens' | 'supps';
 /** Daily targets as the screen shows them: kcal and grams. `est` is true when worked out from the basics. */
-export interface Macros { kcal: number; p: number; c: number; f: number; est: boolean }
+/** `own` marks the numbers the person set, or that follow only from numbers they set. An estimate from an Apple Health
+ * weight is a Health-derived value, so only targets that are wholly their own are saved (see save.ts). */
+export interface Macros { kcal: number; p: number; c: number; f: number; est: boolean; own?: Partial<Record<MacroKey, true>> }
+export type MacroKey = 'kcal' | 'p' | 'c' | 'f';
+/** Every number is the person's own: none still rests on the estimate. */
+export const allOwn = (t: Macros) => !!(t.own?.kcal && t.own.p && t.own.c && t.own.f);
 
 export interface FlowDraft {
   name: string; unit: Unit;
@@ -27,6 +32,9 @@ export interface FlowDraft {
   heightIn: number | null;
   weight: string; age: string; sex: SexChoice; activity: Activity | '';
   filled: boolean;
+  /** The Apple Health reading (kg) that filled the weight, while the field still holds it (converted when units change);
+   * null once a weight is typed. That reading is already kept in the Health store, so setup never saves it again. */
+  healthKg: number | null;
   goals: Record<GoalId, boolean>;
   plan: Plan; t: Macros | null; edited: boolean;
   quiz: { wake: string; keep: Partial<Record<HabitId, boolean>>; wind: string };
@@ -36,7 +44,7 @@ export interface FlowDraft {
 }
 
 export function blankDraft(unit: Unit = 'lb'): FlowDraft {
-  return { name: '', unit, heightIn: null, weight: '', age: '', sex: '', activity: '', filled: false,
+  return { name: '', unit, heightIn: null, weight: '', age: '', sex: '', activity: '', filled: false, healthKg: null,
     goals: { train: false, eat: false, sleep: false, routines: false }, plan: 'maintain', t: null, edited: false,
     quiz: { wake: '', keep: {}, wind: '' }, routine: false, skipped: { about: false, goals: false } };
 }
@@ -99,11 +107,16 @@ export function suggest(d: FlowDraft, plan: Plan, fallback: { kcal: number; p: n
   return { kcal: Math.round(e.energy_kj / 4.184), p: e.protein_g, c: e.carbs_g, f: e.fat_g, est: true };
 }
 /** Calories moved with the stepper: protein stays, fat is 25 percent, carbs take the rest. */
-export function withKcal(t: Macros, kcal: number): Macros { const f = fatFor(kcal); return { ...t, kcal, f, c: carbsFor(kcal, t.p, f) }; }
+export function withKcal(t: Macros, kcal: number): Macros {
+  const f = fatFor(kcal);
+  // Fat follows calories alone; carbs also follow protein, so they are the person's own only when protein is.
+  return { ...t, kcal, f, c: carbsFor(kcal, t.p, f), own: { ...t.own, kcal: true, f: true, ...(t.own?.p ? { c: true } : { c: undefined }) } };
+}
 /** A macro typed in grams: calories follow, to the nearest ten. */
 export function withMacro(t: Macros, key: 'p' | 'c' | 'f', grams: number): Macros {
-  const n = { ...t, [key]: Math.max(0, Math.round(grams) || 0) };
-  return { ...n, kcal: Math.round((n.p * 4 + n.c * 4 + n.f * 9) / 10) * 10 };
+  const n = { ...t, [key]: Math.max(0, Math.round(grams) || 0) }, own = { ...t.own, [key]: true as const };
+  // Calories follow all three macros, so they are the person's own only when every macro is.
+  return { ...n, kcal: Math.round((n.p * 4 + n.c * 4 + n.f * 9) / 10) * 10, own: { ...own, kcal: own.p && own.c && own.f ? true : undefined } };
 }
 export const KCAL_STEP = { step: 50, min: 1200, max: 5000 };
 export function macroShare(t: Macros) {

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 import { Badge, Icon, List, ListRow, NavButton, SectionHeader, font, useKit, Tappable } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
+import { askForReminders, notificationsInBuild } from '@/features/reminders/notifier';
 import { daysBetween, dShort, type ProgressPhoto } from '../model';
 import { clock, fill, wD, wtS } from '../format';
 import { readReminder, saveReminder } from '../local';
@@ -28,20 +30,32 @@ function Pick({ p, n, unit, onPress }: { p: ProgressPhoto; n: number; unit: 'kg'
   </Tappable>;
 }
 
+/** The phone-only build, or one without notifications, can't send reminders, so the photo reminder shows as coming later. */
+const remindLater = () => Constants.expoConfig?.extra?.phoneOnly === true || !notificationsInBuild();
+
 export function PhotosScreen() {
   const d = useProgress(), k = useKit(), auth = useAuth(), u = d.unit, ph = d.photos;
   // The two photos in the comparison (oldest and newest to start); the next tap replaces `next`.
   const [cmp, setCmp] = useState<[number, number]>([0, Math.max(0, ph.length - 1)]), [next, setNext] = useState(0);
-  const [remind, setRemind] = useState(() => auth.repository ? readReminder(auth.repository) : true);
+  const [remind, setRemind] = useState(() => auth.repository ? readReminder(auth.repository) : false);
   const pair = [...cmp].sort((a, b) => a - b).map(i => ph[Math.min(i, ph.length - 1)]).filter(Boolean);
   const pick = (i: number) => {
     const at = cmp.indexOf(i);
     if (at >= 0) { setNext(1 - at); showToast(fill(t('progressStaysInCompare'), { day: dShort(ph[i].day) }), { color: 'sleep' }); return; }
     const c: [number, number] = [...cmp]; c[next] = i; setCmp(c); setNext(1 - next);
   };
+  // Turning it on asks iOS once, as Settings, Reminders does; the app's root puts it on the phone. If iOS says no, it
+  // goes back off and says where to allow notifications.
   const toggle = (on: boolean) => {
-    setRemind(on); if (auth.repository) saveReminder(auth.repository, on);
+    const repo = auth.repository;
+    setRemind(on); if (repo) saveReminder(repo, on);
     showToast(on ? fill(t('progressReminderOn'), { time: clock(480) }) : t('progressReminderOff'), { color: 'sleep' });
+    if (!on) return;
+    void askForReminders().then(s => {
+      if (s !== 'denied') return;
+      setRemind(false); if (repo) saveReminder(repo, false);
+      showToast(t('settingsRemNeedsIos'), { color: 'warning' });
+    });
   };
   const A = pair[0], B = pair[1];
   const days = A && B ? daysBetween(A.day, B.day) : 0, wk = Math.round(days / 7);
@@ -79,7 +93,8 @@ export function PhotosScreen() {
     <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}><Ic icon="lock2" color="success" />
       <Text style={[font(500, 14, 1.45), { flex: 1, color: k.c['text-muted'] }]}><Text style={[font(700, 14), { color: k.c.text }]}>{t('progressPhotosStay')}</Text> {t('progressPhotosStayMore')}</Text></View></Card>
     <List>
-      <ListRow icon="bell" color="sleep" title={t('progressPhotoReminder')} sub={fill(t('progressSundaysAt'), { time: clock(480) })} toggle={remind} onToggle={toggle} />
+      {remindLater() ? <ListRow icon="bell" color="sleep" title={t('progressPhotoReminder')} sub={t('settingsLaterVersion')} toggle={false} disabled />
+        : <ListRow icon="bell" color="sleep" title={t('progressPhotoReminder')} sub={fill(t('progressSundaysAt'), { time: clock(480) })} toggle={remind} onToggle={toggle} />}
     </List>
   </Page>;
 }

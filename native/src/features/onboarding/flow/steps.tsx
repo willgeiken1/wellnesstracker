@@ -10,7 +10,7 @@ import { t, type MessageKey } from '@/i18n/en';
 import type { Activity } from '../model';
 import { ObIcon, type ObIconName } from './icons';
 import {
-  HABITS, WAKE, WIND, clockTime, heightLabel, heightMenuValue, heightOptions, macroShare, routinePlan, slotLabel,
+  HABITS, WAKE, WIND, allOwn, clockTime, heightLabel, heightMenuValue, heightOptions, macroShare, routinePlan, slotLabel,
   type FlowDraft, type GoalId, type HabitId, type Macros, type Plan, type RoutineItemKey, type SexChoice,
 } from './model';
 import { BoxField, Head, KcalStepper, Label, Mark, MenuField, NumberInput, Option, useSurface } from './parts';
@@ -83,7 +83,7 @@ export function BodyStep({ eyebrow, d, set, health, onFill, onUnit }: {
           options={heightOptions(d.unit)} current={heightMenuValue(d.heightIn, d.unit)} onPick={v => set({ heightIn: Number(v), t: null })} />
         <View style={CELL}><BoxField label={t('obbWeight')}>
           <NumberInput testID="onboarding-weight" unit={us ? 'lb' : 'kg'} accessibilityLabel={us ? t('obbWeightLb') : t('obbWeightKg')} keyboardType="decimal-pad"
-            value={d.weight} onChangeText={weight => set({ weight, t: null })} />
+            value={d.weight} onChangeText={weight => set({ weight, healthKg: null, t: null })} />
         </BoxField></View>
       </View>
       <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -178,7 +178,7 @@ export function TargetsStep({ eyebrow, d, est, onPlan, onKcal, onMacro, onReset 
       </View>
     </View>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 12, marginHorizontal: 4 }}>
-      <KitText weight={500} size={13} lineHeight={1.4} color="text-muted" style={{ flexShrink: 1 }}>{d.edited ? t('obbNoteYours') : est ? t('obbNoteEst') : t('obbNoteTypical')}</KitText>
+      <KitText weight={500} size={13} lineHeight={1.4} color="text-muted" style={{ flexShrink: 1 }}>{d.edited ? (tl.est && d.healthKg !== null && !allOwn(tl) ? t('obbNoteHealthKeep') : t('obbNoteYours')) : est ? t('obbNoteEst') : t('obbNoteTypical')}</KitText>
       {d.edited ? <PressScale accessibilityRole="button" accessibilityLabel={t('obbUseSuggestion')} onPress={onReset} hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
         style={{ minHeight: 32, justifyContent: 'center' }}><KitText weight={600} size={13} color="accent">{t('obbUseSuggestion')}</KitText></PressScale> : null}
     </View>

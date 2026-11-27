@@ -3,7 +3,7 @@ import { nightTimeline } from '../src/features/home/tiles/health-detail';
 import { parseMarkup, parseStyle } from '../src/features/home/tiles/markup-parse';
 import { buildState, tileView } from '../src/features/home/tiles/state';
 import { DEFAULT_UNITS, drawTile, studioVersion } from '../src/features/home/tiles/studio';
-import { detailFor, pickRecovery } from '../src/features/home/tiles/use-home-tiles';
+import { detailFor, pickRecovery, todaySources } from '../src/features/home/tiles/use-home-tiles';
 import { createTheme } from '../src/design/tokens';
 import { tilePage } from '../src/features/tiles/registry';
 import type { TileSize } from '../src/features/tiles/types';
@@ -60,6 +60,45 @@ describe('which tiles have a reading to draw', () => {
     expect(d.next.sub).toBe('1,364 of 2,200 kcal so far');
     expect(tileReady(input({ active: { name: 'Legs A', startedAt: new Date(NOW.getTime() - 1450_000), setsDone: 8, setsTotal: 18 } })).next).toBe(true);
   });
+  test('food logged today that gives no energy or protein reads as unknown, not as 0 eaten with the whole goal left', () => {
+    const at = new Date(2026, 10, 22, 12, 30);
+    // A calorie-only Quick add and a scanned bar with no energy: made-up foods.
+    const quick = { ...emptyDay, kcal: 600, protein: null, goalKcal: 2200, goalProtein: 165, meals: [{ id: 'l', name: 'Lunch', kcal: 600, protein: null, count: 1, loggedAt: at }] };
+    const bar = { ...emptyDay, kcal: null, protein: 8, carbs: 30, fat: 4, goalKcal: 2200, goalProtein: 165, meals: [{ id: 'l', name: 'Lunch', kcal: null, protein: 8, count: 1, loggedAt: at }] };
+    const withDay = (d: HomeInput['food'][number]) => input({ food: [...days.slice(1).map(() => emptyDay), d], nextMeal: { id: 'd', name: 'Dinner' } });
+
+    const q = buildState(withDay(quick), DEFAULT_UNITS, () => {});
+    expect(q.ready.calories).toBe(true);
+    expect(tileView(q, 'protein', 'A', 'S', {})).toEqual({ empty: 'foodUnknown' });
+    expect(tileView(q, 'calories', 'C', 'M', {})).toEqual({ empty: 'foodUnknown' });
+    expect(tileView(q, 'logMeal', 'A', 'S', { value: 'p' })).toEqual({ empty: 'foodUnknown' });
+    expect(tileView(q, 'logMeal', 'A', 'S', { value: 'kcal' })).toEqual({ options: { value: 'kcal' } });
+    expect(q.data.protein.byMeal).toEqual([null]);
+
+    const b = buildState(withDay(bar), DEFAULT_UNITS, () => {});
+    expect(tileView(b, 'calories', 'A', 'M', {})).toEqual({ empty: 'foodUnknown' });
+    expect(tileView(b, 'logMeal', 'A', 'S', {})).toEqual({ empty: 'foodUnknown' });
+    expect(b.ready.protein).toBe(true);
+    expect(b.data.calories.meals).toEqual([{ name: 'Lunch', kcal: null, time: '12:30 PM' }]);
+    expect(b.data.next.sub).toBe('– of 2,200 kcal so far');
+    // Drawn where it still can be, an unknown meal reads as a dash, never 0 or null.
+    const html = drawTile({ id: 'protein', style: 'D', size: 'M', options: {}, colors: createTheme('dark'), mode: 'dark', data: q.data, uid: 'pd' }) ?? '';
+    expect(html).not.toMatch(/NaN|null| 0 g/);
+    expect(html).toContain('Lunch – g');
+    // Nothing logged yet is still a real 0 eaten.
+    expect(tileReady(withDay({ ...quick, kcal: null, protein: null, meals: [] })).calories).toBe(true);
+  });
+  test('a recent food that gives no protein or energy reads as a dash in Quick add, not as 0', () => {
+    const fed = { ...emptyDay, kcal: 600, protein: 20, goalKcal: 2200, goalProtein: 165, meals: [{ id: 'l', name: 'Lunch', kcal: 600, protein: 20, count: 1, loggedAt: new Date(2026, 10, 22, 12, 30) }] };
+    // Made-up foods: a calorie-only Quick add and a scanned bar with no energy.
+    const d = buildTileData(input({ food: [...days.slice(1).map(() => emptyDay), fed], nextMeal: { id: 'd', name: 'Dinner' },
+      recentFoods: [{ name: 'Synthetic quick lunch', serving: '', kcal: 450, protein: null }, { name: 'Synthetic bar', serving: '40 g', kcal: null, protein: 8 }] }));
+    expect(d.mealLog?.recent).toEqual([{ n: 'Synthetic quick lunch', q: '', kcal: 450, p: null }, { n: 'Synthetic bar', q: '40 g', kcal: null, p: 8 }]);
+    const draw = (value: string) => drawTile({ id: 'logMeal', style: 'B', size: 'M', options: { value, list: 'recent' }, colors: createTheme('dark'), mode: 'dark', data: d, uid: 'mb' }) ?? '';
+    expect(draw('p')).toContain('Synthetic quick lunch to lunch, – grams of protein');
+    expect(draw('kcal')).toContain('Synthetic bar to lunch, – kcal');
+    for (const v of ['p', 'kcal']) expect(draw(v)).not.toMatch(/NaN|null| 0 g protein|>0</);
+  });
   test('weight is drawn from weigh-ins in the window, in pounds, with no goal line when there is no goal', () => {
     const i = input({ weighIns: [{ day: days[DAYS - 3], kg: 82.6, at: null }, { day: days[DAYS - 1], kg: 82.3, at: new Date(2026, 10, 22, 6, 52) }] });
     const d = buildTileData(i), s = buildState(i, DEFAULT_UNITS, () => {});
@@ -102,6 +141,18 @@ describe('which tiles have a reading to draw', () => {
     expect(tileView(s, 'active', 'C', 'S', {})).toEqual({ options: {} });
     expect(tileView(s, 'active', 'A', 'S', {})).toEqual({ empty: 'detail' });
   });
+  test('an hour the source failed to read is unknown, so hour-by-hour styles say so rather than draw it as a quiet hour', () => {
+    const hours = Array.from({ length: 24 }, (_, h) => h > 16 ? 0 : 300);
+    const gap = hours.map((v, h) => h === 9 ? null : v);
+    const detail = (stepsHourly: (number | null)[]) => ({ stepsHourly, activeHourly: stepsHourly, exerciseHourly: stepsHourly, night: null, bedtimes: null, mindful: null, bodyFat: null });
+    const at = (list: (number | null)[]) => buildState(input({ health: health({ steps: series(7940), activeKcal: series(520), exerciseMinutes: series(24) }), detail: detail(list) }), DEFAULT_UNITS, () => {});
+    expect(tileView(at(hours), 'steps', 'A', 'S', {})).toEqual({ options: {} });
+    const s = at(gap);
+    expect(tileView(s, 'steps', 'A', 'S', {})).toEqual({ empty: 'detail' });
+    expect(tileView(s, 'active', 'A', 'S', {})).toEqual({ empty: 'detail' });
+    expect(tileView(s, 'exercise', 'B', 'S', {})).toEqual({ empty: 'detail' });
+    expect(tileView(s, 'active', 'C', 'S', {})).toEqual({ options: {} });
+  });
 });
 
 describe('health sources stay apart', () => {
@@ -123,6 +174,31 @@ describe('health sources stay apart', () => {
       recovery: { hrv: series(54, 50), rhr: series(56, 57), sleepScore: series(86, 80), source: 'Oura' } }), DEFAULT_UNITS, () => {});
     expect(tileView(s, 'sleep', 'A', 'S', {})).toEqual({ empty: 'sleepStages' });
     expect(tileView(s, 'hrv', 'A', 'S', {})).toEqual({ options: {} });
+  });
+});
+
+describe('where today\'s steps and sleep came from', () => {
+  const hourly = Array.from({ length: 24 }, () => 300);
+  const detail = { stepsHourly: hourly, activeHourly: hourly, exerciseHourly: hourly, bedtimes: [23], mindful: null, bodyFat: null,
+    night: { bed: new Date(2026, 10, 21, 23), wake: new Date(2026, 10, 22, 6), stages: [['core', 0, 420]] as ['core', number, number][] } };
+  test('when today\'s steps are Oura\'s, the label says Oura and Apple Health\'s hourly steps are left out', () => {
+    const today = todaySources({ stepsFrom: ['apple', 'oura'], sleepFrom: ['oura', 'oura'] }, true, 'asked');
+    expect(today).toEqual({ steps: 'Oura', sleep: 'Oura', ouraSteps: true, ouraSleep: true });
+    const d = detailFor(detail, today.ouraSleep, today.ouraSteps)!;
+    expect(d.stepsHourly).toBeNull();
+    expect(d.activeHourly).toBe(hourly);
+    const data = buildTileData(input({ health: health({ steps: series(6400) }), detail: d, sources: { activity: 'Apple Health', steps: today.steps, sleep: today.sleep, body: 'Apple Health' } }));
+    expect(data.steps.source).toBe('Oura');
+    expect(tileView(buildState(input({ health: health({ steps: series(6400) }), detail: d }), DEFAULT_UNITS, () => {}), 'steps', 'A', 'S', {})).toEqual({ empty: expect.any(String) });
+  });
+  test('when today\'s steps and last night\'s sleep are Apple Health\'s, both keep Apple Health\'s detail even with Oura connected', () => {
+    const today = todaySources({ stepsFrom: ['oura', 'apple'], sleepFrom: ['oura', 'apple'] }, true, 'asked');
+    expect(today).toEqual({ steps: 'Apple Health', sleep: 'Apple Health', ouraSteps: false, ouraSleep: false });
+    expect(detailFor(detail, today.ouraSleep, today.ouraSteps)).toBe(detail);
+  });
+  test('with no per-day source, the labels follow what is connected, as before', () => {
+    expect(todaySources(null, false, 'asked')).toEqual({ steps: 'Apple Health', sleep: 'Apple Health', ouraSteps: false, ouraSleep: false });
+    expect(todaySources({}, true, 'ask')).toEqual({ steps: 'Oura', sleep: 'Oura', ouraSteps: true, ouraSleep: true });
   });
 });
 

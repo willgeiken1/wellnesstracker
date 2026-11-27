@@ -1,5 +1,7 @@
 import type { Repository } from '@/data/repository';
+import { deleteProgressPhoto, PROGRESS_PHOTOS_FOLDER, PROGRESS_PHOTOS_PENDING_KEY } from '@/core/owner-files';
 import type { Row } from '@/data/rows';
+import { HEALTH_WEIGHT_KEY as HEALTH_WEIGHT } from '@/features/health/weights';
 import { finite, MEASURE_KEYS, type MeasureKey, type Measured, type Pose, type ProgressPhoto } from './model';
 
 /**
@@ -7,7 +9,7 @@ import { finite, MEASURE_KEYS, type MeasureKey, type Measured, type Pose, type P
  * neck measurement (the synced measurements table has no neck column) and body fat typed in by hand. All in the
  * repository's local, per-person storage, which is never part of the sync queue.
  */
-const PHOTOS = 'progressPhotos', NECK = 'progressNeck', FAT = 'progressBodyFat', REMIND = 'progressPhotoReminder', HEALTH_WEIGHT = 'progressWeightFromHealth';
+const PHOTOS = 'progressPhotos', NECK = 'progressNeck', FAT = 'progressBodyFat', REMIND = 'progressPhotoReminder';
 
 export interface StoredPhoto { id: string; day: string; kg: number | null; pose: Pose; uri: string }
 function list<T>(repo: Repository, key: string): T[] { try { const v = repo.localGet<T[]>(key); return Array.isArray(v) ? v : []; } catch { return []; } }
@@ -17,10 +19,50 @@ export function readPhotos(repo: Repository): ProgressPhoto[] {
     .map(p => ({ id: p.id, day: p.day, kg: finite(p.kg) ? p.kg : null, pose: (['Front', 'Side', 'Back'] as const).includes(p.pose) ? p.pose : 'Front', uri: p.uri }))
     .sort((a, b) => a.day.localeCompare(b.day));
 }
-export function addPhoto(repo: Repository, photo: StoredPhoto) { repo.localSave(PHOTOS, [...list<StoredPhoto>(repo, PHOTOS), photo]); }
-export function removePhoto(repo: Repository, id: string) { repo.localSave(PHOTOS, list<StoredPhoto>(repo, PHOTOS).filter(p => p.id !== id)); }
+/**
+ * The photo list for a change: throws when the stored list can't be read, so a write never replaces addresses it couldn't
+ * see. Those addresses are how departure finds the files to erase.
+ */
+function listToChange<T>(repo: Repository, key: string): T[] {
+  const v = repo.localGet<T[]>(key);
+  if (v == null) return [];
+  if (!Array.isArray(v)) throw new Error('The saved photo list could not be read.');
+  return v;
+}
+const photosToChange = (repo: Repository) => listToChange<StoredPhoto>(repo, PHOTOS);
+export function addPhoto(repo: Repository, photo: StoredPhoto) { repo.localSave(PHOTOS, [...photosToChange(repo), photo]); }
 
-export function readReminder(repo: Repository): boolean { try { return repo.localGet<boolean>(REMIND) !== false; } catch { return true; } }
+/** The address a new photo's file will have once moved in, as noted before the move. */
+const plannedAddress = (id: string) => `${PROGRESS_PHOTOS_FOLDER}/${id.replace(/[^a-zA-Z0-9-]/g, '')}.jpg`;
+function unpend(repo: Repository, address: string) {
+  // A list that can't be read is left as it is: it may name an earlier file that only it remembers.
+  try { repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, listToChange<string>(repo, PROGRESS_PHOTOS_PENDING_KEY).filter(a => a !== address)); } catch { /* a note for a file that is gone or saved is harmless */ }
+}
+/**
+ * Takes in a new photo: notes its file's address first (nothing is moved if that fails), moves the file in, then saves the
+ * photo. If the save fails, the file is deleted; a file that can't be deleted keeps its noted address, so departure still
+ * finds it and the photo never stays on the phone unknown. Throws when the photo was not saved.
+ */
+export async function takeInPhoto(repo: Repository, photo: Omit<StoredPhoto, 'uri'>, move: (id: string) => Promise<string>): Promise<StoredPhoto> {
+  // Example data keeps no files: one taken there would not carry to an account, and its deletion could not find it.
+  if (repo.owner === 'demo') throw new Error('Photos are not kept with example data.');
+  const planned = plannedAddress(photo.id);
+  // Throws, before anything is moved, when the noted addresses can't be read, rather than write over them.
+  repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, [...listToChange<string>(repo, PROGRESS_PHOTOS_PENDING_KEY), planned]);
+  const saved = { ...photo, uri: await move(photo.id) };
+  try { addPhoto(repo, saved); } catch (e) { if (deleteProgressPhoto(saved.uri)) unpend(repo, planned); throw e; }
+  unpend(repo, planned);
+  return saved;
+}
+/** Deletes one progress photo: its file first, then its address. If the file can't be deleted the address stays, so it can be retried. */
+export function removePhoto(repo: Repository, id: string) {
+  const all = photosToChange(repo), gone = all.find(p => p.id === id);
+  if (gone && !deleteProgressPhoto(gone.uri)) return;
+  repo.localSave(PHOTOS, all.filter(p => p.id !== id));
+}
+
+/** The weekly photo reminder starts off, like every reminder; only a saved On (the person's own choice) turns it on. */
+export function readReminder(repo: Repository): boolean { try { return repo.localGet<boolean>(REMIND) === true; } catch { return false; } }
 export function saveReminder(repo: Repository, on: boolean) { repo.localSave(REMIND, on); }
 
 /** Whether new Apple Health weigh-ins fill in on their own when Body opens. On unless turned off in Log weight. */

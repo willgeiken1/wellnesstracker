@@ -34,8 +34,11 @@ export function addToCart(items: CartItem[]) { if (!cart || !items.length) retur
 export function removeFromCart(key: string) { if (!cart) return; cart = { ...cart, items: cart.items.filter(i => i.key !== key) }; emit(); }
 export function removeCartAt(index: number) { if (!cart) return; cart = { ...cart, items: cart.items.filter((_, i) => i !== index) }; emit(); }
 export const inCart = (key: string) => !!cart?.items.some(i => i.key === key);
+/** The tray's energy and protein. A total none of the foods gave is unknown (null), never 0. */
 export function cartTotals(items: readonly CartItem[]) {
-  return { kcal: items.reduce((a, i) => a + (i.kcal ?? 0), 0), p: Math.round(items.reduce((a, i) => a + (i.p ?? 0), 0)) };
+  const total = (key: 'kcal' | 'p') => items.some(i => i[key] != null) ? items.reduce((a, i) => a + (i[key] ?? 0), 0) : null;
+  const kcal = total('kcal'), p = total('p');
+  return { kcal, p: p == null ? null : Math.round(p) };
 }
 
 /** The tray, redrawn on every change. */

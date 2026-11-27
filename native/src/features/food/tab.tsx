@@ -13,13 +13,15 @@ import { TileGrid, tileEdit, useTileEdit } from '@/features/tiles';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import { addWater, mealName } from './actions';
-import { daySums, dayView, fullDate, monthDay, nextMealId, num, plural, stripDays, weekdayName } from './day';
+import { daySums, dayView, fullDate, monthDay, nextMealId, plural, stripDays, weekdayName } from './day';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 import { combos, shiftDay } from './model';
 import { foodRoutes } from './nav';
 import { pickFoodDay, setBurned, useFoodDay } from './selection';
 import { setFoodTileRepo } from './tiles';
 import { useFoodRevision } from './use-food-revision';
 import { quickContainers, readWater, sizeText } from './water';
+import { enAmt, useEnergyUnit } from './energy';
 
 /** Apple Health's active calories for the strip's two weeks, kept in memory for the tiles. */
 function useBurned(focused: boolean) {
@@ -43,7 +45,7 @@ export function FoodTab({ repo }: { repo: Repository }) {
   useFoodRevision(repo);
   useBurned(focused);
   setFoodTileRepo(repo);
-  const sel = useFoodDay();
+  const sel = useFoodDay(), eu = useEnergyUnit();
   const { editing } = useTileEdit('food');
   useShellEditMode('food', editing, () => tileEdit.end());
   useEffect(() => { if (!focused) tileEdit.set('food', false); }, [focused]);
@@ -61,7 +63,7 @@ export function FoodTab({ repo }: { repo: Repository }) {
     quick: { run: () => foodRoutes.quick(next) },
     saved: { run: () => foodRoutes.saved(next), hint: saved.length ? fill(t('foodNSaved'), { n: saved.length }) : undefined },
     copy: { run: () => foodRoutes.copy(yesterday.logged),
-      hint: yesterday.logged ? `${plural(yesterday.logged, t('foodMealWord'), t('foodMealsWord'))}, ${num(yesterday.eaten)} ${t('foodKcal')}` : undefined },
+      hint: yesterday.logged ? `${plural(yesterday.logged, t('foodMealWord'), t('foodMealsWord'))}, ${enAmt(yesterday.eaten, eu)}` : undefined },
     tiles: { run: () => tileEdit.set('food', true) },
   });
 
@@ -80,14 +82,14 @@ export function FoodTab({ repo }: { repo: Repository }) {
       <Button variant="secondary" size="sm" color="food" label={t('foodBackToToday')} onPress={() => pickFoodDay(null)} />
     </View>}
     {/* The engine draws a tile's header text once; a new key when the day or the logged meals change redraws it. */}
-    <TileGrid key={`${sel.day}|${todayView.logged}|${next}|${todayView.left > 0}`} page="food" scrollRef={scrollRef} />
+    <TileGrid key={`${sel.day}|${todayView.logged}|${next}|${todayView.left == null || todayView.left > 0}`} page="food" scrollRef={scrollRef} />
   </Animated.ScrollView>;
 }
 
-/** Two weeks of days, Monday first, paged by week; it opens on this week. */
+/** Two weeks of days, from the first day of the week the person chose, paged by week; it opens on this week. */
 function DayStrip({ repo, day, today, goal }: { repo: Repository; day: string; today: string; goal: number }) {
-  const k = useKit(), haptic = useSelectionHaptic(), { width } = useWindowDimensions();
-  const days = useMemo(() => stripDays(today), [today]);
+  const k = useKit(), haptic = useSelectionHaptic(), { width } = useWindowDimensions(), eu = useEnergyUnit();
+  const wk = useSettingsPrefs()[0].units.week, days = useMemo(() => stripDays(today, wk), [today, wk]);
   const sums = daySums(repo, days.map(d => d.day));
   // contentOffset opens on this week on iOS; the web ignores it, so the first layout scrolls there too.
   const strip = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -96,8 +98,8 @@ function DayStrip({ repo, day, today, goal }: { repo: Repository; day: string; t
     style={{ flexGrow: 0, marginTop: -6, marginHorizontal: -16, marginBottom: 14 }}>
     {[0, 1].map(w => <View key={w} style={{ width, flexDirection: 'row', gap: 2, paddingHorizontal: 10 }}>
       {days.slice(w * 7, w * 7 + 7).map((d, i) => {
-        const on = d.day === day, kcal = sums[w * 7 + i].kcal;
-        const spoken = `${d.today ? `${t('foodToday')}, ` : ''}${fullDate(d.day)}, ${kcal == null ? t('foodNothingLogged') : `${num(kcal)} ${t('foodKcal')}`}`;
+        const on = d.day === day, kcal = sums[w * 7 + i].kcal, logged = sums[w * 7 + i].meals > 0;
+        const spoken = `${d.today ? `${t('foodToday')}, ` : ''}${fullDate(d.day)}, ${kcal == null ? logged ? enAmt(null, eu) : t('foodNothingLogged') : enAmt(kcal, eu)}`;
         return <Tappable key={d.day} dim="fill" disabled={d.future} accessibilityRole="button" accessibilityLabel={spoken} accessibilityState={{ selected: on, disabled: d.future }}
           onPress={() => { if (!on) haptic(); pickFoodDay(d.day); }}
           style={{ flex: 1, minHeight: 70, paddingTop: 8, paddingBottom: 7, borderRadius: 16, alignItems: 'center', gap: 5, backgroundColor: on ? alpha(k.c.food, 0.15) : 'transparent', opacity: d.future ? 0.4 : 1 }}>

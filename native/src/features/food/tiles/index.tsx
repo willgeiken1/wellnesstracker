@@ -4,11 +4,13 @@ import { implementTile } from '../../tiles/registry';
 import type { TileRenderProps } from '../../tiles/types';
 import { fill } from '../../tiles/ui';
 import { mealName } from '../actions';
-import { dayView, nextMealId, num } from '../day';
+import { dayView, nextMealId } from '../day';
 import { foodRoutes } from '../nav';
 import { attributedDay } from '../model';
 import { burnedOn, foodDay } from '../selection';
 import { FOOD_TILES, dayLabel, tile, weekOf } from './tiles';
+import { energyUnitOf, enNum, enText } from '../energy';
+import { loadSettingsPrefs } from '@/features/settings/prefs-model';
 
 /* Registers the Food tab's twelve tiles with the tile engine: what each draws, the grey text in its header and what a tap opens. */
 
@@ -20,6 +22,7 @@ const sel = () => { const day = foodDay(), today = attributedDay(); return { day
 const view = () => { const s = sel(); return repo ? dayView(repo, s.day, { today: s.today, burned: burnedOn(s.day) }) : null; };
 const next = () => repo ? nextMealId(dayView(repo, attributedDay())) : undefined;
 const label = () => dayLabel(sel());
+const wk = () => repo ? loadSettingsPrefs(repo).units.week : undefined;
 const toNutrition = () => foodRoutes.nutrition();
 const toLog = () => foodRoutes.log(next());
 
@@ -27,12 +30,12 @@ const META: Record<keyof typeof FOOD_TILES, (p: TileRenderProps) => string> = {
   cal: label, macros: label, water: label, window: label,
   protein: p => p.options.view === 'meal' ? t('foodFortyAMeal') : label(),
   meals: () => { const v = view(), s = sel(); return v && s.isToday ? fill(t('foodNOfLogged'), { n: v.logged, m: v.meals.length }) : label(); },
-  week: () => weekOf(sel().day),
+  week: () => weekOf(sel().day, wk()),
   micros: p => p.options.show === 'limit' ? t('foodLimits') : label(),
   streak: () => t('foodLast5Weeks'),
   quick: () => repo ? fill(t('foodAddsTo'), { meal: mealName(repo, next()!).toLowerCase() }) : '',
-  net: p => p.options.range === 'week' ? weekOf(sel().day) : label(),
-  fits: () => { const v = repo ? dayView(repo, attributedDay()) : null; return !v ? '' : v.left > 0 ? fill(t('foodKcalLeftMeta'), { v: num(v.left) }) : t('foodGoalReached'); },
+  net: p => p.options.range === 'week' ? weekOf(sel().day, wk()) : label(),
+  fits: () => { const v = repo ? dayView(repo, attributedDay()) : null; return !v ? '' : v.left == null ? enText(t('foodKcalUnknown'), energyUnitOf(repo)) : v.left > 0 ? fill(enText(t('foodKcalLeftMeta'), energyUnitOf(repo)), { v: enNum(v.left, energyUnitOf(repo)) }) : t('foodGoalReached'); },
 };
 const OPEN: Record<keyof typeof FOOD_TILES, () => void> = {
   cal: toNutrition, macros: toNutrition, protein: toNutrition, week: toNutrition, micros: toNutrition, net: toNutrition,
