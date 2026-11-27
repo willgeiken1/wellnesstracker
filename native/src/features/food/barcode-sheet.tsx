@@ -36,10 +36,14 @@ export function BarcodeSheet({ repo, meal: asked }: { repo: Repository; meal?: s
   const k = useKit();
   const { day, today } = useFoodDay();
   const [permission, requestPermission] = useCameraPermissions();
-  const [phase, setPhase] = useState<Phase>('looking'), [torch, setTorch] = useState(false), [typing, setTyping] = useState(false);
+  const [phase, setPhaseState] = useState<Phase>('looking'), [torch, setTorch] = useState(false), [typing, setTyping] = useState(false);
   const [code, setCode] = useState(''), [product, setProduct] = useState<ScannedFood | null>(null);
   const meal = currentCart()?.meal ?? asked ?? nextMealId(dayView(repo, today, { today }));
   const lock = useRef(false), gen = useRef(0), abort = useRef<AbortController | null>(null);
+  // The phase as of now, for camera callbacks the scanner queued before the last render: once a lookup has settled, a late
+  // scan must not start another one over the result.
+  const phaseNow = useRef<Phase>('looking');
+  const setPhase = (next: Phase) => { phaseNow.current = next; setPhaseState(next); };
   useEffect(() => () => { gen.current++; abort.current?.abort(); }, []);
   useEffect(() => { const sub = AppState.addEventListener('change', s => { if (s !== 'active') setTorch(false); }); return () => sub.remove(); }, []);
   useEffect(() => { if (!web && permission && !permission.granted && permission.canAskAgain) void requestPermission(); }, [permission, requestPermission]);
@@ -73,7 +77,7 @@ export function BarcodeSheet({ repo, meal: asked }: { repo: Repository; meal?: s
       <Backdrop torch={torch} />
       {live ? <CameraView style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} facing="back" enableTorch={torch} animateShutter={false}
         barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }} onMountError={() => setPhase('failed')}
-        onBarcodeScanned={({ data, type }) => { if (lock.current || phase !== 'looking') return; try { void lookup(normalizeBarcode(data, type)); } catch { /* keeps looking */ } }} /> : null}
+        onBarcodeScanned={({ data, type }) => { if (lock.current || phaseNow.current !== 'looking') return; try { void lookup(normalizeBarcode(data, type)); } catch { /* keeps looking */ } }} /> : null}
       {!live && (web || found || phase === 'busy') ? <Package code={code} /> : null}
       <Frame done={found} scanning={phase === 'looking'} />
       <View style={{ position: 'absolute', top: 302, left: 0, right: 0, alignItems: 'center' }}>
