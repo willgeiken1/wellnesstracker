@@ -21,7 +21,7 @@ export function DayScoreScreen() {
   const sub = {
     training: T0.goalMin && finite(todayMin) ? fill(t(T0.active ? 'progressScoreTrGoing' : 'progressScoreTr'), { min: todayMin, goal: T0.goalMin, name: T0.active?.name ?? '' }) : p.training == null ? t('progressScoreTrNone') : t('progressScoreTrPlain'),
     food: F.eatenKcal != null && F.goalKcal ? fill(t(F.proteinG != null && F.proteinGoal ? 'progressScoreFoodP' : 'progressScoreFood'), { eaten: fmt(F.eatenKcal), goal: fmt(F.goalKcal), p: Math.round(F.proteinG ?? 0), pg: Math.round(F.proteinGoal ?? 0) }) : t('progressScoreFoodNone'),
-    sleep: night ? fill(t(hrv != null && d.hrvBand && hrv >= d.hrvBand[0] && hrv <= d.hrvBand[1] ? 'progressScoreSleepIn' : 'progressScoreSleep'), { hm: hm(night.min / 60) }) : t('progressScoreSleepNone'),
+    sleep: night ? fill(t(hrv != null && d.hrvBand && hrv >= d.hrvBand[0] && hrv <= d.hrvBand[1] ? 'progressScoreSleepIn' : 'progressScoreSleep'), { hm: hm(Math.max(0, night.min - night.awake) / 60) }) : t('progressScoreSleepNone'),
   };
   const line = scoreLine(today, d.yesterdayScore, false);
   const known = PIL.filter(([key]) => p[key] != null);

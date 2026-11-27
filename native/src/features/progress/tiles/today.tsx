@@ -124,20 +124,22 @@ function RecoveryTile({ size, options, body }: TileRenderProps) {
   const src = S?.source ?? (d.sources.oura || d.demo ? 'Oura' : 'Apple Health');
   if (!S && h == null && rh == null) return <View style={{ flex: 1 }}><NoData fs={size === 'S' ? 24 : 28} text={t('progressNoData')} /><Sub wrap style={{ marginTop: 6 }}>{t('progressRecoveryEmpty')}</Sub></View>;
   const usual = (b: readonly [number, number] | null) => b ? fill(t('progressUsualRange'), { a: b[0], b: b[1] }) : t('progressNoUsualYet');
-  const sleepCells = (hgt = 6) => <Cells states={meter((S?.min ?? 0) / goal, goal / 60)} color="sleep" h={hgt} gap={2} r={2} />;
+  // Time asleep, without the minutes awake in the night: what the goal and the sleep history count.
+  const asleep = S ? Math.max(0, S.min - S.awake) : 0;
+  const sleepCells = (hgt = 6) => <Cells states={meter(asleep / goal, goal / 60)} color="sleep" h={hgt} gap={2} r={2} />;
   const scaleH = () => h != null ? <Scale v={h} lo={36} hi={72} band={hb} /> : null, scaleR = () => rh != null ? <Scale v={rh} lo={48} hi={66} band={rb} /> : null;
   const col = (num: ReactNode, title: string, sub: string, viz: ReactNode) => <View>{num}<Sub size={12} style={{ marginTop: 5 }} color={k.c.text}>{title}</Sub><Sub size={11.5} style={{ marginTop: 3 }}>{sub}</Sub><View style={{ marginTop: 9 }}>{viz}</View></View>;
   const nd = (fs: number) => <NoData fs={fs * 0.8} text={t('progressNoData')} />;
   const cols = {
-    sleep: (fs: number) => col(S ? <HM min={S.min} fs={fs} tight /> : nd(fs), t('progressPSleep'), fill(t('progressGoalLower'), { v: `${goal / 60}h` }), sleepCells()),
+    sleep: (fs: number) => col(S ? <HM min={asleep} fs={fs} tight /> : nd(fs), t('progressPSleep'), fill(t('progressGoalLower'), { v: `${goal / 60}h` }), sleepCells()),
     hrv: (fs: number) => col(h != null ? <Num v={h} unit="ms" fs={fs} /> : nd(fs), HRV_NAME, usual(hb), scaleH()),
     rhr: (fs: number) => col(rh != null ? <Num v={rh} unit="bpm" fs={fs} /> : nd(fs), t('progressRhrShort'), usual(rb), scaleR()),
   };
-  const aria = fill(t('progressRecoveryAria'), { src, sleep: S ? hm(S.min / 60) : t('progressNoData'), hrv: h ?? t('progressNoData'), rhr: rh ?? t('progressNoData') });
+  const aria = fill(t('progressRecoveryAria'), { src, sleep: S ? hm(asleep / 60) : t('progressNoData'), hrv: h ?? t('progressNoData'), rhr: rh ?? t('progressNoData') });
   const lead = (options.lead ?? 'sleep') as keyof typeof cols;
   if (size === 'S') {
-    const num = lead === 'sleep' ? (S ? <HM min={S.min} fs={30} /> : nd(30)) : lead === 'hrv' ? (h != null ? <Num v={h} unit="ms" fs={30} /> : nd(30)) : (rh != null ? <Num v={rh} unit="bpm" fs={30} /> : nd(30));
-    const short = S ? goal - S.min : 0;
+    const num = lead === 'sleep' ? (S ? <HM min={asleep} fs={30} /> : nd(30)) : lead === 'hrv' ? (h != null ? <Num v={h} unit="ms" fs={30} /> : nd(30)) : (rh != null ? <Num v={rh} unit="bpm" fs={30} /> : nd(30));
+    const short = S ? goal - asleep : 0;
     const note = lead === 'sleep' ? (!S ? '' : short > 0 ? fill(t('progressMinShort'), { n: short, goal: `${goal / 60}h` }) : t('progressGoalMet')) : usual(lead === 'hrv' ? hb : rb);
     return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>{num}
       <Sub style={{ marginTop: 4 }}>{lead === 'sleep' ? t('progressPSleep') : lead === 'hrv' ? HRV_NAME : t('progressMRhr')}</Sub><Sub>{note}</Sub>

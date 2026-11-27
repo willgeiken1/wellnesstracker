@@ -131,7 +131,7 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
   const todayFood = foods[HISTORY - 1];
   let targetsToday: ReturnType<typeof foodTargets>['targets'] = null;
   try { targetsToday = foodTargets(repo, today).targets; } catch { targetsToday = null; }
-  d.food = { goalKcal: targetsToday ? Math.round(targetsToday.energy_kj / KJ) : null, eatenKcal: todayFood.logged ? Math.round(todayFood.kcal ?? 0) : null,
+  d.food = { goalKcal: targetsToday ? Math.round(targetsToday.energy_kj / KJ) : null, eatenKcal: todayFood.logged && finite(todayFood.kcal) ? Math.round(todayFood.kcal) : null,
     proteinG: todayFood.protein == null ? null : Math.round(todayFood.protein), proteinGoal: targetsToday ? Math.round(targetsToday.protein_g) : null };
 
   /* training */
