@@ -9,7 +9,7 @@ import Constants from 'expo-constants';
 import { BarChart, EmptyState, Card, Icon, KitText, List, ListRow, NavBar, NavButton, SectionHeader, SegmentedControl, Tappable, alpha, useKit } from '@/components/kit';
 import { capitals } from '@/components/kit-style';
 import { showToast } from '@/features/shell/toast';
-import { askForReminders } from '@/features/reminders/notifier';
+import { askForReminders, notificationsInBuild } from '@/features/reminders/notifier';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import {
@@ -22,7 +22,8 @@ import { SunPath, Thumb } from './sun-path';
 import { useRoutines, type RoutinesStore } from './store';
 
 /** The phone-only build cannot send notifications, so Remind me shows as coming later there. */
-const REMIND_LATER = Constants.expoConfig?.extra?.phoneOnly === true;
+/** The phone-only build, or one without notifications, can't send reminders, so Remind me shows as coming later. */
+const remindLater = () => Constants.expoConfig?.extra?.phoneOnly === true || !notificationsInBuild();
 /** Remind me, as Settings, Reminders turns a reminder on: iOS is asked once, the first time; if it says no (or said no
  * before), the switch goes back off and says where to allow notifications. The app's root puts it on the phone. */
 function turnRemind(store: RoutinesStore, id: string, name: string, on: boolean) {
@@ -84,7 +85,7 @@ export function RoutineDetail({ store, rid }: { store: RoutinesStore; rid: strin
     <SectionHeader title={t('routinesSettings')} />
     <List>
       <ListRow icon="plus" color="sleep" title={fill(t('routinesAddItemTo'), { name: r.name })} onPress={() => routinesRoutes.add({ routine: r.id })} />
-      {REMIND_LATER ? <ListRow icon="bell" color="sleep" title={t('routinesRemindMe')} sub={t('settingsLaterVersion')} toggle={false} disabled />
+      {remindLater() ? <ListRow icon="bell" color="sleep" title={t('routinesRemindMe')} sub={t('settingsLaterVersion')} toggle={false} disabled />
         : <ListRow icon="bell" color="sleep" title={t('routinesRemindMe')} sub={fill(t('routinesRemindSub'), { time: h12(r.from) })} toggle={r.remind}
           onToggle={on => turnRemind(store, r.id, r.name, on)} />}
       {pause ? <ListRow icon="pause" color="sleep" title={fill(t('routinesResumeName'), { name: r.name })} sub={fill(t('routinesPausedUntil'), { date: shortDate(pause.until) })} chevron={false}

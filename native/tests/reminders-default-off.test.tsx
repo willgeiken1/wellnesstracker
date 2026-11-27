@@ -196,7 +196,7 @@ describe('turning a reminder on in Settings', () => {
     expect(n.replace).not.toHaveBeenCalled();
     expect(screen.getByTestId('reminders-ios')).toHaveTextContent(/Off/);
   });
-  test('without notifications in the build the choice is still kept, and nothing is asked or scheduled', async () => {
+  test('when the phone reports notifications unavailable, the choice is still kept, and nothing is asked or scheduled', async () => {
     const { n } = fakeNotifier('unavailable');
     setNotifierForTests(n);
     const repo = memoryRepository();
@@ -206,6 +206,20 @@ describe('turning a reminder on in Settings', () => {
     expect(saved(repo).rem.workout).toBe(true);
     expect(n.request).not.toHaveBeenCalled();
     expect(n.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('a build without the notifications module', () => {
+  test('shows every reminder off and greyed out, says they come later, and never asks', async () => {
+    setNotifierForTests(null);
+    const repo = memoryRepository();
+    await show(<Section />, repo);
+    expect(screen.getByText('Reminders arrive with notifications in a later version. Nothing here is sent yet.')).toBeTruthy();
+    expect(checked('workout')).toBe(false);
+    expect(screen.queryByTestId('reminders-ios')).toBeNull();
+    const sw = screen.getAllByRole('switch');
+    expect(sw.length).toBeGreaterThan(0);
+    expect(sw.every(el => el.props.accessibilityState?.disabled === true)).toBe(true);
   });
 });
 

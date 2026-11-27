@@ -32,7 +32,7 @@ import { rateInsight } from './rate';
 import { switchLock } from '@/features/privacy-lock/turn-on';
 import { useLockAvailable } from '@/features/privacy-lock/cover';
 import { OURA_ALERT_AVAILABLE, isReminderSwitch, remindersOn } from '@/features/reminders/plan';
-import { askForReminders, notifier, type NotifyPermission } from '@/features/reminders/notifier';
+import { askForReminders, notificationsInBuild, notifier, type NotifyPermission } from '@/features/reminders/notifier';
 import { useReminderSync } from '@/features/reminders/sync';
 
 const KG = 2.20462;
@@ -296,7 +296,9 @@ const REM_OFF: SettingsPrefs['rem'] = { v: 2, cap: false, workout: false, workou
  * (or said no before), the switch goes back off and a note says where to allow them. Whenever iOS allows them, the
  * reminders that are on are put on the phone's schedule again after each change (the app's root does the same from
  * launch). The Reconnect Oura alert needs the server to notice Oura going quiet, so it shows as coming later. */
-export function RemindersPage({ limited = false }: { limited?: boolean }) {
+export function RemindersPage({ limited: phoneOnly = false }: { limited?: boolean }) {
+  // A build without notifications reads as the phone-only one: nothing here could arrive.
+  const limited = phoneOnly || !notificationsInBuild();
   const [p, set] = useSettingsPrefs();
   const repository = useOptionalAuth()?.repository ?? null;
   const [perm, setPerm] = useState<NotifyPermission | null>(null);

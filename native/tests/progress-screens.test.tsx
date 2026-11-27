@@ -85,3 +85,14 @@ test('a pillar with no data leaves the score to the others, so what each adds su
   expect(screen.getByLabelText('Training adds No data, Food 100.0, Sleep No data, total 100')).toBeTruthy();
   expect(screen.getByText('+100.0')).toBeTruthy();
 });
+
+describe('the photo reminder in a build without notifications', () => {
+  test('shows as coming in a later version, switched off, not a live switch', async () => {
+    const repo = memoryRepository();
+    repo.localSave('progressPhotoReminder', true);
+    jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle', demo: false } as ReturnType<typeof useAuth>);
+    await render(<ThemeProvider><PhotosScreen /></ThemeProvider>);
+    expect(screen.getByText('Comes in a later version')).toBeTruthy();
+    expect(screen.getByRole('switch').props.accessibilityState).toMatchObject({ checked: false, disabled: true });
+  });
+});

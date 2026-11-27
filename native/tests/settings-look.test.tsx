@@ -20,6 +20,7 @@ import { FoodAiPrivacy } from '../src/features/food/ai/privacy';
 import { aiState, setThumbnails } from '../src/features/food/ai/service';
 import { Account as PhoneAccount } from '../src/phone-only/screens';
 import { t } from '../src/i18n/en';
+import { setNotifierForTests } from '../src/features/reminders/notifier';
 
 let mockSection = 'about';
 let mockScreens: { name: string; options: Record<string, unknown> }[] = [];
@@ -155,9 +156,13 @@ describe('Settings pages', () => {
   });
   test('Reminders counts what is on in its intro', async () => {
     mockSection = 'reminders';
-    await show(<Section />);
-    // Every reminder starts off; At most 2 a day is a limit and stays on.
-    expect(screen.getByText(/0 are on, and you will get at most 2 a day\./)).toBeTruthy();
+    // A build with notifications (without them the page says they come later).
+    setNotifierForTests({ permission: async () => 'undetermined', request: async () => 'undetermined', replace: async () => {} });
+    try {
+      await show(<Section />);
+      // Every reminder starts off; At most 2 a day is a limit and stays on.
+      expect(screen.getByText(/0 are on, and you will get at most 2 a day\./)).toBeTruthy();
+    } finally { setNotifierForTests(null); }
   });
   test('Delete account offers Save a backup first whenever there is a log of your own to back up', async () => {
     mockSection = 'delete-account';

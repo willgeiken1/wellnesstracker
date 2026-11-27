@@ -84,6 +84,9 @@ function load(): Notifier {
 }
 /** The notifier in use. */
 export function notifier(): Notifier { return override ?? (loaded ??= load()); }
+/** Whether this build can put reminders on the phone at all. Without the module, reminder switches show as coming in a
+ * later version (as in the phone-only build) rather than sit On with nothing ever arriving. */
+export const notificationsInBuild = () => notifier() !== unavailable;
 /** Test hook: stand in for the phone's notifications (null goes back to the real one). */
 export function setNotifierForTests(n: Notifier | null) { override = n; }
 

@@ -6,7 +6,7 @@ import { Badge, Icon, List, ListRow, NavButton, SectionHeader, font, useKit, Tap
 import { useAuth } from '@/auth/provider';
 import { t } from '@/i18n/en';
 import { showToast } from '@/features/shell/toast';
-import { askForReminders } from '@/features/reminders/notifier';
+import { askForReminders, notificationsInBuild } from '@/features/reminders/notifier';
 import { daysBetween, dShort, type ProgressPhoto } from '../model';
 import { clock, fill, wD, wtS } from '../format';
 import { readReminder, saveReminder } from '../local';
@@ -30,8 +30,8 @@ function Pick({ p, n, unit, onPress }: { p: ProgressPhoto; n: number; unit: 'kg'
   </Tappable>;
 }
 
-/** The phone-only build cannot send notifications, so the photo reminder shows as coming later there. */
-const REMIND_LATER = Constants.expoConfig?.extra?.phoneOnly === true;
+/** The phone-only build, or one without notifications, can't send reminders, so the photo reminder shows as coming later. */
+const remindLater = () => Constants.expoConfig?.extra?.phoneOnly === true || !notificationsInBuild();
 
 export function PhotosScreen() {
   const d = useProgress(), k = useKit(), auth = useAuth(), u = d.unit, ph = d.photos;
@@ -93,7 +93,7 @@ export function PhotosScreen() {
     <Card><View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}><Ic icon="lock2" color="success" />
       <Text style={[font(500, 14, 1.45), { flex: 1, color: k.c['text-muted'] }]}><Text style={[font(700, 14), { color: k.c.text }]}>{t('progressPhotosStay')}</Text> {t('progressPhotosStayMore')}</Text></View></Card>
     <List>
-      {REMIND_LATER ? <ListRow icon="bell" color="sleep" title={t('progressPhotoReminder')} sub={t('settingsLaterVersion')} toggle={false} disabled />
+      {remindLater() ? <ListRow icon="bell" color="sleep" title={t('progressPhotoReminder')} sub={t('settingsLaterVersion')} toggle={false} disabled />
         : <ListRow icon="bell" color="sleep" title={t('progressPhotoReminder')} sub={fill(t('progressSundaysAt'), { time: clock(480) })} toggle={remind} onToggle={toggle} />}
     </List>
   </Page>;

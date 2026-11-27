@@ -7,6 +7,7 @@ import { addDays, clock, demoState, nowOf, rById, type RoutinesState } from '../
 import { createRoutinesStore, refreshNow, type RoutinesStore } from '../src/features/routines/store';
 import { RoutineDetail, RoutineHistory, RoutinesReorder } from '../src/features/routines/screens';
 import { AddItem, Converter, NewRoutine, PauseRoutine } from '../src/features/routines/sheets';
+import { setNotifierForTests } from '../src/features/reminders/notifier';
 import { memoryRepository } from './workout-repository';
 
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
@@ -36,6 +37,9 @@ function demoStore(): RoutinesStore {
 }
 
 describe('routine detail', () => {
+  // A build with notifications, so Remind me is a live switch.
+  beforeEach(() => { setNotifierForTests({ permission: async () => 'granted', request: async () => 'granted', replace: async () => {} }); });
+  afterEach(() => { setNotifierForTests(null); });
   it('shows the routine, its items for today and its settings', async () => {
     await render(<RoutineDetail store={demoStore()} rid="night" />, { wrapper });
     expect(screen.getByText('Night')).toBeTruthy();
@@ -51,6 +55,14 @@ describe('routine detail', () => {
     await act(async () => { fireEvent(screen.getByRole('switch'), 'valueChange', false); });
     expect(rById(store.read(), 'night')!.remind).toBe(false);
     expect(showToast).toHaveBeenCalledWith('Night reminders off', expect.anything());
+  });
+});
+
+describe('Remind me in a build without notifications', () => {
+  it('shows as coming in a later version, not a switch that sits on with nothing arriving', async () => {
+    await render(<RoutineDetail store={demoStore()} rid="night" />, { wrapper });
+    expect(screen.getByText('Comes in a later version')).toBeTruthy();
+    expect(screen.getByRole('switch').props.accessibilityState).toMatchObject({ checked: false, disabled: true });
   });
 });
 
