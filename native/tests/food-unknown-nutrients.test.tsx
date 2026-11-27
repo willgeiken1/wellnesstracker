@@ -56,6 +56,17 @@ describe('nutrients no logged food gives', () => {
     expect(screen.queryByLabelText(/^Protein, 0 of/)).toBeNull();
   });
 
+  test('leave the calorie split unknown on the Nutrition screen until all three macros are known', async () => {
+    const repo = quickOnly();
+    await render(<NutritionScreen repo={repo} />, { wrapper });
+    expect(screen.queryByLabelText(/^Calories from protein/)).toBeNull();
+    expect(screen.getAllByText('Some of this food has no protein, carbs or fat listed, so the split is unknown.').length).toBeGreaterThan(0);
+    // Protein known alone is no split either: it is never drawn as 100% protein.
+    saveFood(repo, DAY, LUNCH, { ...toast, name: 'Synthetic shake', carbs_g: null, fat_g: null });
+    await render(<NutritionScreen repo={repo} />, { wrapper });
+    expect(screen.queryByLabelText(/^Calories from protein 100%/)).toBeNull();
+  });
+
   test('read as unknown on the Protein tile, not as 0 g with the whole target to go', async () => {
     const Protein = FOOD_TILES.protein;
     const p = { page: 'food', id: 'protein', size: 'S', style: 'A', options: { view: 'day' }, editing: false, preview: true,

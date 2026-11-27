@@ -1180,7 +1180,7 @@ export const en = {
   foodShowing: 'Showing {day}, {date}', foodBackToToday: 'Back to today', foodNSaved: '{n} saved', foodMealWord: 'meal', foodMealsWord: 'meals',
   foodEaten: 'eaten', foodOver: 'over', foodLeft: 'left', foodLeftOf: 'left of', foodOf: 'of', foodOfN: 'of {n}', foodEatenCap: 'Eaten', foodLeftCap: 'Left', foodGoal: 'Goal',
   foodCalA11y: '{eaten} of {goal} kcal eaten, {left} {word}', foodByMeal: 'By meal', foodByMealA11y: 'Calories by meal:', foodNotLogged: 'not logged', foodNone: 'None',
-  foodOfGrams: '{name} {v} of {goal} grams', foodSplitA11y: 'Calories from protein {p}%, carbs {c}%, fat {f}%', foodSplitUnknownA11y: 'share of calories unknown', foodFromProtein: 'Calories from protein',
+  foodOfGrams: '{name} {v} of {goal} grams', foodSplitA11y: 'Calories from protein {p}%, carbs {c}%, fat {f}%', foodSplitUnknownA11y: 'share of calories unknown', foodSplitUnavailable: 'Some of this food has no protein, carbs or fat listed, so the split is unknown.', foodFromProtein: 'Calories from protein',
   // Strings that end in the word from use backticks, so the module guards that scan this file do not read them as imports.
   foodCarbsLower: 'carbs', foodFatLower: 'fat', foodWhereFrom: `Where calories came from`, foodGToGo: '{g} g to go', foodTargetMet: 'Target met',
   foodGramsProtein: '{g} grams of protein', foodGProtein: '{g} g protein', foodNothingLogged: 'nothing logged', foodProteinByDay: 'Protein by day, target {g} g',

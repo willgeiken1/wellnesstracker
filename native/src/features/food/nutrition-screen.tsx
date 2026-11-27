@@ -45,7 +45,9 @@ function DayPart({ repo }: { repo: Repository }) {
   const k = useKit(), u = useEnergyUnit();
   const { day, today, isToday, burned } = useFoodDay();
   const v = dayView(repo, day, { today, burned });
-  const cells = waffleCells(known(v.p), known(v.c), known(v.f)), N = nutrients(v), pcs = macroPercents(known(v.p), known(v.c), known(v.f)).pc;
+  // A share of the calories needs all three macros: with any unknown, the split is unknown, never drawn or spoken as 0%.
+  const whole = v.p != null && v.c != null && v.f != null;
+  const cells = whole ? waffleCells(v.p!, v.c!, v.f!) : waffleCells(0, 0, 0), N = nutrients(v), pcs = macroPercents(known(v.p), known(v.c), known(v.f)).pc;
   const round = (x: number | null) => x == null ? null : Math.round(x);
   const macros: Nu[] = [{ key: t('foodMacroProtein'), v: round(v.p), goal: Math.round(v.goals.p), u: 'g', color: MACRO_COLOR.p },
     { key: t('foodMacroCarbs'), v: round(v.c), goal: Math.round(v.goals.c), u: 'g', color: MACRO_COLOR.c },
@@ -66,7 +68,8 @@ function DayPart({ repo }: { repo: Repository }) {
       </View>
       <View accessible accessibilityLabel={fill(enText(t('foodOfGoalA11y'), u), { v: enNum(v.eaten, u), goal: enNum(v.goal, u) })}><Cells states={meter(known(v.eaten) / v.goal, 22)} color={k.c.food} h={14} gap={3} r={3} /></View>
       <SectionLabel inset title={t('foodWhereFrom')} aside={t('foodEachSquare')} />
-      <Waffle cells={cells} label={fill(t('foodSplitA11y'), { p: pcs[0], c: pcs[1], f: pcs[2] })} />
+      <Waffle cells={cells} label={whole ? fill(t('foodSplitA11y'), { p: pcs[0], c: pcs[1], f: pcs[2] }) : t('foodSplitUnavailable')} />
+      {!whole && <KitText weight={500} size={13} lineHeight={1.35} color="text-muted" style={{ marginTop: 8 }}>{t('foodSplitUnavailable')}</KitText>}
       <EnergyLegend p={v.p} c={v.c} f={v.f} />
     </Card>
     <SectionHeader title={t('foodMacrosTitle')} />
