@@ -213,7 +213,7 @@ describe("Discover coming soon", { concurrency: false }, () => {
 
     const sw = read("../logger/sw.js");
     const sentry = read("../logger/js/sentry.js");
-    assert.match(sw, /const CACHE = "insight-shell-v89"/);
-    assert.match(sentry, /insight-shell-v89/);
+    assert.match(sw, /const CACHE = "insight-shell-v90"/);
+    assert.match(sentry, /insight-shell-v90/);
   });
 });

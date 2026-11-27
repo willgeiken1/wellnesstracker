@@ -205,8 +205,8 @@ function rangeCounts(from, to) {
   const oura = Object.keys((app.state.oura && app.state.oura.days) || {}).filter((d) => d >= from && d <= to).length;
   const photos = (app.myPhotos ? app.myPhotos() : []).filter((p) => p.date >= from && p.date <= to).length;
   const plan = Object.keys(app.state.plan || {}).filter((d) => d >= from && d <= to).length;
-  const hour = app.state && app.state.dailyRoutines && app.state.dailyRoutines.settings ? app.state.dailyRoutines.settings.dayRolloverHour : 4;
-  const routineLogs = ((app.state.dailyRoutines && app.state.dailyRoutines.logs) || []).filter((log) => log && !(log.deletedAt > 0) && routineLogMatchesPurge(log, { from, to, ...routineEarlyWindow(from, hour) })).length;
+  const early = routinePurgeEarly(from);
+  const routineLogs = ((app.state.dailyRoutines && app.state.dailyRoutines.logs) || []).filter((log) => log && !(log.deletedAt > 0) && routineLogMatchesPurge(log, { from, to, ...early })).length;
   return { sessions, meals, cardio, meas, weighs, checks, oura, photos, plan, routineLogs };
 }
 app.rangeCounts = rangeCounts;
@@ -301,9 +301,15 @@ async function exportAllData() {
 }
 app.exportAllData = exportAllData;
 
-function rememberPurge(from, to, synced) {
-  const hour = app.state && app.state.dailyRoutines && app.state.dailyRoutines.settings ? app.state.dailyRoutines.settings.dayRolloverHour : 4;
-  app.state.purges = notePurge(app.state.purges, from, to, synced, Date.now(), routineEarlyWindow(from, hour));
+function routinePurgeEarly(from) {
+  const settings = app.state && app.state.dailyRoutines && app.state.dailyRoutines.settings;
+  const hour = settings ? settings.dayRolloverHour : 4;
+  return routineEarlyWindow(from, hour);
+}
+
+function rememberPurge(from, to, synced, early) {
+  const window = early === undefined ? routinePurgeEarly(from) : early;
+  app.state.purges = notePurge(app.state.purges, from, to, synced, Date.now(), window);
 }
 function purgePayload(from, to) {
   const p = (app.state.purges || []).find((x) => x && x.from === from && x.to === to);
@@ -360,8 +366,10 @@ async function purgeRange(from, to) {
   if (app.purgeBusy) return;
   app.purgeBusy = true;
   try {
-    app.wipeLogs((data) => stripRange(data, from, to));
-    rememberPurge(from, to, false);
+    const deletedAt = Date.now();
+    const early = routinePurgeEarly(from);
+    app.wipeLogs((data) => stripRange(data, from, to, { before: deletedAt, now: deletedAt, early }));
+    app.state.purges = notePurge(app.state.purges, from, to, false, deletedAt, early);
     app.ui.workoutOpen = false;
     app.ui.sheet = null;
     app.save();

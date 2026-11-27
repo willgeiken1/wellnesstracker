@@ -510,19 +510,40 @@ function rawAhead(p, now) {
   return Math.max(timeMs(p && p.deletedAt) || 0, timeMs(p && p.at) || 0) > now + CLOCK_SKEW_MS;
 }
 
+function earlyPair(p) {
+  if (!p || typeof p.routineEarlyFrom !== "number" || typeof p.routineEarlyTo !== "number") return null;
+  if (!Number.isFinite(p.routineEarlyFrom) || !Number.isFinite(p.routineEarlyTo)) return null;
+  if (p.routineEarlyTo < p.routineEarlyFrom) return null;
+  return { earlyFrom: p.routineEarlyFrom, earlyTo: p.routineEarlyTo };
+}
+
+function writeEarly(row, early) {
+  const pair = earlyPair(early);
+  if (!pair) return;
+  row.routineEarlyFrom = pair.earlyFrom;
+  row.routineEarlyTo = pair.earlyTo;
+}
+
 export function unionPurges(a, b, now = Date.now()) {
   const map = new Map();
   for (const p of [...(a || []), ...(b || [])]) {
     if (!p || !validDay(p.from) || !validDay(p.to) || p.from > p.to) continue;
     const k = p.from + "\0" + p.to;
     const cur = map.get(k);
-    const usable = Math.max(usableCutoff(p, now), cur ? cur.usable : 0);
+    const incomingUsable = usableCutoff(p, now);
+    const usable = Math.max(incomingUsable, cur ? cur.usable : 0);
     const ahead = rawAhead(p, now) || !!(cur && cur.ahead);
     const stamp = usable || (ahead ? (now > 0 ? now - 1 : now) : 0);
-    const incomingEarly = typeof p.routineEarlyFrom === "number" && typeof p.routineEarlyTo === "number"
-      ? { earlyFrom: p.routineEarlyFrom, earlyTo: p.routineEarlyTo }
-      : null;
-    const early = !cur ? incomingEarly : (cur.earlyFrom != null && incomingEarly ? incomingEarly : null);
+    const incomingEarly = earlyPair(p);
+    const curEarly = cur && cur.earlyFrom != null ? { earlyFrom: cur.earlyFrom, earlyTo: cur.earlyTo } : null;
+    /* The window belongs to the cutoff that wins. A copy with the same cutoff,
+       including a sync acknowledgment, does not replace it. */
+    let early = incomingEarly;
+    if (cur) {
+      if (incomingUsable > cur.usable) early = incomingEarly;
+      else if (incomingUsable < cur.usable) early = curEarly;
+      else early = curEarly || incomingEarly;
+    }
     map.set(k, {
       from: p.from,
       to: p.to,
@@ -550,16 +571,20 @@ export function notePurge(list, from, to, synced, now = Date.now(), early = null
   if (!validDay(from) || !validDay(to) || from > to) return purges;
   const hit = purges.find((p) => p && p.from === from && p.to === to);
   if (hit) {
-    if (!synced) { hit.at = now; hit.deletedAt = now; }
-    else if (purgeCutoff(hit) == null) { hit.at = now; hit.deletedAt = now; }
+    if (!synced) {
+      hit.at = now;
+      hit.deletedAt = now;
+      writeEarly(hit, early);
+    } else if (purgeCutoff(hit) == null) {
+      hit.at = now;
+      hit.deletedAt = now;
+      writeEarly(hit, early);
+    }
     hit.synced = !!synced;
     return purges;
   }
   const row = { from, to, at: now, deletedAt: now, synced: !!synced };
-  if (early && typeof early.routineEarlyFrom === "number" && typeof early.routineEarlyTo === "number") {
-    row.routineEarlyFrom = early.routineEarlyFrom;
-    row.routineEarlyTo = early.routineEarlyTo;
-  }
+  writeEarly(row, early);
   purges.push(row);
   return purges;
 }

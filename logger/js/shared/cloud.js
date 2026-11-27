@@ -123,29 +123,45 @@ function keepHomeV2(remoteLayout) {
   app.state.layout.homeV2 = picked;
 }
 
+/* The reply belongs to the session that sent it. A sign-out or a new sign-in
+   during the request leaves that session behind, and its routines must not land here. */
+function sessionStill(session, userId) {
+  const current = app.session;
+  return !!session && current === session && !!current.user && current.user.id === userId;
+}
+
 /* Used only when merge_user_data is not deployed yet. The function itself merges homeV2. */
-async function cloudPushFallback(blob) {
+async function cloudPushFallback(blob, session, userId) {
   try {
-    const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", app.session.user.id).maybeSingle();
+    const { data, error } = await app.sb.from("user_data").select("data").eq("user_id", userId).maybeSingle();
+    if (!sessionStill(session, userId)) return;
     if (!error && data && data.data) {
       app.state.machineNotes = app.mergeMachineNotes(app.state.machineNotes, data.data.machineNotes);
       keepHomeV2(data.data.layout);
     }
   } catch (e) { /* offline: send this phone's copy; the next pull merges */ }
+  if (!sessionStill(session, userId)) return;
   blob.machineNotes = app.state.machineNotes || {};
   blob.layout = app.state.layout || {};
   try {
-    const { error } = await app.sb.from("user_data").upsert({ user_id: app.session.user.id, data: blob, updated_at: new Date().toISOString() });
+    const { error } = await app.sb.from("user_data").upsert({ user_id: userId, data: blob, updated_at: new Date().toISOString() });
+    if (!sessionStill(session, userId)) return;
     if (!error) rememberCloudPush();
     else noteCloudFail();
-  } catch (e) { /* offline: the next save or app open retries */ noteCloudFail(); }
+  } catch (e) {
+    if (!sessionStill(session, userId)) return;
+    noteCloudFail();
+  }
 }
 
 async function cloudPush() {
-  if (!app.sb || !app.session) return;
+  if (!app.sb || !app.session || !app.session.user || !app.session.user.id) return;
+  const session = app.session;
+  const userId = session.user.id;
   const blob = userDataBlob();
   try {
     const { data, error } = await app.sb.rpc("merge_user_data", { p_data: blob });
+    if (!sessionStill(session, userId)) return;
     if (!error && data && typeof data === "object") {
       // A note edited while this push was in flight is newer than the reply, so merge instead of replacing.
       let notesChanged = false;
@@ -170,8 +186,13 @@ async function cloudPush() {
       return;
     }
     if (!(error && mergeRpcMissing(error))) { if (error) noteCloudFail(); return; }
-  } catch (e) { /* offline: the next save or app open retries */ noteCloudFail(); return; }
-  await cloudPushFallback(blob);
+  } catch (e) {
+    if (!sessionStill(session, userId)) return;
+    noteCloudFail();
+    return;
+  }
+  if (!sessionStill(session, userId)) return;
+  await cloudPushFallback(blob, session, userId);
 }
 app.cloudPush = cloudPush;
 app.mergeRpcMissing = mergeRpcMissing;

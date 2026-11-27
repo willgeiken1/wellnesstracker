@@ -442,20 +442,27 @@ export function resolveCutoff(data: Bag, from: string, to: string, requested: un
   return settleCutoff(timeMs(hit && (hit.deletedAt ?? hit.at)), timeMs(requested), now);
 }
 
+function assignEarly(row: Bag, earlyFrom?: number | null, earlyTo?: number | null) {
+  if (typeof earlyFrom !== "number" || typeof earlyTo !== "number") return;
+  if (!Number.isFinite(earlyFrom) || !Number.isFinite(earlyTo) || earlyTo < earlyFrom) return;
+  row.routineEarlyFrom = earlyFrom;
+  row.routineEarlyTo = earlyTo;
+}
+
 export function addPurge(data: Bag, from: string, to: string, deletedAt?: number, now = Date.now(), earlyFrom?: number | null, earlyTo?: number | null) {
   const purges = Array.isArray(data.purges) ? data.purges : [];
   const hit = purges.find((p: Bag) => p && p.from === from && p.to === to);
-  const next = settleCutoff(timeMs(hit && (hit.deletedAt ?? hit.at)), timeMs(deletedAt), now);
+  const prev = timeMs(hit && (hit.deletedAt ?? hit.at));
+  const next = settleCutoff(prev, timeMs(deletedAt), now);
   if (hit) {
+    const advanced = next > (prev || 0);
     hit.at = next;
     hit.deletedAt = next;
     hit.synced = true;
+    if (advanced) assignEarly(hit, earlyFrom, earlyTo);
   } else {
     const row: Bag = { from, to, at: next, deletedAt: next, synced: true };
-    if (typeof earlyFrom === "number" && typeof earlyTo === "number" && earlyTo > earlyFrom) {
-      row.routineEarlyFrom = earlyFrom;
-      row.routineEarlyTo = earlyTo;
-    }
+    assignEarly(row, earlyFrom, earlyTo);
     purges.push(row);
   }
   data.purges = purges;
