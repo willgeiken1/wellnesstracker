@@ -17,7 +17,7 @@ import { useTheme } from '@/design/theme-provider';
 import { showToast } from '@/features/shell/toast';
 import { useAppleHealth } from '@/features/health/use-apple-health';
 import { useOura } from '@/features/health/use-oura';
-import { readProfile, saveProfileName } from '@/features/onboarding/model';
+import { readProfile, saveProfileName, saveProfileUnit } from '@/features/onboarding/model';
 import { devicePreferencesUnsaved, saveDevicePreferences, useDevicePreferences } from '@/features/onboarding/device-preferences';
 import { LEGAL_LINKS, openPage } from './links';
 import { iconArt, iconId } from './app-icon';
@@ -368,6 +368,9 @@ function HidePreview({ text }: { text: string }) {
 export function UnitsPage() {
   const k = useKit();
   const [p, set] = useSettingsPrefs();
+  const repo = useOptionalAuth()?.repository ?? null;
+  // Progress, Body and Training read the weight unit from the profile, so it changes with this choice.
+  const setWeight = (v: 'lb' | 'kg') => { set('units.weight', v); if (repo) { try { saveProfileUnit(repo, v); } catch { /* the setting still changes */ } } };
   const u = p.units;
   const weeks = [{ v: 'mon' as const, l: 'Monday' }, { v: 'sun' as const, l: 'Sunday' }, { v: 'sat' as const, l: 'Saturday' }];
   const order = { mon: ['Monday', 'Sunday'], sun: ['Sunday', 'Saturday'], sat: ['Saturday', 'Friday'] }[u.week];
@@ -375,7 +378,7 @@ export function UnitsPage() {
     u.distance === 'km' ? '5.8 km' : '3.6 mi', clock(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), p)];
   return <SetPage back={st('settings')} title={st('settingsUnitsTitle')} testID="settings-units">
     <List>
-      <SegRow title={st('settingsWeight')} value={u.weight} onChange={v => set('units.weight', v)} options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
+      <SegRow title={st('settingsWeight')} value={u.weight} onChange={setWeight} options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
       <SegRow title={st('settingsHeight')} value={u.height} onChange={v => set('units.height', v)} options={[{ value: 'ftin', label: 'ft, in' }, { value: 'cm', label: 'cm' }]} />
       <SegRow title={st('settingsEnergy')} value={u.energy} onChange={v => set('units.energy', v)} options={[{ value: 'kcal', label: 'kcal' }, { value: 'kJ', label: 'kJ' }]} />
       <SegRow title={st('settingsWater')} value={u.water} onChange={v => set('units.water', v)} options={[{ value: 'floz', label: 'fl oz' }, { value: 'ml', label: 'mL' }]} />

@@ -74,6 +74,14 @@ export function saveProfileName(repo:Repository,name:string) {
   if(!current)return;
   repo.save('profile',{...current.data,name:name.trim()||null},current.id);
 }
+/** Changes only the profile's weight unit, which Progress, Body and new workout entries read, keeping every other
+ * field. Settings' Units page calls it with its own weight choice so the two never disagree. Without a profile row it
+ * writes nothing, because a profile row marks the account as set up. Height stays in metres, so it needs no change. */
+export function saveProfileUnit(repo:Repository,unit:Unit) {
+  const current=repo.list('profile').sort(compareRows).at(-1);
+  if(!current||current.data.weight_unit===unit)return;
+  repo.save('profile',{...current.data,weight_unit:unit},current.id);
+}
 export function finishOnboarding(repo:Repository,input:ProfileInput,template:'empty'|'fullBody',targets:Targets|null,day=today()) {
   if(!validProfile(input,day))throw new Error('Invalid profile.');
   if(targets&&Object.values(targets).some(v=>!Number.isFinite(v)||v<0))throw new Error('Invalid targets.');
