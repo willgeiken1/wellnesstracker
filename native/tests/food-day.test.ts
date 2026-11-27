@@ -20,7 +20,7 @@ describe('the day', () => {
     saveFood(repo, DAY, LUNCH, soup, 2);
     const v = dayView(repo, DAY, { today: DAY });
     expect(v.meals.map(m => m.name)).toEqual(['Breakfast', 'Lunch', 'Snack', 'Dinner']);
-    expect(Math.round(v.eaten)).toBe(900);
+    expect(Math.round(v.eaten!)).toBe(900);
     expect(v.p).toBe(48);
     expect(v.fib).toBe(12);
     expect(v.logged).toBe(2);

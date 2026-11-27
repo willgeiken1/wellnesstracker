@@ -5,7 +5,7 @@
  * and shown, `permission()` reads 'unavailable', and nothing is asked or scheduled. iOS is only ever asked by
  * `request()`, through `askForReminders()`, when the person turns a reminder on: on the Reminders page or a routine's
  * Remind me (never at launch or during setup). The app-wide sync only reads what iOS allows. */
-import type { PlannedReminder } from './plan';
+import { MAX_SCHEDULED, type PlannedReminder } from './plan';
 
 export type NotifyPermission = 'granted' | 'denied' | 'undetermined' | 'unavailable';
 export interface Notifier {
@@ -54,11 +54,20 @@ function expoNotifier(N: ExpoNotifications): Notifier {
       const scheduled = await N.getAllScheduledNotificationsAsync();
       for (const s of scheduled) if (s.identifier.startsWith(REMINDER_ID_PREFIX)) await N.cancelScheduledNotificationAsync(s.identifier);
       const now = Date.now();
+      let count = 0;
       for (const r of list) {
         // A one-off whose moment has passed has nothing left to say.
         if (r.at != null && !(r.at > now)) continue;
         await N.scheduleNotificationAsync({ identifier: REMINDER_ID_PREFIX + r.id, content: { title: r.title, body: r.body, sound: true },
           trigger: r.at != null ? { type: 'date', date: r.at } : { type: 'weekly', weekday: expoWeekday(r.weekday), hour: r.hour, minute: r.minute } });
+        count++;
+      }
+      // The later weeks of a reminder that skipped today, while there is room under iOS's limit (the plan's own come first).
+      for (const r of list) for (const [i, at] of (r.at != null ? r.then ?? [] : []).entries()) {
+        if (count >= MAX_SCHEDULED) return;
+        if (!(at > now)) continue;
+        await N.scheduleNotificationAsync({ identifier: `${REMINDER_ID_PREFIX}${r.id}-week${i + 2}`, content: { title: r.title, body: r.body, sound: true }, trigger: { type: 'date', date: at } });
+        count++;
       }
     },
   };

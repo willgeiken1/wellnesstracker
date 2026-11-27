@@ -21,7 +21,7 @@ type Data = ReturnType<typeof useDayData>;
 type TileBody = ComponentType<{ p: TileRenderProps; repo: Repository; d: Data }>;
 const tx = (key: Parameters<typeof t>[0], v: Record<string, string | number> = {}) => fill(t(key), v);
 /* Energy is counted in kcal and shown in the unit chosen in Settings. */
-const EN = (d: Data, kcal: number) => enNum(kcal, d.eu);
+const EN = (d: Data, kcal: number | null) => enNum(kcal, d.eu);
 const EL = (d: Data) => enLabel(d.eu);
 const txe = (d: Data, key: Parameters<typeof t>[0], v: Record<string, string | number> = {}) => fill(enText(t(key), d.eu), v);
 const WD1 = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -56,32 +56,34 @@ const dayIndexTap = (d: Data) => (i: number) => { const day = weekDays(d.day)[i]
 
 /* 1. Calories */
 const Calories: TileBody = ({ p, d }) => {
-  const k = useKit(), shade = useShade(), v = d.view, over = v.left < 0, eat = p.options.lead === 'eaten';
-  const big = eat ? v.eaten : Math.abs(v.left), word = eat ? t('foodEaten') : over ? t('foodOver') : t('foodLeft');
-  const label = txe(d, 'foodCalA11y', { eaten: EN(d, v.eaten), goal: EN(d, v.goal), left: EN(d, Math.abs(v.left)), word: over ? t('foodOver') : t('foodLeft') });
-  const g = (sz: number, fs: number, sw?: number) => <Gauge frac={v.eaten / v.goal} size={sz} sw={sw} color={over ? k.c.warning : k.c.food} fs={fs} us={sz > 120 ? 12 : 10.5}
+  const k = useKit(), shade = useShade(), v = d.view, over = v.left != null && v.left < 0, eat = p.options.lead === 'eaten';
+  // Unknown when food was logged without its energy: it reads as a dash and draws as nothing.
+  const absLeft = v.left == null ? null : Math.abs(v.left);
+  const big = eat ? v.eaten : absLeft, word = eat ? t('foodEaten') : over ? t('foodOver') : t('foodLeft');
+  const label = txe(d, 'foodCalA11y', { eaten: EN(d, v.eaten), goal: EN(d, v.goal), left: EN(d, absLeft), word: over ? t('foodOver') : t('foodLeft') });
+  const g = (sz: number, fs: number, sw?: number) => <Gauge frac={known(v.eaten) / v.goal} size={sz} sw={sw} color={over ? k.c.warning : k.c.food} fs={fs} us={sz > 120 ? 12 : 10.5}
     value={EN(d, big)} unit={`${EL(d)} ${word}`} label={label} />;
   const burned = v.burned == null ? '–' : EN(d, v.burned);
   if (p.size === 'S') return <View style={[col, { alignItems: 'center', justifyContent: 'flex-end' }]}>
     {g(104, 24)}
-    <Sub style={{ marginTop: -8 }}>{eat ? `${EN(d, Math.abs(v.left))} ${over ? t('foodOver') : tx('foodLeftOf')} ` : `${t('foodOf')} `}{EN(d, v.goal)} {EL(d)}</Sub>
+    <Sub style={{ marginTop: -8 }}>{eat ? `${EN(d, absLeft)} ${over ? t('foodOver') : tx('foodLeftOf')} ` : `${t('foodOf')} `}{EN(d, v.goal)} {EL(d)}</Sub>
   </View>;
   const kvs = (gap: number, more?: boolean) => <View style={{ flex: 1, gap }}>
-    <KV k={eat ? t('foodLeftCap') : t('foodEatenCap')} v={EN(d, eat ? Math.abs(v.left) : v.eaten)} unit={EL(d)} /><Hair />
+    <KV k={eat ? t('foodLeftCap') : t('foodEatenCap')} v={EN(d, eat ? absLeft : v.eaten)} unit={EL(d)} /><Hair />
     <KV k={t('foodGoal')} v={EN(d, v.goal)} unit={EL(d)} /><Hair />
     <KV k={t('foodBurnedCap')} v={burned} unit={v.burned == null ? undefined : EL(d)} after={more ? undefined : <IconFlame />} />
     {more ? <><Hair /><KV k={t('foodMealsCap')} v={String(v.logged)} unit={tx('foodOfN', { n: v.meals.length })} /></> : null}
   </View>;
   if (p.size === 'M') return <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18 }}>{g(118, 25, 9)}{kvs(9)}</View>;
-  const tot = Math.max(v.goal, v.eaten);
+  const tot = Math.max(v.goal, known(v.eaten));
   return <View style={col}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>{g(140, 30, 11)}{kvs(8, true)}</View>
     <View style={{ marginTop: 'auto' }}>
       <View style={{ flexDirection: 'row', marginBottom: 8 }}><Kick style={{ flex: 1 }}>{t('foodByMeal')}</Kick><Sub size={11.5}>{EN(d, v.eaten)} {t('foodOf')} {EN(d, tot)} {EL(d)}</Sub></View>
       <View accessible accessibilityRole="image" accessibilityLabel={`${t('foodByMealA11y')} ${v.meals.map(m => `${m.name} ${m.empty ? t('foodNotLogged') : `${EN(d, m.kcal)} ${EL(d)}`}`).join(', ')}`}
         style={{ flexDirection: 'row', gap: 2, height: 12, borderRadius: 999, overflow: 'hidden' }}>
-        {v.meals.map((m, i) => m.kcal > 0 ? <View key={m.id} style={{ flex: m.kcal, backgroundColor: shade(i) }} /> : null)}
-        {v.left > 0 ? <View style={{ flex: v.left, backgroundColor: k.dark ? mix(k.c.surface, '#000000', 0.66) : mix(k.c.bg, k.c.text, 0.93), borderTopRightRadius: 999, borderBottomRightRadius: 999 }} /> : null}
+        {v.meals.map((m, i) => m.kcal != null && m.kcal > 0 ? <View key={m.id} style={{ flex: m.kcal, backgroundColor: shade(i) }} /> : null)}
+        {v.left != null && v.left > 0 ? <View style={{ flex: v.left, backgroundColor: k.dark ? mix(k.c.surface, '#000000', 0.66) : mix(k.c.bg, k.c.text, 0.93), borderTopRightRadius: 999, borderBottomRightRadius: 999 }} /> : null}
       </View>
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>{v.meals.slice(0, 4).map((m, i) => <View key={m.id} style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Dot color={shade(i)} /><Sub size={11.5}>{m.name}</Sub></View>
@@ -227,7 +229,7 @@ const Meals: TileBody = ({ p, repo, d }) => {
     return <View style={col}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Ic name={nx.icon} /><Kick>{t('foodUpNext')}</Kick></View>
       <KitText weight={700} size={19} lineHeight={1.2} numberOfLines={1} style={{ marginTop: 10 }}>{nx.name}</KitText>
-      <Sub style={{ marginTop: 2 }}>{v.left > 0 ? pv ? tx('foodProteinLeft', { g: Math.max(0, Math.round(v.goals.p - known(v.p))) }) : `${EN(d, v.left)} ${EL(d)} ${t('foodLeft')}` : t('foodGoalReached')}</Sub>
+      <Sub style={{ marginTop: 2 }}>{v.left == null || v.left > 0 ? pv ? tx('foodProteinLeft', { g: Math.max(0, Math.round(v.goals.p - known(v.p))) }) : `${EN(d, v.left)} ${EL(d)} ${t('foodLeft')}` : t('foodGoalReached')}</Sub>
       <View style={{ marginTop: 'auto' }}><TileButton sm full icon="plus" label={tx('foodAddMealNamed', { meal: nx.name.toLowerCase() })} onPress={() => foodRoutes.log(nx.id)} /></View>
     </View>;
   }
@@ -432,7 +434,7 @@ function Timeline({ d, w, h, mh, mw = 6, target, ticks }: { d: Data; w: number; 
       backgroundColor: k.dark ? mix(k.c.food, k.c['surface-2'], 0.48) : mix(k.c.food, k.c.surface, 0.34) }} /> : null}
     {target && W.first != null && X(W.first + target, w) > X(end!, w) + 3 ? <Svg style={{ position: 'absolute', left: X(end!, w) + 2, top: base - 1 }} width={X(W.first + target, w) - X(end!, w) - 2} height={2}>
       <Line x1={0} y1={1} x2={400} y2={1} stroke={k.c.food} strokeWidth={2} strokeDasharray="4 3" opacity={0.8} /></Svg> : null}
-    {W.meals.map((m, i) => { const hh = mh * (0.42 + 0.58 * Math.min(1, m.k / 650));
+    {W.meals.map((m, i) => { const hh = mh * (0.42 + 0.58 * Math.min(1, known(m.k) / 650));
       return <View key={i} style={{ position: 'absolute', left: X(m.t, w) - mw / 2, width: mw, top: base - 2.5 - hh, height: hh, borderTopLeftRadius: mw / 2, borderTopRightRadius: mw / 2, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: shade(m.i), boxShadow: `0px 0px 0px 1.5px ${k.c.surface}` }} />; })}
     {W.live ? <View style={{ position: 'absolute', left: X(W.now, w) - 0.75, width: 1.5, top: base - mh - 2, height: mh + 6, borderRadius: 1, backgroundColor: alpha(k.c.text, 0.75) }}>
       <View style={{ position: 'absolute', left: -2.25, top: -3, width: 6, height: 6, borderRadius: 3, backgroundColor: k.c.text }} /></View> : null}
@@ -558,14 +560,14 @@ function QuickRow({ f, first, h, repo, d, sub, title, size }: { f: Food; first: 
 
 /* 11. Net calories */
 const Net: TileBody = ({ p, repo, d }) => {
-  const k = useKit(), v = d.view, burned = v.burned, net = burned == null ? null : v.eaten - burned, week = p.options.range === 'week';
+  const k = useKit(), v = d.view, burned = v.burned, net = burned == null || v.eaten == null ? null : v.eaten - burned, week = p.options.range === 'week';
   const days = weekDays(d.day), sums = daySums(repo, days), liveI = days.indexOf(d.today), full = liveI >= 0 ? liveI : 7;
   const eat = sums.map((x, i) => days[i] > d.today ? null : x.kcal), bw = days.map(x => x > d.today ? null : burnedOn(x));
   const nets = eat.map((x, i) => x == null || bw[i] == null ? null : x - bw[i]!);
   const knownN = nets.slice(0, full).filter((x): x is number => x != null), avg = knownN.length ? Math.round(knownN.reduce((a, b) => a + b, 0) / knownN.length) : null;
   const mx = Math.max(1, ...eat.map(x => x ?? 0)) * 1.06;
   const E = (x: number | null) => x == null ? '–' : EN(d, x);
-  const eb = (H: number) => { const m = Math.max(v.eaten, burned ?? 0) || 1;
+  const eb = (H: number) => { const m = Math.max(known(v.eaten), burned ?? 0) || 1;
     return <View style={{ gap: H > 8 ? 9 : 7 }}>{([[t('foodEatenCap'), v.eaten, k.c.food], [t('foodBurnedCap'), burned, k.c.warning]] as const).map(([name, x, c]) => <View key={name} style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8 }}>
       <Sub size={12} style={{ width: 52 }}>{name}</Sub><WellBar frac={(x ?? 0) / m} h={H} color={c} /><KitText weight={700} size={13.5} lineHeight={1} numeric style={{ width: 62, textAlign: 'right' }}>{E(x)}</KitText></View>)}</View>; };
   const weekCols = (H: number, cw: number, vl?: boolean, ls = 10.5) => <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>{eat.map((x, i) => {
@@ -591,7 +593,7 @@ const Net: TileBody = ({ p, repo, d }) => {
     return <View style={col}><Num v={E(net)} unit={EL(d)} fs={28} /><Sub style={{ marginTop: 4 }}>{d.isToday ? t('foodNetSoFar') : t('foodNetThatDay')}</Sub>
       <View style={{ marginTop: 'auto' }}>{([[t('foodEatenCap'), v.eaten, k.c.food], [t('foodBurnedCap'), burned, k.c.warning]] as const).map(([name, x, c], i) => <View key={name} style={{ marginTop: i ? 9 : 0 }}>
         <View style={{ flexDirection: 'row', gap: 6 }}><Sub size={11.5} style={{ flex: 1 }}>{name}</Sub><KitText weight={700} size={12.5} numeric>{E(x)}</KitText></View>
-        <View style={{ marginTop: 4 }}><WellBar frac={(x ?? 0) / (Math.max(v.eaten, burned ?? 0) || 1)} h={6} color={c} /></View></View>)}</View></View>;
+        <View style={{ marginTop: 4 }}><WellBar frac={(x ?? 0) / (Math.max(known(v.eaten), burned ?? 0) || 1)} h={6} color={c} /></View></View>)}</View></View>;
   }
   if (p.size === 'M') {
     if (week) return <View style={{ flex: 1, flexDirection: 'row', gap: 16 }}><View style={{ width: 104, ...col }}><Num v={E(avg)} unit={EL(d)} fs={24} /><Sub style={{ marginTop: 4 }}>{t('foodNetADay')}</Sub>
@@ -606,8 +608,11 @@ const Net: TileBody = ({ p, repo, d }) => {
 
 /* 12. What fits today */
 const Fits: TileBody = ({ p, repo, d }) => {
-  const k = useKit(), today = d.today === d.day ? d.view : null, v = today ?? d.view, left = v.goal - v.eaten, pg = Math.max(0, Math.round(v.goals.p - known(v.p)));
+  const k = useKit(), today = d.today === d.day ? d.view : null, v = today ?? d.view, left = v.left, pg = Math.max(0, Math.round(v.goals.p - known(v.p)));
   const mn = mealName(repo, d.next).toLowerCase();
+  // With the day's energy unknown, what fits can't be worked out, so say so rather than count it as nothing eaten.
+  if (left == null) return <View style={[col, { justifyContent: 'center' }]}>
+    <Title>{t('foodFitsUnknownTitle')}</Title><Sub lines={2} style={{ marginTop: 4 }}>{txe(d, 'foodEnergyUnknownFits')}</Sub></View>;
   const list = combos(repo).map(c => ({ c, kcal: comboKcal(c), p: comboProtein(c) })).filter(x => x.kcal <= left)
     .sort(p.options.by === 'p' ? (a, b) => b.p - a.p : (a, b) => b.kcal - a.kcal);
   if (left <= 0 || !list.length) return <View style={[col, { justifyContent: 'center' }]}>
@@ -630,7 +635,7 @@ const Fits: TileBody = ({ p, repo, d }) => {
     <View style={{ marginTop: 'auto' }}>{list.slice(0, 2).map((x, i) => row(x, 44, i))}</View></View>;
   return <View style={col}>
     <View style={{ flexDirection: 'row', gap: 16 }}>
-      <View style={{ flex: 1 }}><Num v={EN(d, left)} unit={EL(d)} fs={22} /><Sub style={{ marginTop: 3, marginBottom: 8 }}>{tx('foodLeftOfGoal', { v: EN(d, v.goal), u: EL(d) })}</Sub><WellBar frac={v.eaten / v.goal} h={6} color={k.c.food} /></View>
+      <View style={{ flex: 1 }}><Num v={EN(d, left)} unit={EL(d)} fs={22} /><Sub style={{ marginTop: 3, marginBottom: 8 }}>{tx('foodLeftOfGoal', { v: EN(d, v.goal), u: EL(d) })}</Sub><WellBar frac={known(v.eaten) / v.goal} h={6} color={k.c.food} /></View>
       <View style={{ flex: 1 }}><Num v={String(pg)} unit="g" fs={22} /><Sub style={{ marginTop: 3, marginBottom: 8 }}>{t('foodProteinToGo')}</Sub><WellBar frac={known(v.p) / v.goals.p} h={6} color={k.c.food} /></View>
     </View>
     <View style={{ marginTop: 'auto' }}>{list.slice(0, 4).map((x, i) => row(x, 46, i))}</View>

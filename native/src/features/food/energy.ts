@@ -15,12 +15,12 @@ export const energyUnitOf = (storage: PrefsStorage | null | undefined): EnergyUn
 
 /** A kcal value in the chosen unit, as a number. */
 export const enValue = (kcal: number, u: EnergyUnit) => energyValue(kcal, u);
-/** A kcal value in the chosen unit, with commas: "1,240" or "5,190". */
-export const enNum = (kcal: number, u: EnergyUnit) => num(energyValue(kcal, u));
+/** A kcal value in the chosen unit, with commas: "1,240" or "5,190". Unknown (food logged without its energy) is a dash. */
+export const enNum = (kcal: number | null, u: EnergyUnit) => kcal == null ? '–' : num(energyValue(kcal, u));
 /** The unit's label: "kcal" or "kJ". */
 export const enLabel = (u: EnergyUnit) => u === 'kJ' ? t('foodKj') : t('foodKcal');
 /** "1,240 kcal" or "5,190 kJ". */
-export const enAmt = (kcal: number, u: EnergyUnit) => `${enNum(kcal, u)} ${enLabel(u)}`;
+export const enAmt = (kcal: number | null, u: EnergyUnit) => `${enNum(kcal, u)} ${enLabel(u)}`;
 /** A typed amount in the chosen unit, back to kcal. */
 export const toKcal = (v: number, u: EnergyUnit) => u === 'kJ' ? v / KJ_PER_KCAL : v;
 /** " · 300 kcal" after a label, or nothing when the energy is unknown. */

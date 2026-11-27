@@ -63,7 +63,7 @@ function DayPart({ repo }: { repo: Repository }) {
           <Icon name="apple" size={12} color={k.c['text-muted']} /><KitText weight={600} size={12} color="text-muted">{fill(t('foodNBurned'), { v: enNum(v.burned, u) })}</KitText>
         </View> : null}
       </View>
-      <View accessible accessibilityLabel={fill(enText(t('foodOfGoalA11y'), u), { v: enNum(v.eaten, u), goal: enNum(v.goal, u) })}><Cells states={meter(v.eaten / v.goal, 22)} color={k.c.food} h={14} gap={3} r={3} /></View>
+      <View accessible accessibilityLabel={fill(enText(t('foodOfGoalA11y'), u), { v: enNum(v.eaten, u), goal: enNum(v.goal, u) })}><Cells states={meter(known(v.eaten) / v.goal, 22)} color={k.c.food} h={14} gap={3} r={3} /></View>
       <SectionLabel inset title={t('foodWhereFrom')} aside={t('foodEachSquare')} />
       <Waffle cells={cells} label={fill(t('foodSplitA11y'), { p: pcs[0], c: pcs[1], f: pcs[2] })} />
       <EnergyLegend p={v.p} c={v.c} f={v.f} />
@@ -157,7 +157,7 @@ function WeekPart({ repo }: { repo: Repository }) {
             <KitText weight={700} size={17} numeric>{monthDay(d).split(' ')[1]}</KitText>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <KitText weight={600} size={15.5} numeric color={v == null ? 'text-muted' : undefined}>{v == null ? t('foodNotLoggedCap') : enAmt(v, u)}</KitText>
+            <KitText weight={600} size={15.5} numeric color={v == null ? 'text-muted' : undefined}>{v == null ? (sums[i].meals && d <= today ? enAmt(null, u) : t('foodNotLoggedCap')) : enAmt(v, u)}</KitText>
             <KitText weight={500} size={13} numeric color="text-muted" style={{ marginTop: 2 }}>{`${pr[i] == null ? '–' : num(pr[i]!)} g ${t('foodProteinLower')} · ${waterAmt(litresOn(water, d), water.unit)} ${t('foodWaterLower')}`}</KitText>
           </View>
           {v == null && !part ? null : <Badge label={part ? t('foodSoFarCap') : ok ? t('foodOnTarget') : v! > goal ? t('foodOverCap') : t('foodUnderCap')} color={part ? 'text-muted' : ok ? 'success' : 'warning'} />}

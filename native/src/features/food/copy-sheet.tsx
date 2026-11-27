@@ -31,7 +31,7 @@ export function CopySheet({ repo }: { repo: Repository }) {
   const { day, today } = useFoodDay();
   const from = shiftDay(day, -1), y = dayView(repo, from, { today }), now = dayView(repo, day, { today });
   const [pick, setPick] = useState<Record<string, boolean>>(() => copyPicks(y.meals, now.meals));
-  const list = y.meals.filter(m => !m.empty), sel = list.filter(m => pick[m.id]), total = sel.reduce((a, m) => a + m.kcal, 0);
+  const list = y.meals.filter(m => !m.empty), sel = list.filter(m => pick[m.id]), total = sel.some(m => m.kcal != null) ? sel.reduce((a, m) => a + (m.kcal ?? 0), 0) : null;
   const copy = () => {
     if (!sel.length) return;
     const undos = sel.map(m => logFoods(repo, day, m.id, m.items.map(i => ({ food: i.data }))));

@@ -81,7 +81,7 @@ export function FoodTab({ repo }: { repo: Repository }) {
       <Button variant="secondary" size="sm" color="food" label={t('foodBackToToday')} onPress={() => pickFoodDay(null)} />
     </View>}
     {/* The engine draws a tile's header text once; a new key when the day or the logged meals change redraws it. */}
-    <TileGrid key={`${sel.day}|${todayView.logged}|${next}|${todayView.left > 0}`} page="food" scrollRef={scrollRef} />
+    <TileGrid key={`${sel.day}|${todayView.logged}|${next}|${todayView.left == null || todayView.left > 0}`} page="food" scrollRef={scrollRef} />
   </Animated.ScrollView>;
 }
 
@@ -97,8 +97,8 @@ function DayStrip({ repo, day, today, goal }: { repo: Repository; day: string; t
     style={{ flexGrow: 0, marginTop: -6, marginHorizontal: -16, marginBottom: 14 }}>
     {[0, 1].map(w => <View key={w} style={{ width, flexDirection: 'row', gap: 2, paddingHorizontal: 10 }}>
       {days.slice(w * 7, w * 7 + 7).map((d, i) => {
-        const on = d.day === day, kcal = sums[w * 7 + i].kcal;
-        const spoken = `${d.today ? `${t('foodToday')}, ` : ''}${fullDate(d.day)}, ${kcal == null ? t('foodNothingLogged') : enAmt(kcal, eu)}`;
+        const on = d.day === day, kcal = sums[w * 7 + i].kcal, logged = sums[w * 7 + i].meals > 0;
+        const spoken = `${d.today ? `${t('foodToday')}, ` : ''}${fullDate(d.day)}, ${kcal == null ? logged ? enAmt(null, eu) : t('foodNothingLogged') : enAmt(kcal, eu)}`;
         return <Tappable key={d.day} dim="fill" disabled={d.future} accessibilityRole="button" accessibilityLabel={spoken} accessibilityState={{ selected: on, disabled: d.future }}
           onPress={() => { if (!on) haptic(); pickFoodDay(d.day); }}
           style={{ flex: 1, minHeight: 70, paddingTop: 8, paddingBottom: 7, borderRadius: 16, alignItems: 'center', gap: 5, backgroundColor: on ? alpha(k.c.food, 0.15) : 'transparent', opacity: d.future ? 0.4 : 1 }}>

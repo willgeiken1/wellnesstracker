@@ -13,7 +13,17 @@ import { currentPause, dayKey, markOf, nowOf, rItems, type RoutinesState } from 
  * `hour`:`minute`, on the phone's clock. With `at` (a moment in milliseconds) it comes once, then; `weekday`, `hour` and
  * `minute` still say when that is on the phone's clock.
  */
-export interface PlannedReminder { id: string; weekday: number; hour: number; minute: number; at?: number; title: string; body: string }
+export interface PlannedReminder {
+  id: string; weekday: number; hour: number; minute: number; at?: number; title: string; body: string;
+  /**
+   * For a weekly reminder that skips today and starts again next week: the same day in the weeks after that, as moments.
+   * The phone can't start a weekly repeat a week late, so these keep it coming until Insight plans again (it does each
+   * time it opens).
+   */
+  then?: number[];
+}
+/** How many weeks a weekly reminder that skips today is scheduled ahead, one at a time. */
+export const SKIP_WEEKS = 4;
 
 /** The reminders a switch in Settings can turn on. "At most 2 a day" is a limit, not one of them. */
 export const REMINDER_SWITCHES = ['workout', 'rest', 'weekly', 'food', 'oura', 'breakfast', 'lunch', 'dinner'] as const;
@@ -102,7 +112,8 @@ function routineSlots(s: RoutinesState, nowDate: Date): { starts: Slot[]; lefts:
  *
  * The phone cannot check later whether something is still open, so a reminder that is only needed while something is
  * open repeats every week as usual, except on today's weekday once nothing is open today: then it waits for the same
- * day next week. Insight plans again whenever something changes and each time it opens.
+ * day next week, and is put on the phone one week at a time for the next SKIP_WEEKS weeks so it keeps coming. Insight
+ * plans again whenever something changes and each time it opens.
  */
 export function planReminders(rem: SettingsPrefs['rem'], workoutDays: readonly number[] = [], ctx: ReminderContext = {}): PlannedReminder[] {
   const now = ctx.now ?? Date.now(), nowDate = new Date(now), todayWd = monday0(nowDate.getDay());
@@ -142,7 +153,7 @@ export function planReminders(rem: SettingsPrefs['rem'], workoutDays: readonly n
       // Every week, today included; once today only; or not today, from the same day next week.
       if (inToday && inNext) out.push(base);
       else if (inToday && todayAt > now) out.push({ ...base, at: todayAt });
-      else if (!inToday && inNext) out.push({ ...base, at: atToday(sl, 1) });
+      else if (!inToday && inNext) out.push({ ...base, at: atToday(sl, 1), then: Array.from({ length: SKIP_WEEKS - 1 }, (_, i) => atToday(sl, i + 2)) });
     }
   }
   if (rem.rest && ctx.timer && !ctx.timer.ended && Number.isFinite(ctx.timer.endAt) && ctx.timer.endAt > now) {

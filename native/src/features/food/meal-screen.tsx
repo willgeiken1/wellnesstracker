@@ -69,7 +69,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
     </List>
   </FoodPage>;
 
-  const share = Math.round(m.kcal / view.goal * 100);
+  const share = m.kcal == null ? null : Math.round(m.kcal / view.goal * 100);
   const saveMeal = () => {
     const name = `${m.name}, ${monthDay(day)}`;
     try { saveCombo(repo, day, m.id, name); showToast(fill(t('foodSavedAsMeal'), { name }), { color: 'food' }); } catch { showToast(t('foodCannotSave'), { color: 'food' }); }
@@ -85,7 +85,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
           </View>)}
       </View>
       <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: known(m.p) * 4, color: k.tok(MACRO_COLOR.p) }, { v: known(m.c) * 4, color: k.tok(MACRO_COLOR.c) }, { v: known(m.f) * 9, color: k.tok(MACRO_COLOR.f) }]} />
-      <KitText weight={500} size={12.5} lineHeight={1.4} tracking={-0.02} numeric color="text-muted" style={{ marginTop: 10, marginHorizontal: 2 }}>{fill(enText(t('foodShareOfDay'), u), { pct: share, goal: enNum(view.goal, u) })}</KitText>
+      <KitText weight={500} size={12.5} lineHeight={1.4} tracking={-0.02} numeric color="text-muted" style={{ marginTop: 10, marginHorizontal: 2 }}>{share == null ? fill(enText(t('foodShareUnknown'), u), { goal: enNum(view.goal, u) }) : fill(enText(t('foodShareOfDay'), u), { pct: share, goal: enNum(view.goal, u) })}</KitText>
     </Card>
     <SectionHeader title={t('foodFoodsCap')} aside={plural(m.items.length, t('foodItemWord'), t('foodItemsWord'))} />
     <List>

@@ -87,7 +87,7 @@ export function GoalsPage() {
   return <SetPage back={st('settings')} title={st('settingsGoalsTitle')} testID="settings-goals">
     <H first>{st('settingsDailyTargets')}</H>
     <List footer={st('settingsTargetsFoot')}>
-      <ListRow title={st('settingsCalories')} sub={g ? st('settingsEatenToday', { v: kj ? `${formatNumber(g.eaten * 4.184)} kJ` : `${formatNumber(g.eaten)} kcal` }) : undefined}
+      <ListRow title={st('settingsCalories')} sub={g ? st('settingsEatenToday', { v: g.eaten == null ? (kj ? '– kJ' : '– kcal') : kj ? `${formatNumber(g.eaten * 4.184)} kJ` : `${formatNumber(g.eaten)} kcal` }) : undefined}
         right={<RowStepper label={st('settingsDailyCalories')} value={kj ? Math.round(kcal * 4.184 / 10) * 10 : kcal}
         step={kj ? 250 : 50} snap min={kj ? 4000 : 1000} max={kj ? 20000 : 5000} unit={kj ? 'kJ' : ''}
         onChange={v => { const next = kj ? Math.round(v / 4.184) : v; if (repo) save(() => saveFoodTarget(repo, 'kcal', next)); else set('goals.kcal', next); }} />} />

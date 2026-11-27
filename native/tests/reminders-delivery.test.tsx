@@ -123,6 +123,11 @@ describe('food reminders', () => {
     expect(list.find(r => r.id === `food-breakfast-${WED}`)).toMatchObject({ at: at(7, 9, 30) });
     expect(list.find(r => r.id === `food-lunch-${WED}`)!.at).toBeUndefined();
   });
+  test('a meal skipped today keeps coming in the weeks after next, not only once', () => {
+    const list = planReminders(food, [], { now: NOW, mealsLogged: ['breakfast'] });
+    expect(list.find(r => r.id === `food-breakfast-${WED}`)!.then).toEqual([at(14, 9, 30), at(21, 9, 30), at(28, 9, 30)]);
+    expect(list.find(r => r.id === `food-lunch-${WED}`)!.then).toBeUndefined();
+  });
   test('reads which meals have something logged on the day, and nothing else', () => {
     const repo = account();
     repo.save('food_entries', { day: '2026-11-25', meal_id: 'fd000000-0000-4000-8000-000000000002', name: 'Soup', energy_kj: 900 });
@@ -230,6 +235,34 @@ describe('the phone notifications adapter', () => {
       ['cancel', `${REMINDER_ID_PREFIX}rest`],
       ['schedule', { identifier: `${REMINDER_ID_PREFIX}rest`, content: { title: 'Rest is over', body: 'Next set', sound: true }, trigger: { type: 'date', date: soon } }],
     ]);
+    jest.dontMock('expo-notifications');
+  });
+  test("puts a skipped reminder's later weeks on date triggers, within iOS's limit", async () => {
+    const calls: { identifier: string; trigger: unknown }[] = [];
+    const fake = {
+      getPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+      requestPermissionsAsync: jest.fn(),
+      getAllScheduledNotificationsAsync: jest.fn(async () => []),
+      cancelScheduledNotificationAsync: jest.fn(async () => {}),
+      scheduleNotificationAsync: jest.fn(async (r: { identifier: string; trigger: unknown }) => { calls.push(r); return 'x'; }),
+    };
+    jest.doMock('expo-notifications', () => fake, { virtual: true });
+    const week = 7 * 86_400_000, first = Date.now() + week;
+    const skipped = { id: 'food-breakfast-2', at: first, then: [first + week, first + 2 * week], weekday: 2, hour: 9, minute: 30, title: 'Log breakfast', body: 'b' };
+    const weekly = (i: number) => ({ id: `w-${i}`, weekday: i % 7, hour: 8, minute: i % 60, title: 't', body: 'b' });
+    await jest.isolateModulesAsync(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- a fresh copy that loads the mocked module
+      const { notifier } = require('../src/features/reminders/notifier') as typeof import('../src/features/reminders/notifier');
+      await notifier().replace([skipped, weekly(0)]);
+      expect(calls.map(c => c.identifier)).toEqual([`${REMINDER_ID_PREFIX}food-breakfast-2`, `${REMINDER_ID_PREFIX}w-0`,
+        `${REMINDER_ID_PREFIX}food-breakfast-2-week2`, `${REMINDER_ID_PREFIX}food-breakfast-2-week3`]);
+      expect(calls[2].trigger).toEqual({ type: 'date', date: first + week });
+      calls.length = 0;
+      // A full plan leaves no room: the plan's own reminders come first and nothing goes past the limit.
+      await notifier().replace([skipped, ...Array.from({ length: MAX_SCHEDULED - 1 }, (_, i) => weekly(i))]);
+      expect(calls).toHaveLength(MAX_SCHEDULED);
+      expect(calls.some(c => c.identifier.endsWith('-week2'))).toBe(false);
+    });
     jest.dontMock('expo-notifications');
   });
   test('the same plan is not put on the phone twice, and syncs never ask', async () => {

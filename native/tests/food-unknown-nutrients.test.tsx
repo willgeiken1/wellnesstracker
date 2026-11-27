@@ -39,7 +39,7 @@ describe('nutrients no logged food gives', () => {
   test('stay unknown in the day, the meal and the week, and count only known values once one food gives them', () => {
     const repo = quickOnly();
     const v = dayView(repo, DAY, { today: DAY });
-    expect(Math.round(v.eaten)).toBe(600);
+    expect(Math.round(v.eaten!)).toBe(600);
     expect(v).toMatchObject({ p: null, c: null, f: null, fib: null });
     expect(v.meals.find(m => m.id === LUNCH)).toMatchObject({ p: null, c: null, f: null, empty: false });
     expect(v.meals.find(m => m.empty)).toMatchObject({ p: 0, c: 0, f: 0 });
@@ -65,5 +65,39 @@ describe('nutrients no logged food gives', () => {
     expect(screen.getByText(/^–/)).toBeTruthy();
     expect(screen.getByText('Not on your foods yet')).toBeTruthy();
     expect(screen.queryByText(/to go/)).toBeNull();
+  });
+});
+
+describe('energy no logged food gives', () => {
+  const bar = { ...toast, name: 'Synthetic scanned bar', energy_kj: null };
+  function noEnergy() {
+    const repo = memoryRepository();
+    saveFood(repo, DAY, LUNCH, bar);
+    return repo;
+  }
+  test('stays unknown in the day, the meal and the week, not 0 eaten with the whole goal left', () => {
+    const repo = noEnergy();
+    const v = dayView(repo, DAY, { today: DAY });
+    expect(v).toMatchObject({ eaten: null, left: null, p: 8 });
+    expect(v.meals.find(m => m.id === LUNCH)).toMatchObject({ kcal: null, empty: false });
+    expect(v.meals.find(m => m.empty)!.kcal).toBe(0);
+    expect(daySums(repo, [DAY])[0]).toMatchObject({ kcal: null, meals: 1 });
+    // One food with its energy makes the total known again.
+    saveFood(repo, DAY, LUNCH, toast);
+    expect(Math.round(dayView(repo, DAY, { today: DAY }).eaten!)).toBe(200);
+  });
+  test('reads as a dash on the Nutrition screen and the Calories tile', async () => {
+    const repo = noEnergy();
+    const first = await render(<NutritionScreen repo={repo} />, { wrapper });
+    expect(screen.getByLabelText('– of 2,000 kcal')).toBeTruthy();
+    expect(screen.queryByLabelText('0 of 2,000 kcal')).toBeNull();
+    first.unmount();
+    const Calories = FOOD_TILES.cal;
+    const p = { page: 'food', id: 'cal', size: 'M', style: 'A', options: { lead: 'left' }, editing: false, preview: true,
+      frame: { w: 340, h: 170 }, body: { w: 320, h: 120 } } as unknown as TileRenderProps;
+    function Host() { return <Calories p={p} repo={repo} d={useDayData(repo)} />; }
+    await render(<Host />, { wrapper });
+    expect(screen.getByLabelText('– of 2,000 kcal eaten, – left')).toBeTruthy();
+    expect(screen.queryByLabelText(/^0 of 2,000 kcal eaten/)).toBeNull();
   });
 });

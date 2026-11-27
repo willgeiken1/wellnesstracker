@@ -31,11 +31,12 @@ export interface FoodItem {
 export interface MealView {
   id: string; name: string; icon: IconName; time: number | null;
   /** A nutrient is null when food was logged but none of it gave that nutrient, so it reads as unknown, not 0. */
-  kcal: number; p: number | null; c: number | null; f: number | null; fib: number | null; items: FoodItem[]; empty: boolean;
+  kcal: number | null; p: number | null; c: number | null; f: number | null; fib: number | null; items: FoodItem[]; empty: boolean;
 }
 export interface Goals { kcal: number; p: number; c: number; f: number; fib: number; set: boolean }
 export interface DayView {
-  day: string; today: boolean; eaten: number; goal: number; left: number; burned: number | null;
+  /** eaten and left are null when food was logged but none of it gave its energy. */
+  day: string; today: boolean; eaten: number | null; goal: number; left: number | null; burned: number | null;
   p: number | null; c: number | null; f: number | null; fib: number | null; goals: Goals; meals: MealView[]; logged: number; items: FoodItem[];
 }
 
@@ -64,17 +65,17 @@ export const known = (v: number | null) => v ?? 0;
 export const roundOr = (v: number | null) => v == null ? '–' : String(Math.round(v));
 const sum = (items: FoodItem[], key: 'kcal' | 'p' | 'c' | 'f' | 'fib') => items.reduce((a, i) => add(a, i[key]), 0);
 /** A nutrient total: 0 with nothing logged, null when food was logged but none of it gave the nutrient. */
-export const nutrient = (items: FoodItem[], key: 'p' | 'c' | 'f' | 'fib') => items.length && items.every(i => i[key] == null) ? null : sum(items, key);
+export const nutrient = (items: FoodItem[], key: 'kcal' | 'p' | 'c' | 'f' | 'fib') => items.length && items.every(i => i[key] == null) ? null : sum(items, key);
 
 export function dayView(repo: Repository, day: string, { today = attributedDay(), burned = null }: { today?: string; burned?: number | null } = {}): DayView {
   const items = dayItems(repo, day), goals = goalsFor(repo, day);
   const views = mealList(repo).map(m => {
     const mine = items.filter(i => i.data.meal_id === m.id);
     return { id: m.id, name: m.name, icon: mealIcon(m.id), time: mine.length ? Math.min(...mine.map(i => i.at)) : null,
-      kcal: sum(mine, 'kcal'), p: nutrient(mine, 'p'), c: nutrient(mine, 'c'), f: nutrient(mine, 'f'), fib: nutrient(mine, 'fib'), items: mine, empty: !mine.length };
+      kcal: nutrient(mine, 'kcal'), p: nutrient(mine, 'p'), c: nutrient(mine, 'c'), f: nutrient(mine, 'f'), fib: nutrient(mine, 'fib'), items: mine, empty: !mine.length };
   });
-  const eaten = sum(items, 'kcal');
-  return { day, today: day === today, eaten, goal: goals.kcal, left: goals.kcal - eaten, burned,
+  const eaten = nutrient(items, 'kcal');
+  return { day, today: day === today, eaten, goal: goals.kcal, left: eaten == null ? null : goals.kcal - eaten, burned,
     p: nutrient(items, 'p'), c: nutrient(items, 'c'), f: nutrient(items, 'f'), fib: nutrient(items, 'fib'), goals, meals: views, logged: views.filter(m => !m.empty).length, items };
 }
 
@@ -112,7 +113,7 @@ export const weekDays = (day: string) => Array.from({ length: 7 }, (_, i) => shi
 export function daySums(repo: Repository, days: readonly string[]) {
   const rows = repo.list('food_entries'), by = new Map<string, FoodItem[]>();
   for (const r of rows) { const d = String(r.data.day); if (days.includes(d)) by.set(d, [...(by.get(d) ?? []), item(r)]); }
-  return days.map(day => { const it = by.get(day); return it?.length ? { day, kcal: sum(it, 'kcal'), p: nutrient(it, 'p'), meals: new Set(it.map(i => String(i.data.meal_id))).size } : { day, kcal: null, p: null, meals: 0 }; });
+  return days.map(day => { const it = by.get(day); return it?.length ? { day, kcal: nutrient(it, 'kcal'), p: nutrient(it, 'p'), meals: new Set(it.map(i => String(i.data.meal_id))).size } : { day, kcal: null, p: null, meals: 0 }; });
 }
 
 /** Days in a row with food logged (or every meal logged), counting back from today. An empty today does not break it yet. */
