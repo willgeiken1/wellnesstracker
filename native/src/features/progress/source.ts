@@ -25,6 +25,13 @@ export interface SourceInput {
   health: HealthDays | null; recovery: Recovery | null; ring: OuraRecovery | null;
   /** The sleep goal in minutes from Settings › Goals; read from the saved choices when left out. */
   sleepGoalMin?: number;
+  /** The daily training goal in minutes from Settings › Goals; read from the saved choices when left out. */
+  trainGoalMin?: number;
+}
+/** The daily training goal in minutes the person chose, or none when it isn't a usable number. */
+export function trainGoalOf(repo: Parameters<typeof loadSettingsPrefs>[0], given?: number): number | null {
+  const v = given ?? loadSettingsPrefs(repo).goals.train;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
 }
 /** The sleep goal in minutes the person chose, or eight hours. */
 export function sleepGoalOf(repo: Parameters<typeof loadSettingsPrefs>[0]): number {
@@ -54,7 +61,7 @@ const minutesOf = (s: Row) => {
 };
 
 /** Progress from what is logged on this phone, plus steps, sleep and heart readings held in memory. Saves nothing. */
-export function buildProgress({ store, now, demo, health, recovery, ring, sleepGoalMin }: SourceInput): ProgressData {
+export function buildProgress({ store, now, demo, health, recovery, ring, sleepGoalMin, trainGoalMin }: SourceInput): ProgressData {
   const repo = store.repo, unit = readProfile(repo).unit, today = addDays(dayKeyOf(now), 0);
   const days = daysEnding(today, HISTORY), index = new Map(days.map((d, i) => [d, i]));
   const base = demo ? sampleProgress(today, unit, now.getTime()) : emptyProgress(today, unit, now.getTime());
@@ -136,11 +143,14 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
 
   /* training */
   const sessions = store.trainingHistory(), active = store.active();
-  const minutes = new Map<string, number>(), names = new Map<string, string[]>();
-  for (const s of sessions) { const k = String(s.data.day); minutes.set(k, (minutes.get(k) ?? 0) + minutesOf(s)); names.set(k, [...(names.get(k) ?? []), String(s.data.name ?? '')]); }
+  const minutes = new Map<string, number>(), names = new Map<string, string[]>(), count = new Map<string, number>();
+  for (const s of sessions) { const k = String(s.data.day); minutes.set(k, (minutes.get(k) ?? 0) + minutesOf(s)); names.set(k, [...(names.get(k) ?? []), String(s.data.name ?? '')]); count.set(k, (count.get(k) ?? 0) + 1); }
   // Cardio logged on its own sheet counts toward training minutes, as on Training.
   const cardio = repo.list('cardio_sessions').filter(c => typeof c.data.day === 'string' && String(c.data.day) <= today);
-  for (const c of cardio) { const min = Math.round(Number(c.data.duration_ms ?? 0) / 60000); if (finite(min) && min > 0) minutes.set(String(c.data.day), (minutes.get(String(c.data.day)) ?? 0) + min); }
+  for (const c of cardio) {
+    const k = String(c.data.day), min = Math.round(Number(c.data.duration_ms ?? 0) / 60000);
+    if (finite(min) && min > 0) { minutes.set(k, (minutes.get(k) ?? 0) + min); count.set(k, (count.get(k) ?? 0) + 1); }
+  }
   const activeMin = active && finite(Number(active.data.started_at)) ? Math.max(0, Math.round((now.getTime() - Number(active.data.started_at)) / 60000)) : null;
   const firstDay = [...sessions, ...cardio].map(s => String(s.data.day)).sort()[0] ?? (active ? today : null);
   d.days.training = days.map(day => firstDay && day >= firstDay ? (minutes.get(day) ?? 0) + (day === today && activeMin != null ? activeMin : 0) : null);
@@ -166,8 +176,8 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
   const parsed = parseDay(today), monday = addDays(today, -((parsed.getDay() + 6) % 7));
   const records = (() => { try { return liftRecords(store); } catch { return []; } })();
   d.training = {
-    goalMin: null, weekVolumeKg: volume(weekStart, today), lastWeekVolumeKg: volume(prevStart, addDays(weekStart, -1)),
-    sessions: sessions.filter(s => String(s.data.day) >= weekStart).length,
+    goalMin: trainGoalOf(repo, trainGoalMin), weekVolumeKg: volume(weekStart, today), lastWeekVolumeKg: volume(prevStart, addDays(weekStart, -1)),
+    sessions: sessions.filter(s => String(s.data.day) >= weekStart).length, perDay: days.map(day => count.get(day) ?? 0),
     active: active && activeMin != null ? { name: String(active.data.name ?? t('progressWorkout')), min: activeMin } : null,
     plan: { name: null, perWeek, done: sessions.filter(s => String(s.data.day) >= monday).length }, next: null,
     records: records.map(r => ({ name: r.exercise, kg: r.unit === 'lb' ? r.weight / LB : r.weight, reps: 0, day: r.day, unit: r.unit })),

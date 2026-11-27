@@ -79,6 +79,7 @@ export function sampleProgress(today: string, unit: Unit, now = Date.now()): Pro
     .map(([b, lb, fig], i) => ({ id: `sample-${i}`, day: back(b), kg: kg(lb), pose: 'Front' as const, uri: null, fig }));
   d.training = {
     goalMin: 60, weekVolumeKg: kg(52890), lastWeekVolumeKg: kg(64200), sessions: 4,
+    perDay: d.days.training.map((x, i) => i === d.days.training.length - 1 ? 0 : x != null && x > 0 ? 1 : 0),
     active: { name: t('progressSampleActive'), min: 24 },
     plan: { name: t('progressSamplePlan'), perWeek: 5, done: 4 },
     next: { name: t('progressSampleNext'), exercises: 6, estMin: 50, when: t('progressTomorrow') },

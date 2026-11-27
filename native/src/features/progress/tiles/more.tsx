@@ -15,7 +15,7 @@ import { B, Cols, Figure, HM, Hair, Head, IconTile, K, NoData, Num, PhotoBack, R
 function TrainingTile({ size, options, body }: TileRenderProps) {
   const d = useProgressData(), k = useKit(), T0 = d.training, r = rangeOf(options, usePageRange()), se = series(d, 'training', r), mins = sum(se.v), yr = r === 'year', u = d.unit;
   if (!se.v.some(finite)) return <View style={{ flex: 1 }}><NoData fs={size === 'S' ? 24 : 28} text={t('progressNoData')} /><Sub wrap style={{ marginTop: 6 }}>{t('progressTrainingEmpty')}</Sub></View>;
-  const going = T0.active ? 1 : 0, sess = se.v.slice(0, going ? -1 : undefined).filter(x => finite(x) && x > 0).length;
+  const going = T0.active ? 1 : 0, sess = sum(T0.perDay.slice(-(r === 'week' ? 7 : 30)));
   const vol = wtV(T0.weekVolumeKg, u), lastV = wtV(T0.lastWeekVolumeKg, u), vd = T0.lastWeekVolumeKg > 0 ? Math.round((T0.weekVolumeKg / T0.lastWeekVolumeKg - 1) * 100) : null;
   const aria = fill(t('progressTrainingAria'), { range: rangeShort(r), min: fmt(mins), sess }) + ' ' + fill(t('progressVolumeAria'), { vol: `${fmt(vol)} ${u}` }) + (vd != null ? ' ' + fill(t('progressVolumePctAria'), { pct: signed(vd) }) : '');
   const volLead = options.lead === 'vol';

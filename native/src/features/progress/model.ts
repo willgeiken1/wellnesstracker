@@ -61,6 +61,8 @@ export interface ProgressData {
   photos: ProgressPhoto[];
   training: {
     goalMin: number | null; weekVolumeKg: number; lastWeekVolumeKg: number; sessions: number;
+    /** Finished workouts and cardio sessions on each day of `days`, oldest first; the one going now isn't counted. */
+    perDay: readonly number[];
     active: { name: string; min: number } | null;
     plan: { name: string | null; perWeek: number; done: number };
     next: { name: string; exercises: number; estMin: number; when: string } | null;
@@ -224,7 +226,7 @@ export function emptyProgress(today: string, unit: Unit, now = Date.now()): Prog
     sources: { oura: false, apple: false, ouraSynced: null, heart: null },
     weight: { kg: null, day: null, time: null, startKg: null, startDay: null, goalKg: null },
     bodyFat: [], measures: [], photos: [],
-    training: { goalMin: null, weekVolumeKg: 0, lastWeekVolumeKg: 0, sessions: 0, active: null, plan: { name: null, perWeek: 3, done: 0 }, next: null, records: [], streak: 0 },
+    training: { goalMin: null, weekVolumeKg: 0, lastWeekVolumeKg: 0, sessions: 0, perDay: Array(HISTORY).fill(0), active: null, plan: { name: null, perWeek: 3, done: 0 }, next: null, records: [], streak: 0 },
     food: { goalKcal: null, eatenKcal: null, proteinG: null, proteinGoal: null },
   };
 }

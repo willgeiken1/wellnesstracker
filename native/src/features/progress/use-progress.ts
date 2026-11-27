@@ -29,10 +29,10 @@ export function useProgress(): ProgressData {
   const auth = useAuth(), store = useWorkoutStore(auth.repository), demo = !!auth.demo, focused = useFocused(), now = useNow();
   const live = focused && !demo && !!store;
   const health = useHealthDays(live, undefined, 30), recovery = useRecovery(live, undefined, 30), ring = useOuraRecovery(live, undefined, 30);
-  const minute = Math.floor(now.getTime() / 60_000), sleepGoalMin = useSettingsPrefs()[0].goals.sleep;
-  const built = useMemo(() => store ? buildProgress({ store, now: new Date(minute * 60_000), demo, health, recovery: recovery.recovery, ring, sleepGoalMin }) : null,
+  const minute = Math.floor(now.getTime() / 60_000), [prefs] = useSettingsPrefs(), sleepGoalMin = prefs.goals.sleep, trainGoalMin = prefs.goals.train;
+  const built = useMemo(() => store ? buildProgress({ store, now: new Date(minute * 60_000), demo, health, recovery: recovery.recovery, ring, sleepGoalMin, trainGoalMin }) : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [store, minute, demo, health, recovery.recovery, ring, sleepGoalMin]);
+    [store, minute, demo, health, recovery.recovery, ring, sleepGoalMin, trainGoalMin]);
   useEffect(() => { if (built) publishProgress(built); }, [built]);
   const shared = useProgressData();
   return built ?? shared;
