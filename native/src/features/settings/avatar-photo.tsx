@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import { randomUUID } from 'expo-crypto';
 import { useAuth } from '@/auth/provider';
-import { dropFile, PROFILE_PHOTO_FOLDER, PROFILE_PHOTO_KEY } from '@/core/owner-files';
+import { deleteProfilePhoto, PROFILE_PHOTO_FOLDER, PROFILE_PHOTO_KEY, PROFILE_PHOTO_LEFTOVERS_KEY } from '@/core/owner-files';
 import type { Repository } from '@/data/repository';
 import { Icon, Tappable, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
@@ -25,6 +25,22 @@ function storedUri(repo: Repository | null | undefined): string | null {
   if (!repo) return null;
   try { const uri = repo.localGet<string | null>(KEY); return typeof uri === 'string' && uri ? uri : null; } catch { return null; }
 }
+function leftovers(repo: Repository): string[] {
+  try { const v = repo.localGet<unknown>(PROFILE_PHOTO_LEFTOVERS_KEY); return Array.isArray(v) ? v.filter((u): u is string => typeof u === 'string' && !!u) : []; } catch { return []; }
+}
+/** Notes an old photo's address as waiting to be deleted, before its own address is cleared or replaced, so the file is
+ * never forgotten while it is still on the phone. Returns every address waiting. */
+function keepForDeleting(repo: Repository, uri: string | null): string[] {
+  const before = leftovers(repo), waiting = uri && !before.includes(uri) ? [...before, uri] : before;
+  if (waiting !== before) repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, waiting);
+  return waiting;
+}
+/** Deletes the waiting files and keeps the addresses of any still there, for the next change or departure to retry. */
+function deleteWaiting(repo: Repository, waiting: string[]) {
+  if (!waiting.length) return;
+  const left = waiting.filter(u => !deleteProfilePhoto(u));
+  try { repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, left.length ? left : null); } catch { /* the list still names them all */ }
+}
 function exists(uri: string) { try { return new File(uri).exists; } catch { return false; } }
 
 /** The kept photo's address, or null when there is none or its file is gone (a backup restored on another phone). */
@@ -40,16 +56,18 @@ export async function saveProfilePhoto(repo: Repository, pickedUri: string): Pro
   const dest = new File(dir, `${randomUUID().replace(/[^a-zA-Z0-9-]/g, '')}.jpg`);
   await new File(pickedUri).move(dest);
   const before = storedUri(repo);
+  const waiting = keepForDeleting(repo, before && before !== dest.uri ? before : null);
   repo.localSave(KEY, dest.uri);
-  if (before && before !== dest.uri) dropFile(before);
+  deleteWaiting(repo, waiting);
   return dest.uri;
 }
 
-/** Deletes the kept file and the address; the initial shows again. */
+/** Deletes the kept file and the address; the initial shows again. A file that can't be deleted yet keeps its address
+ * among the leftovers, so the next change or departure deletes it. */
 export function removeProfilePhoto(repo: Repository) {
-  const before = storedUri(repo);
+  const waiting = keepForDeleting(repo, storedUri(repo));
   repo.localSave(KEY, null);
-  dropFile(before);
+  deleteWaiting(repo, waiting);
 }
 
 /** The current person's photo, kept up to date as it changes. Null outside an account or without one. */

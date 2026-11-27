@@ -9,6 +9,9 @@ import type { Repository } from '@/data/repository';
  */
 export const PROFILE_PHOTO_KEY = 'profilePhoto';
 export const PROFILE_PHOTO_FOLDER = 'profile-photo';
+/** Addresses of replaced or removed profile photos whose files could not be deleted yet. The next change and departure
+ * try them again, so a file is never forgotten while it is still on the phone. */
+export const PROFILE_PHOTO_LEFTOVERS_KEY = 'profilePhotoLeftovers';
 export const PROGRESS_PHOTOS_KEY = 'progressPhotos';
 export const PROGRESS_PHOTOS_FOLDER = 'progress-photos';
 const FOLDERS = [PROFILE_PHOTO_FOLDER, PROGRESS_PHOTOS_FOLDER];
@@ -22,8 +25,6 @@ function keptFile(uri: unknown, folder: string): File | null {
   if (!/^[A-Za-z0-9-]+\.jpg$/.test(name)) return null;
   try { return new File(new Directory(Paths.document, folder), name); } catch { return null; }
 }
-/** Deletes a file; one already gone is fine. */
-export function dropFile(uri: string | null | undefined) { if (!uri) return; try { const f = new File(uri); if (f.exists) f.delete(); } catch { /* already gone */ } }
 
 /** Deletes a kept file or folder. True when it is gone afterwards (or was never there); false when it is still there or
  * that can't be told. */
@@ -39,6 +40,12 @@ export function deleteProgressPhoto(uri: unknown): boolean {
   return !f || gone(f);
 }
 
+/** Deletes one kept profile photo by its stored address. True when the file is gone afterwards (or was never there). */
+export function deleteProfilePhoto(uri: unknown): boolean {
+  const f = keptFile(uri, PROFILE_PHOTO_FOLDER);
+  return !f || gone(f);
+}
+
 /** A kept file or folder that departure could not delete. Departure stops before the wipe, so the addresses and the
  * departure marker stay and a retry finishes it. */
 export class OwnerFilesNotErased extends Error { constructor() { super('Kept files could not be deleted.'); } }
@@ -49,7 +56,8 @@ function read(repo: Pick<Repository, 'localGet'>, key: string): unknown { try { 
 function ownerFiles(repo: Pick<Repository, 'localGet'>): File[] {
   const progress = read(repo, PROGRESS_PHOTOS_KEY);
   const progressUris = Array.isArray(progress) ? progress.map(p => p && typeof p === 'object' ? (p as { uri?: unknown }).uri : null) : [];
-  return [keptFile(read(repo, PROFILE_PHOTO_KEY), PROFILE_PHOTO_FOLDER), ...progressUris.map(u => keptFile(u, PROGRESS_PHOTOS_FOLDER))]
+  const leftovers = read(repo, PROFILE_PHOTO_LEFTOVERS_KEY), profileUris = [read(repo, PROFILE_PHOTO_KEY), ...(Array.isArray(leftovers) ? leftovers : [])];
+  return [...profileUris.map(u => keptFile(u, PROFILE_PHOTO_FOLDER)), ...progressUris.map(u => keptFile(u, PROGRESS_PHOTOS_FOLDER))]
     .filter((f): f is File => !!f);
 }
 
