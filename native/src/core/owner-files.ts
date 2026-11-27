@@ -72,6 +72,37 @@ function ownerFiles(repo: Pick<Repository, 'localGet'>): File[] {
     .filter((f): f is File => !!f);
 }
 
+/** The photo addresses this person has stored, profile photo and progress photos apart. */
+export interface PhotoAddresses { profile: string[]; progress: string[] }
+const nameOf = (u: string) => u.slice(u.lastIndexOf('/') + 1);
+export function photoAddresses(repo: Pick<Repository, 'localGet'>): PhotoAddresses {
+  const list = (v: unknown) => Array.isArray(v) ? v : [];
+  const text = (v: unknown[]) => v.filter((u): u is string => typeof u === 'string' && !!u);
+  const progress = list(read(repo, PROGRESS_PHOTOS_KEY)).map(p => p && typeof p === 'object' ? (p as { uri?: unknown }).uri : null);
+  return {
+    profile: text([read(repo, PROFILE_PHOTO_KEY), ...list(read(repo, PROFILE_PHOTO_LEFTOVERS_KEY))]),
+    progress: text([...progress, ...list(read(repo, PROGRESS_PHOTOS_PENDING_KEY))]),
+  };
+}
+/**
+ * After stored addresses were written over (a Replace restore), deletes each photo file that no address names any more.
+ * Files are matched by name, as departure finds them, so an address from a backup saved under another app folder still
+ * keeps its file. A file that can't be deleted keeps its address in the leftovers or pending list, so a later change or
+ * departure still finds and deletes it, and account deletion never leaves a photo on the phone.
+ */
+export function settleReplacedPhotos(repo: Pick<Repository, 'localGet' | 'localSave'>, before: PhotoAddresses) {
+  const after = photoAddresses(repo);
+  const dropped = (was: string[], now: string[]) => {
+    const kept = new Set(now.map(nameOf)), seen = new Set<string>();
+    return was.filter(u => !kept.has(nameOf(u)) && !seen.has(nameOf(u)) && !!seen.add(nameOf(u)));
+  };
+  const profileLeft = dropped(before.profile, after.profile).filter(u => !deleteProfilePhoto(u));
+  const progressLeft = dropped(before.progress, after.progress).filter(u => !deleteProgressPhoto(u));
+  const kept = (key: string) => { const v = read(repo, key); return Array.isArray(v) ? v : []; };
+  if (profileLeft.length) repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, [...kept(PROFILE_PHOTO_LEFTOVERS_KEY), ...profileLeft]);
+  if (progressLeft.length) repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, [...kept(PROGRESS_PHOTOS_PENDING_KEY), ...progressLeft]);
+}
+
 /** Departure: deletes this person's kept files. Call before their rows are wiped, while the addresses still read. Tries
  * every file, then throws OwnerFilesNotErased if any is still there, so the wipe never forgets a file's address. */
 export function eraseOwnerFiles(repo: Pick<Repository, 'localGet'>) {

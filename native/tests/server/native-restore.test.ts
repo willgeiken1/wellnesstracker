@@ -8,6 +8,8 @@ import { createPhoneBackup } from '../../src/phone-only/backup';
 import { commitImport, nativeBackup, nativeBackupPlan, previewImport, restoreNativeLocal } from '../../src/features/importer/local';
 import { DEVICE_A } from '../../fixtures/sync';
 
+/** Photo files are kept in their own test; this restore holds no photo addresses. */
+const noPhotos = { names: () => null, settle: () => {} };
 const ids = { custom: '30000000-0000-4000-8000-000000000011', plan: '30000000-0000-4000-8000-000000000012', pause: '30000000-0000-4000-8000-000000000013', session: '30000000-0000-4000-8000-000000000014' };
 async function setup() {
   const sqlite = new DatabaseSync(':memory:');
@@ -51,10 +53,10 @@ test('Replace puts the file\'s phone-side details back over the phone\'s, and a 
     repo.localSave('timer', { seconds: 30 });
     repo.localSave('unilateral:fixture', false);
     repo.localSave('pwaImportedIds', ['kept']);
-    restoreNativeLocal(repo, backup, new Set(), 'merge');
+    restoreNativeLocal(repo, backup, new Set(), 'merge', noPhotos);
     expect(repo.localGet('timer')).toEqual({ seconds: 30 });
     expect(repo.localGet('unilateral:fixture')).toBe(false);
-    restoreNativeLocal(repo, backup, new Set(), 'replace');
+    restoreNativeLocal(repo, backup, new Set(), 'replace', noPhotos);
     expect(repo.localGet('timer')).toEqual({ seconds: 90 });
     expect(repo.localGet('unilateral:fixture')).toBe(true);
     // The importer's own bookkeeping and AI photos are never taken from the file.

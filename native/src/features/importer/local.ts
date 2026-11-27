@@ -239,13 +239,23 @@ export function nativeBackupPlan(backup: NativeBackup): ImportPlan {
  * any the phone does not have yet, and the set rows of a workout the restore brought back; Replace writes every one of them.
  * The importer's own bookkeeping is left alone.
  */
-export function restoreNativeLocal(
+/**
+ * The phone's kept photo files, which the restore must not lose track of: `names` reads which files the stored addresses
+ * point at, and `settle` deletes the ones no address names after the restore, keeping the address of any it can't delete.
+ */
+export interface RestorePhotos<T> {
+  names(repo: Repository): T;
+  settle(repo: Repository, before: T): void;
+}
+export function restoreNativeLocal<T>(
   repo: Repository,
   backup: NativeBackup,
   newEntries: ReadonlySet<string>,
-  mode: "merge" | "replace" = "merge",
+  mode: "merge" | "replace",
+  photos: RestorePhotos<T>,
 ) {
   repo.atomic(() => {
+    const before = photos.names(repo);
     for (const [key, value] of Object.entries(backup.local)) {
       if (key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:")) continue;
       const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));
@@ -253,5 +263,7 @@ export function restoreNativeLocal(
       if (mode === "merge" && repo.localGet(key) !== undefined && !fresh) continue;
       repo.localSave(key, value);
     }
+    // A Replace can write over photo addresses; their files go too, and one that won't delete keeps its address.
+    photos.settle(repo, before);
   });
 }

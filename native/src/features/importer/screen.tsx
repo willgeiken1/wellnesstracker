@@ -28,6 +28,7 @@ import { Card } from "../../components/card";
 import { ThemedText } from "../../components/themed-text";
 import { t as message, type MessageKey } from "../../i18n/en";
 import { exerciseLibrary } from "../../core/workout/library";
+import { photoAddresses, settleReplacedPhotos } from "../../core/owner-files";
 import {
   nativeBackup,
   nativeBackupPlan,
@@ -209,7 +210,7 @@ function ImportBody() {
       const own = server ? null : nativeBackup(input);
       const newEntries = new Set(p.plan.rows.filter((r) => r.table === "entries" && !repo.get("entries", r.id)).map((r) => r.id));
       commitImport(repo, p, true, mode === "replace");
-      if (own) restoreNativeLocal(repo, own, newEntries, mode);
+      if (own) restoreNativeLocal(repo, own, newEntries, mode, { names: photoAddresses, settle: settleReplacedPhotos });
       if (server) repo.localSave("pwaImportComplete", true);
       setDone(true);
       void auth.syncNow();
