@@ -1,6 +1,6 @@
 import type { Repository } from '@/data/repository';
 import type { Row, Table } from '@/data/rows';
-import { deleteProgressPhoto } from '@/auth/owner-files';
+import { deleteProgressPhoto } from '@/core/owner-files';
 import { WATER_KEY } from '@/features/food/water';
 
 /** What Delete a date range can remove, in the order the sheet lists them. */

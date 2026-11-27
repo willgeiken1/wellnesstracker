@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import { randomUUID } from 'expo-crypto';
 import { useAuth } from '@/auth/provider';
-import { dropFile, PROFILE_PHOTO_FOLDER, PROFILE_PHOTO_KEY } from '@/auth/owner-files';
+import { dropFile, PROFILE_PHOTO_FOLDER, PROFILE_PHOTO_KEY } from '@/core/owner-files';
 import type { Repository } from '@/data/repository';
 import { Icon, Tappable, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
@@ -16,7 +16,7 @@ import { actionSheet } from './sheet-actions';
  * The profile photo (pages/settings.js `.st-acct .cam`, `photo`): taken or chosen from the library, cropped square and kept
  * on this phone only, as Progress photos are. The file lives in the app's Documents folder, its address in the person's
  * local storage, which is never synced, uploaded or sent anywhere. Without a photo the avatar shows the initial. Signing out
- * and deleting the account delete the file (src/auth/owner-files.ts).
+ * and deleting the account delete the file (src/core/owner-files.ts).
  */
 const KEY = PROFILE_PHOTO_KEY;
 const FOLDER = PROFILE_PHOTO_FOLDER;

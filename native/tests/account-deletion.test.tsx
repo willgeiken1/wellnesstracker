@@ -28,7 +28,7 @@ jest.mock('../src/data/sync/supabase',()=>({SupabaseTransport:class {
 jest.mock('expo-network',()=>({addNetworkStateListener:jest.fn(()=>({remove:jest.fn()}))}));
 jest.mock('../src/phone-only/export',()=>({exportAccountBackup:jest.fn(async()=>{}),exportPhoneBackup:jest.fn(async()=>{})}));
 
-// Photo files kept outside the database (src/auth/owner-files.ts): addresses of files that exist.
+// Photo files kept outside the database (src/core/owner-files.ts): addresses of files that exist.
 const mockFiles=new Set<string>();
 jest.mock('expo-file-system',()=>{
   class Directory{uri:string;constructor(base:{uri:string},name:string){this.uri=`${base.uri}${name}/`;}get exists(){return false;}delete(){}}

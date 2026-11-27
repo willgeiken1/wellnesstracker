@@ -1,5 +1,5 @@
 import type { Repository } from '@/data/repository';
-import { deleteProgressPhoto } from '@/auth/owner-files';
+import { deleteProgressPhoto } from '@/core/owner-files';
 import type { Row } from '@/data/rows';
 import { finite, MEASURE_KEYS, type MeasureKey, type Measured, type Pose, type ProgressPhoto } from './model';
 
