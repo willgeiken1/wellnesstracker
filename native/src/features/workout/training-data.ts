@@ -65,6 +65,20 @@ const sessionName = (s: Row, fallback: string) => String(s.data.name ?? '') || f
  * Everything the Training tab and its tiles read, worked out once from the workout, plan and cardio data.
  * Weights come back in the person's unit (lb or kg); minutes count strength sessions and logged cardio.
  */
+/**
+ * The routine a saved plan has next. A chosen split decides it (a weekday split, a picked starting day, a skipped or swapped day
+ * included), so Home, the Split screen and the Training tiles all name the same day; otherwise the plan's own rotation cursor.
+ */
+export function nextPlanDay(repo: Repository, now: Date, plans = new PlanStore(repo)): { index: number; routineId: string } | null {
+  const p = plans.read();
+  if (!p.days.length) return null;
+  const ids = p.days.map(d => d.routineId);
+  const split = new SplitStore(repo).view(now);
+  const splitNext = split ? split.days[split.now.kind === 'live' ? split.now.then[0] ?? -1 : split.now.focus]?.routineId : undefined;
+  const index = splitNext && ids.includes(splitNext) ? ids.indexOf(splitNext) : plans.nextIndex();
+  return ids[index] === undefined ? null : { index, routineId: ids[index] };
+}
+
 export class TrainingData {
   readonly workout: WorkoutStore;
   readonly plans: PlanStore;
@@ -180,10 +194,7 @@ export class TrainingData {
       const p = this.plans.read(), live = this.live(), liveRow = live ? this.workout.active() : undefined;
       const templates = this.workout.templates();
       const ids = p.days.length ? p.days.map(d => d.routineId) : templates.map(r => r.id);
-      // A chosen split decides what is next (a skipped or swapped day included), so every tile names the same day.
-      const split = p.days.length ? new SplitStore(this.repo).view(new Date(this.now)) : null;
-      const splitNext = split ? split.days[split.now.kind === 'live' ? split.now.then[0] ?? -1 : split.now.focus]?.routineId : undefined;
-      const nextIndex = splitNext && ids.includes(splitNext) ? ids.indexOf(splitNext) : p.days.length ? this.plans.nextIndex() : 0;
+      const nextIndex = p.days.length ? nextPlanDay(this.repo, new Date(this.now), this.plans)?.index ?? this.plans.nextIndex() : 0;
       const days: PlanDayView[] = ids.map((routineId, index) => {
         const r = this.repo.get('routines', routineId);
         const ex = this.workout.templateExercises(routineId).map(e => {

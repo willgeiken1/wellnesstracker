@@ -5,8 +5,8 @@ import { dailyWeights } from '@/features/body/model';
 import { attributedDay, foodTargets, meals as mealList, recentFoods, totals } from '@/features/food/model';
 import { drinksOn, litresOn, readWater } from '@/features/food/water';
 import type { HealthDays } from '@/features/health/days';
-import { PlanStore } from '@/features/plans/store';
 import { readScore } from '@/features/score/read';
+import { nextPlanDay } from '@/features/workout/training-data';
 import { entryVolumeKg } from '@/features/workout/volume';
 import { pluralize } from '@/i18n/en';
 import { DAYS, type ActiveWorkoutIn, type FoodDayIn, type HomeInput, type ScoreDayIn, type WaterIn } from './data';
@@ -82,10 +82,10 @@ function readActive(store: WorkoutStore): ActiveWorkoutIn | null {
   return { name: String(session.data.name ?? ''), startedAt: started === null ? null : new Date(started), setsDone: done, setsTotal: order.length };
 }
 
-function readUpNext(store: WorkoutStore): string | null {
+function readUpNext(store: WorkoutStore, now: Date): string | null {
   try {
-    const plans = new PlanStore(store.repo), days = plans.read().days;
-    const routine = days.length ? store.templates().find(r => r.id === days[plans.nextIndex()]?.routineId) : undefined;
+    const id = nextPlanDay(store.repo, now)?.routineId;
+    const routine = id === undefined ? undefined : store.templates().find(r => r.id === id);
     if (!routine) return null;
     const n = store.templateExercises(routine.id).length;
     return `${String(routine.data.name ?? '')} · ${pluralize(n, 'exercise')}`;
@@ -136,7 +136,7 @@ export function readAppData(store: WorkoutStore, now: Date, health: HealthDays |
   return {
     days, food, nextMeal, recentFoods: recent, weighIns, water: readWaterIn(store.repo, days, now),
     volumeKg: training.volumeKg, volumeByGroupKg: training.byGroup, volumeLastWeekKg: training.lastWeek, workoutsThisWeek: training.workouts,
-    active: readActive(store), upNext: readUpNext(store), score: readScores(store, days, now, health),
+    active: readActive(store), upNext: readUpNext(store, now), score: readScores(store, days, now, health),
     weightUnit: store.unit(),
   };
 }
