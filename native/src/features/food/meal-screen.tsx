@@ -7,12 +7,12 @@ import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import { removeFood } from './actions';
-import { clock, dayView, known, monthDay, num, plural, shortDate, weekdayName, type FoodItem } from './day';
+import { clock, dayView, monthDay, num, plural, shortDate, weekdayName, type FoodItem } from './day';
 import { combos, saveCombo, shiftDay } from './model';
 import { foodRoutes } from './nav';
 import { useFoodDay } from './selection';
 import { RowLine, useLatest } from './sheet';
-import { MACRO_COLOR, SplitBar } from './ui';
+import { MACRO_COLOR, SplitBar, macroPercents } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
 import { useFoodWeightUnit, weightText, type FoodWeightUnit } from './weight';
@@ -70,6 +70,8 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
   </FoodPage>;
 
   const share = m.kcal == null ? null : Math.round(m.kcal / view.goal * 100);
+  const whole = m.p != null && m.c != null && m.f != null;
+  const pc = whole ? macroPercents(m.p!, m.c!, m.f!).pc : [];
   const saveMeal = () => {
     const name = `${m.name}, ${monthDay(day)}`;
     try { saveCombo(repo, day, m.id, name); showToast(fill(t('foodSavedAsMeal'), { name }), { color: 'food' }); } catch { showToast(t('foodCannotSave'), { color: 'food' }); }
@@ -84,7 +86,10 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
             <KitText weight={600} size={12.5} color="text-muted" style={{ marginTop: 4 }}>{l}</KitText>
           </View>)}
       </View>
-      <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: known(m.p) * 4, color: k.tok(MACRO_COLOR.p) }, { v: known(m.c) * 4, color: k.tok(MACRO_COLOR.c) }, { v: known(m.f) * 9, color: k.tok(MACRO_COLOR.f) }]} />
+      {/* The split needs all three macros: one that isn't listed is unknown, not 0, so the bar stays empty rather than lean on the others. */}
+      <View accessible accessibilityRole="image" testID="food-meal-split" accessibilityLabel={whole ? fill(t('foodSplitA11y'), { p: pc[0], c: pc[1], f: pc[2] }) : t('foodSplitUnavailable')}>
+        <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={whole ? [{ v: m.p! * 4, color: k.tok(MACRO_COLOR.p) }, { v: m.c! * 4, color: k.tok(MACRO_COLOR.c) }, { v: m.f! * 9, color: k.tok(MACRO_COLOR.f) }] : []} />
+      </View>
       <KitText weight={500} size={12.5} lineHeight={1.4} tracking={-0.02} numeric color="text-muted" style={{ marginTop: 10, marginHorizontal: 2 }}>{share == null ? fill(enText(t('foodShareUnknown'), u), { goal: enNum(view.goal, u) }) : fill(enText(t('foodShareOfDay'), u), { pct: share, goal: enNum(view.goal, u) })}</KitText>
     </Card>
     <SectionHeader title={t('foodFoodsCap')} aside={plural(m.items.length, t('foodItemWord'), t('foodItemsWord'))} />
