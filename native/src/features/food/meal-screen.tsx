@@ -17,6 +17,7 @@ import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
 import { useFoodWeightUnit, weightText, type FoodWeightUnit } from './weight';
 import { capitals } from '@/components/kit-style';
+import { enAmt, enLabel, enNum, enText, useEnergyUnit } from './energy';
 
 /** A pushed Food screen: the kit's bar, then the page scrolling under it. */
 export function FoodPage({ back, title, right, children, testID }: { back: string; title?: string; right?: ReactNode; children: ReactNode; testID?: string }) {
@@ -38,7 +39,7 @@ const g = (v: number | null) => v == null ? '–' : `${num(v)} g`;
  */
 export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string }) {
   useFoodRevision(repo);
-  const k = useKit(), unit = useFoodWeightUnit(repo);
+  const k = useKit(), unit = useFoodWeightUnit(repo), u = useEnergyUnit();
   const { day, today } = useFoodDay();
   const view = dayView(repo, day, { today }), m = view.meals.find(x => x.id === id) ?? view.meals[0];
   const [editing, setEditing] = useState(false), [open, setOpen] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
     <View style={{ height: 12 }} />
     <List>
       <ListRow icon="bookmark" color="food" title={t('foodSavedMeals')} sub={fill(t('foodNSaved'), { n: combos(repo).length })} onPress={() => foodRoutes.saved(m.id)} />
-      <ListRow icon="copy" color="food" title={t('foodCopyYesterday')} sub={`${weekdayName(shiftDay(day, -1))}, ${num(dayView(repo, shiftDay(day, -1), { today }).eaten)} ${t('foodKcal')}`} onPress={foodRoutes.copy} />
+      <ListRow icon="copy" color="food" title={t('foodCopyYesterday')} sub={`${weekdayName(shiftDay(day, -1))}, ${enAmt(dayView(repo, shiftDay(day, -1), { today }).eaten, u)}`} onPress={foodRoutes.copy} />
       <ListRow icon="bolt" color="food" title={t('foodTileQuick')} sub={t('foodJustCalories')} onPress={() => foodRoutes.quick(m.id)} />
     </List>
   </FoodPage>;
@@ -77,14 +78,14 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
     {header}
     <Card>
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-        {([[num(m.kcal), t('foodKcal'), 'food'], [g(m.p), t('foodMacroProtein')], [g(m.c), t('foodMacroCarbs')], [g(m.f), t('foodMacroFat')]] as [string, string, string?][]).map(([v, l, c]) =>
+        {([[enNum(m.kcal, u), enLabel(u), 'food'], [g(m.p), t('foodMacroProtein')], [g(m.c), t('foodMacroCarbs')], [g(m.f), t('foodMacroFat')]] as [string, string, string?][]).map(([v, l, c]) =>
           <View key={l} style={{ flex: 1 }} accessible accessibilityLabel={`${v} ${l}`}>
             <KitText weight={700} size={22} lineHeight={1.05} tracking={-0.035} numeric color={c ?? 'text'}>{v}</KitText>
             <KitText weight={600} size={12.5} color="text-muted" style={{ marginTop: 4 }}>{l}</KitText>
           </View>)}
       </View>
       <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: known(m.p) * 4, color: k.tok(MACRO_COLOR.p) }, { v: known(m.c) * 4, color: k.tok(MACRO_COLOR.c) }, { v: known(m.f) * 9, color: k.tok(MACRO_COLOR.f) }]} />
-      <KitText weight={500} size={12.5} lineHeight={1.4} tracking={-0.02} numeric color="text-muted" style={{ marginTop: 10, marginHorizontal: 2 }}>{fill(t('foodShareOfDay'), { pct: share, goal: num(view.goal) })}</KitText>
+      <KitText weight={500} size={12.5} lineHeight={1.4} tracking={-0.02} numeric color="text-muted" style={{ marginTop: 10, marginHorizontal: 2 }}>{fill(enText(t('foodShareOfDay'), u), { pct: share, goal: enNum(view.goal, u) })}</KitText>
     </Card>
     <SectionHeader title={t('foodFoodsCap')} aside={plural(m.items.length, t('foodItemWord'), t('foodItemsWord'))} />
     <List>
@@ -104,7 +105,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
 function SwipeRow({ item, unit, first, editing, open, onOpen, onEdit, onDelete }: {
   item: FoodItem; unit: FoodWeightUnit; first: boolean; editing: boolean; open: boolean; onOpen: (on: boolean) => void; onEdit: () => void; onDelete: () => void;
 }) {
-  const k = useKit();
+  const k = useKit(), u = useEnergyUnit();
   const [x] = useState(() => new Animated.Value(0));
   const live = useLatest({ open, onOpen, reduce: !!k.reduceMotion });
   useEffect(() => { Animated.timing(x, { toValue: open ? -DEL : 0, duration: k.reduceMotion ? 0 : 280, useNativeDriver: true }).start(); }, [open, x, k.reduceMotion]);
@@ -131,13 +132,13 @@ function SwipeRow({ item, unit, first, editing, open, onOpen, onEdit, onDelete }
         style={{ width: 44, height: 44, marginLeft: -10, marginRight: -8, alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: k.c.danger }}><Icon name="minus" size={14} color={k.c['on-accent']} /></View>
       </Tappable> : null}
-      <Tappable dim="none" accessibilityRole="button" accessibilityLabel={`${item.name}${sub ? `, ${sub}` : ''}, ${item.kcal == null ? t('foodUnknownVal') : `${num(item.kcal)} ${t('foodKcal')}`}. ${t('foodEditBtn')}`}
+      <Tappable dim="none" accessibilityRole="button" accessibilityLabel={`${item.name}${sub ? `, ${sub}` : ''}, ${item.kcal == null ? t('foodUnknownVal') : enAmt(item.kcal, u)}. ${t('foodEditBtn')}`}
         onPress={onEdit} style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, marginLeft: editing ? 10 : 0 }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <KitText weight={600} size={15.5} lineHeight={1.25} tracking={-0.01} numberOfLines={1}>{item.name}</KitText>
           {sub ? <KitText weight={500} size={13} lineHeight={1.35} color="text-muted" numberOfLines={1} style={{ marginTop: 2 }}>{sub}</KitText> : null}
         </View>
-        <KitText weight={700} size={15} tracking={-0.01} numeric>{item.kcal == null ? '–' : num(item.kcal)}</KitText>
+        <KitText weight={700} size={15} tracking={-0.01} numeric>{item.kcal == null ? '–' : enNum(item.kcal, u)}</KitText>
       </Tappable>
     </Animated.View>
   </View>;

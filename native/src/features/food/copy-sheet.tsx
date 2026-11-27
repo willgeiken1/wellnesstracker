@@ -6,7 +6,7 @@ import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import { kcalTail, logFoods } from './actions';
-import { dayView, foodsLine, fullDate, num, plural } from './day';
+import { dayView, foodsLine, fullDate, plural } from './day';
 import { shiftDay } from './model';
 import { useFoodDay } from './selection';
 import { closeSheet, FoodSheet, KcalValue, RowLine } from './sheet';
@@ -14,6 +14,7 @@ import { Caption, CheckCircle } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
 import { capitals } from '@/components/kit-style';
+import { enAmt, enLabel, enNum, useEnergyUnit } from './energy';
 
 /** Which of yesterday's meals start ticked: the ones not yet logged today. */
 export function copyPicks(yesterday: { id: string; empty: boolean }[], today: { id: string; empty: boolean }[]) {
@@ -26,7 +27,7 @@ export function copyPicks(yesterday: { id: string; empty: boolean }[], today: { 
  */
 export function CopySheet({ repo }: { repo: Repository }) {
   useFoodRevision(repo);
-  const k = useKit();
+  const k = useKit(), u = useEnergyUnit();
   const { day, today } = useFoodDay();
   const from = shiftDay(day, -1), y = dayView(repo, from, { today }), now = dayView(repo, day, { today });
   const [pick, setPick] = useState<Record<string, boolean>>(() => copyPicks(y.meals, now.meals));
@@ -45,13 +46,13 @@ export function CopySheet({ repo }: { repo: Repository }) {
   return <FoodSheet testID="food-copy-sheet" header={header}>
     <View style={{ marginHorizontal: 4, marginBottom: 14 }}>{/* .fd-ch: its 2 pt top margin folds into the header's 4 */}
       <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{fullDate(from)}</KitText>
-      <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.02} numeric style={{ marginTop: 6 }}>{num(y.eaten)}
-        <KitText weight={600} tracking={0} size={13} color="text-muted" style={proportional}>{` ${t('foodKcal')} · ${plural(list.length, t('foodMealWord'), t('foodMealsWord'))}`}</KitText></KitText>
+      <KitText weight={700} size={24} lineHeight={1.1} tracking={-0.02} numeric style={{ marginTop: 6 }}>{enNum(y.eaten, u)}
+        <KitText weight={600} tracking={0} size={13} color="text-muted" style={proportional}>{` ${enLabel(u)} · ${plural(list.length, t('foodMealWord'), t('foodMealsWord'))}`}</KitText></KitText>
     </View>
     <List>
       {list.map((m, i) => {
         const on = !!pick[m.id], has = !(now.meals.find(x => x.id === m.id)?.empty ?? true);
-        return <Tappable key={m.id} dim="none" accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={`${m.name}, ${foodsLine(m.items)}, ${num(m.kcal)} ${t('foodKcal')}${has ? `, ${t('foodLoggedToday')}` : ''}`}
+        return <Tappable key={m.id} dim="none" accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={`${m.name}, ${foodsLine(m.items)}, ${enAmt(m.kcal, u)}${has ? `, ${t('foodLoggedToday')}` : ''}`}
           onPress={() => setPick(p => ({ ...p, [m.id]: !p[m.id] }))}
           style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 68, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: pressed ? k.tint(k.c.text, 0.07) : 'transparent' })}>
           {i > 0 && <RowLine />}
@@ -70,7 +71,7 @@ export function CopySheet({ repo }: { repo: Repository }) {
     <Caption>{t('foodCopyNote')}</Caption>
     <View style={{ marginTop: 16 }}>
       <Button full color="food" icon="copy" disabled={!sel.length} testID="food-copy-go"
-        label={sel.length ? fill(t('foodCopyN'), { n: plural(sel.length, t('foodMealWord'), t('foodMealsWord')) }) + kcalTail(total) : t('foodChooseToCopy')} onPress={copy} />
+        label={sel.length ? fill(t('foodCopyN'), { n: plural(sel.length, t('foodMealWord'), t('foodMealsWord')) }) + kcalTail(total, u) : t('foodChooseToCopy')} onPress={copy} />
     </View>
   </FoodSheet>;
 }

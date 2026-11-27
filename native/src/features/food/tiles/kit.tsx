@@ -11,6 +11,7 @@ import { useFoodDay } from '../selection';
 import { useFoodRevision } from '../use-food-revision';
 import { readWater } from '../water';
 import { capitals } from '@/components/kit-style';
+import { useEnergyUnit } from '../energy';
 
 /* The Food tiles' own type and parts (pagetiles-food.js: fdt-n, fdt-s, fdt-t, fdt-k, fdt-plus, fdt-btn, fdt-ic, cols). */
 
@@ -142,10 +143,12 @@ export function useTileDay(): Repository | null {
   // The phone-only build swaps in its own provider, which keeps its context private, so this goes through useAuth.
   try { return useAuth().repository ?? null; } catch { return null; }
 }
+/** The day a food tile shows, with the energy unit from Settings (`eu`). */
 export function useDayData(repo: Repository) {
   useFoodRevision(repo);
   const sel = useFoodDay();
   const view = dayView(repo, sel.day, { today: sel.today, burned: sel.burned });
   const water = readWater(repo);
-  return { ...sel, view, water, next: nextMealId(dayView(repo, sel.today, { today: sel.today })) };
+  const eu = useEnergyUnit();
+  return { ...sel, view, water, eu, next: nextMealId(dayView(repo, sel.today, { today: sel.today })) };
 }

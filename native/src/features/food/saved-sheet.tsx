@@ -13,6 +13,7 @@ import { closeSheet, FoodRow, FoodSheet, RowLine } from './sheet';
 import { MealSeg, SectionLabel } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
+import { enAmt, enLabel, enNum, useEnergyUnit } from './energy';
 
 const lower = (s: string) => s.toLowerCase();
 /** Saved meals whose name or foods hold the words. */
@@ -27,7 +28,7 @@ export function matchSaved(list: Combo[], q: string) {
  */
 export function SavedSheet({ repo, meal: asked, open: opened }: { repo: Repository; meal?: string; open?: string }) {
   useFoodRevision(repo);
-  const { day, today } = useFoodDay();
+  const { day, today } = useFoodDay(), u = useEnergyUnit();
   const inTray = !!currentCart();
   const [meal, setMeal] = useState(() => currentCart()?.meal ?? (asked && meals(repo).some(m => m.id === asked) ? asked : nextMealId(dayView(repo, today, { today }))));
   const [q, setQ] = useState(''), [open, setOpen] = useState<string | null>(opened ?? null);
@@ -45,7 +46,7 @@ export function SavedSheet({ repo, meal: asked, open: opened }: { repo: Reposito
         const kcal = comboKcal(c), foods = plural(c.foods.length, t('foodFood'), t('foodFoods'));
         return <Fragment key={c.name}>
           <FoodRow first={i === 0} title={c.name} sub={`${foods} · ${num(comboProtein(c))} g ${t('foodProteinLower')}`} kcal={kcal} on={false}
-            openLabel={`${c.name}, ${foods}, ${num(kcal)} ${t('foodKcal')}. ${open === c.name ? t('foodHideFoods') : t('foodShowFoods')}`}
+            openLabel={`${c.name}, ${foods}, ${enAmt(kcal, u)}. ${open === c.name ? t('foodHideFoods') : t('foodShowFoods')}`}
             onOpen={() => setOpen(open === c.name ? null : c.name)} onAdd={() => add(c)} />
           {open === c.name ? <SavedFoods combo={c} /> : null}
         </Fragment>;
@@ -55,7 +56,7 @@ export function SavedSheet({ repo, meal: asked, open: opened }: { repo: Reposito
 }
 
 function SavedFoods({ combo }: { combo: Combo }) {
-  const k = useKit();
+  const k = useKit(), u = useEnergyUnit();
   return <View style={{ paddingTop: 2, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: k.tint(k.c.food, 0.05) }}>
     {combo.foods.map((f, i) => { const kcal = kcalOf(f.energy_kj), g = typeof f.amount_g === 'number' ? f.amount_g : null;
       return <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, paddingVertical: 7 }}>
@@ -64,7 +65,7 @@ function SavedFoods({ combo }: { combo: Combo }) {
           <KitText weight={500} size={13.5}>{String(f.name ?? '')}</KitText>
           {g != null ? <KitText weight={500} size={12} color="text-muted">{`${num(g)} g`}</KitText> : null}
         </View>
-        <KitText weight={700} size={13.5} numeric color="text-muted">{kcal == null ? '–' : num(kcal)}<KitText weight={600} tracking={0} size={12} color="text-muted">{` ${t('foodKcal')}`}</KitText></KitText>
+        <KitText weight={700} size={13.5} numeric color="text-muted">{kcal == null ? '–' : enNum(kcal, u)}<KitText weight={600} tracking={0} size={12} color="text-muted">{` ${enLabel(u)}`}</KitText></KitText>
       </View>; })}
   </View>;
 }

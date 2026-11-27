@@ -15,6 +15,7 @@ import { MACRO_COLOR, MealSeg, PillStepper, SectionLabel, SplitBar, macroPercent
 import { useFoodRevision } from './use-food-revision';
 import { gramsOfOz, ozOf, useFoodWeightUnit, weightText, type FoodWeightUnit } from './weight';
 import { showToast } from '../shell/toast';
+import { enLabel, enNum, useEnergyUnit } from './energy';
 
 const n = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const nice = (v: number) => String(Number(v.toFixed(2)));
@@ -73,7 +74,7 @@ export function ItemSheet({ repo }: { repo: Repository }) {
 }
 
 function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
-  const { day, today } = useFoodDay();
+  const { day, today } = useFoodDay(), u = useEnergyUnit();
   const editing = !!target.entryId, inTray = !!currentCart() && !editing;
   const food = target.food, name = String(food.name ?? '');
   const unit = useFoodWeightUnit(repo), options = servingsOf(food, unit);
@@ -101,7 +102,7 @@ function ItemBody({ repo, target }: { repo: Repository; target: ItemTarget }) {
     closeSheet(); quickAdd(repo, day, meal, food, mult);
   };
   const mn = lower(mealName(repo, meal));
-  const footer = <Button full color="food" label={editing ? t('foodSaveChanges') : fill(t('foodAddToMeal'), { meal: mn }) + kcalTail(kcal)} onPress={commit} testID="food-item-add" />;
+  const footer = <Button full color="food" label={editing ? t('foodSaveChanges') : fill(t('foodAddToMeal'), { meal: mn }) + kcalTail(kcal, u)} onPress={commit} testID="food-item-add" />;
 
   return <FoodSheet testID="food-item-sheet" footer={footer}
     header={<SheetHeader title={editing ? t('foodEditFood') : t('foodDetails')} left={t('cancel')} onLeft={() => closeSheet()} />}>
@@ -147,12 +148,12 @@ function SaveButton({ on, onPress }: { on: boolean; onPress: () => void }) {
 
 /** The energy and how it splits between protein, carbs and fat (`.fd-ikc`). */
 export function EnergyCard({ kcal, p, c, f }: { kcal: number | null; p: number | null; c: number | null; f: number | null }) {
-  const k = useKit();
+  const k = useKit(), u = useEnergyUnit();
   return <Card>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
       <View style={{ minWidth: 84 }}>
-        <KitText weight={700} size={32} lineHeight={1} tracking={-0.02} numeric>{kcal == null ? '–' : num(kcal)}</KitText>
-        <KitText weight={600} size={12} lineHeight={1.2} color="text-muted" style={{ marginTop: 4 }}>{t('foodKcal')}</KitText>
+        <KitText weight={700} size={32} lineHeight={1} tracking={-0.02} numeric>{kcal == null ? '–' : enNum(kcal, u)}</KitText>
+        <KitText weight={600} size={12} lineHeight={1.2} color="text-muted" style={{ marginTop: 4 }}>{enLabel(u)}</KitText>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: (p ?? 0) * 4, color: k.c.food }, { v: (c ?? 0) * 4, color: k.c.accent }, { v: (f ?? 0) * 9, color: k.c.sleep }]} />

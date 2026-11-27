@@ -6,7 +6,7 @@ import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import { mealName, quickAdd } from './actions';
 import { addToCart, cartItem, currentCart } from './cart';
-import { KJ, dayView, nextMealId, num } from './day';
+import { KJ, dayView, nextMealId } from './day';
 import { meals, saveReusable, type Food } from './model';
 import { useFoodDay } from './selection';
 import { closeSheet, FoodSheet } from './sheet';
@@ -14,6 +14,7 @@ import { Caption, MealSeg, SectionLabel } from './ui';
 import { useFoodRevision } from './use-food-revision';
 import { showToast } from '../shell/toast';
 import { capitals } from '@/components/kit-style';
+import { enAmt, energyTail, enLabel, enNum, enText, enValue, toKcal, useEnergyUnit } from './energy';
 
 /** A typed number, or null when the box is blank or not a number. Blank stays unknown, never zero. */
 export function parseAmount(text: string): number | null {
@@ -33,13 +34,14 @@ export const macroKcal = (p: number | null, c: number | null, f: number | null) 
  */
 export function QuickSheet({ repo, meal: asked, name: given, mine }: { repo: Repository; meal?: string; name?: string; mine?: boolean }) {
   useFoodRevision(repo);
-  const k = useKit();
+  const k = useKit(), u = useEnergyUnit();
   const { day, today } = useFoodDay();
   const inTray = !!currentCart();
   const [meal, setMeal] = useState(() => currentCart()?.meal ?? (asked && meals(repo).some(m => m.id === asked) ? asked : nextMealId(dayView(repo, today, { today }))));
   const [kcalText, setKcal] = useState(''), [pt, setP] = useState(''), [ct, setC] = useState(''), [ft, setF] = useState(''), [name, setName] = useState(given ?? '');
   const big = useRef<React.ComponentRef<typeof TextInput>>(null);
-  const kcal = parseAmount(kcalText), p = parseAmount(pt), c = parseAmount(ct), f = parseAmount(ft), mk = macroKcal(p, c, f);
+  // The big field takes the unit from Settings; it is counted in kcal from here on.
+  const typed = parseAmount(kcalText), kcal = typed == null ? null : toKcal(typed, u), p = parseAmount(pt), c = parseAmount(ct), f = parseAmount(ft), mk = macroKcal(p, c, f);
   const ok = kcal != null && kcal > 0, mn = mealName(repo, meal).toLowerCase();
   const add = () => {
     if (!ok) return;
@@ -55,9 +57,9 @@ export function QuickSheet({ repo, meal: asked, name: given, mine }: { repo: Rep
       <KitText weight={700} size={10.5} lineHeight={1} tracking={0.14} color="text-muted" style={capitals}>{t('foodCaloriesCap')}</KitText>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8 }}>
         <TextInput ref={big} value={kcalText} onChangeText={setKcal} keyboardType="number-pad" placeholder="0" testID="food-quick-kcal"
-          accessibilityLabel={t('foodCaloriesInKcal')} autoComplete="off" placeholderTextColor={k.c.ghost} selectionColor={k.c.food} cursorColor={k.c.food}
+          accessibilityLabel={enText(t('foodCaloriesInKcal'), u)} autoComplete="off" placeholderTextColor={k.c.ghost} selectionColor={k.c.food} cursorColor={k.c.food}
           style={[font(700, 52, 1.1, -0.04), { width: 190, textAlign: 'right', color: k.c.text, padding: 0, paddingVertical: 1, fontVariant: ['tabular-nums'] }]} />
-        <KitText weight={600} size={18} color="text-muted" style={{ width: 120 }}>{t('foodKcal')}</KitText>
+        <KitText weight={600} size={18} color="text-muted" style={{ width: 120 }}>{enLabel(u)}</KitText>
       </View>
     </Tappable>
     <SectionLabel title={t('foodMacrosCap')} aside={t('foodOptional')} />
@@ -67,14 +69,14 @@ export function QuickSheet({ repo, meal: asked, name: given, mine }: { repo: Rep
           accessibilityLabel={fill(t('foodInGrams'), { name: label })} /></View>)}
     </View>
     {mk > 0 && !kcal ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10, paddingVertical: 6, paddingRight: 6, paddingLeft: 14, borderRadius: 14, backgroundColor: k.tint(k.c.food, 0.12) }}>
-      <KitText weight={500} size={13.5}>{t('foodMacrosAddUp')} <KitText weight={700} size={13.5} numeric>{`${num(mk)} ${t('foodKcal')}`}</KitText></KitText>
-      <Tappable dim="text" accessibilityRole="button" accessibilityLabel={fill(t('foodUseKcal'), { v: num(mk) })} onPress={() => setKcal(String(Math.round(mk)))}
+      <KitText weight={500} size={13.5}>{t('foodMacrosAddUp')} <KitText weight={700} size={13.5} numeric>{enAmt(mk, u)}</KitText></KitText>
+      <Tappable dim="text" accessibilityRole="button" accessibilityLabel={fill(enText(t('foodUseKcal'), u), { v: enNum(mk, u) })} onPress={() => setKcal(String(enValue(mk, u)))}
         style={{ minHeight: 44, paddingHorizontal: 14, justifyContent: 'center' }}><KitText weight={700} size={14} color="food">{t('foodUse')}</KitText></Tappable>
     </View> : null}
     <View style={{ marginTop: 16 }}><TextField label={t('foodNameLabel')} value={name} onChangeText={setName} placeholder={given || t('foodTileQuick')} maxLength={80} /></View>
     {inTray ? null : <><SectionLabel title={t('foodAddToCap')} /><MealSeg label={t('foodMealLabel')} meals={meals(repo)} value={meal} onChange={setMeal} /></>}
     <View style={{ marginTop: 16 }}>
-      <Button full color="food" icon="plus" disabled={!ok} label={fill(t('foodAddToMeal'), { meal: mn }) + (ok ? ` · ${num(kcal)} ${t('foodKcal')}` : '')} onPress={add} testID="food-quick-add" />
+      <Button full color="food" icon="plus" disabled={!ok} label={fill(t('foodAddToMeal'), { meal: mn }) + (ok ? energyTail(kcal, u) : '')} onPress={add} testID="food-quick-add" />
     </View>
     <Caption>{t('foodBlankUnknown')}</Caption>
   </FoodSheet>;

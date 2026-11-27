@@ -13,13 +13,17 @@ import { foodRoutes } from '../nav';
 import { burnedOn, pickFoodDay } from '../selection';
 import { Cells, Gauge, MACRO_COLOR, MacroRings, SplitBar, WaterIcon, macroPercents, meter } from '../ui';
 import { WellBar } from './well-bar';
+import { enLabel, enNum, enText, enValue } from '../energy';
 import { litresOn, quickContainers, sizeNum, sizeSpoken, sizeText, unitLabel, waterAmt, waterNum, type Container } from '../water';
 import { B, Cols, Dot, Hair, Ic, KV, Kick, Num, Plate, Plus, Stripes, Sub, TileButton, Title, useDayData, useShade, useTileDay } from './kit';
 
 type Data = ReturnType<typeof useDayData>;
 type TileBody = ComponentType<{ p: TileRenderProps; repo: Repository; d: Data }>;
 const tx = (key: Parameters<typeof t>[0], v: Record<string, string | number> = {}) => fill(t(key), v);
-const KC = () => t('foodKcal');
+/* Energy is counted in kcal and shown in the unit chosen in Settings. */
+const EN = (d: Data, kcal: number) => enNum(kcal, d.eu);
+const EL = (d: Data) => enLabel(d.eu);
+const txe = (d: Data, key: Parameters<typeof t>[0], v: Record<string, string | number> = {}) => fill(enText(t(key), d.eu), v);
 const WD1 = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const DAYN = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -54,18 +58,18 @@ const dayIndexTap = (d: Data) => (i: number) => { const day = weekDays(d.day)[i]
 const Calories: TileBody = ({ p, d }) => {
   const k = useKit(), shade = useShade(), v = d.view, over = v.left < 0, eat = p.options.lead === 'eaten';
   const big = eat ? v.eaten : Math.abs(v.left), word = eat ? t('foodEaten') : over ? t('foodOver') : t('foodLeft');
-  const label = tx('foodCalA11y', { eaten: num(v.eaten), goal: num(v.goal), left: num(Math.abs(v.left)), word: over ? t('foodOver') : t('foodLeft') });
+  const label = txe(d, 'foodCalA11y', { eaten: EN(d, v.eaten), goal: EN(d, v.goal), left: EN(d, Math.abs(v.left)), word: over ? t('foodOver') : t('foodLeft') });
   const g = (sz: number, fs: number, sw?: number) => <Gauge frac={v.eaten / v.goal} size={sz} sw={sw} color={over ? k.c.warning : k.c.food} fs={fs} us={sz > 120 ? 12 : 10.5}
-    value={num(big)} unit={`${KC()} ${word}`} label={label} />;
-  const burned = v.burned == null ? '–' : num(v.burned);
+    value={EN(d, big)} unit={`${EL(d)} ${word}`} label={label} />;
+  const burned = v.burned == null ? '–' : EN(d, v.burned);
   if (p.size === 'S') return <View style={[col, { alignItems: 'center', justifyContent: 'flex-end' }]}>
     {g(104, 24)}
-    <Sub style={{ marginTop: -8 }}>{eat ? `${num(Math.abs(v.left))} ${over ? t('foodOver') : tx('foodLeftOf')} ` : `${t('foodOf')} `}{num(v.goal)} {KC()}</Sub>
+    <Sub style={{ marginTop: -8 }}>{eat ? `${EN(d, Math.abs(v.left))} ${over ? t('foodOver') : tx('foodLeftOf')} ` : `${t('foodOf')} `}{EN(d, v.goal)} {EL(d)}</Sub>
   </View>;
   const kvs = (gap: number, more?: boolean) => <View style={{ flex: 1, gap }}>
-    <KV k={eat ? t('foodLeftCap') : t('foodEatenCap')} v={num(eat ? Math.abs(v.left) : v.eaten)} unit={KC()} /><Hair />
-    <KV k={t('foodGoal')} v={num(v.goal)} unit={KC()} /><Hair />
-    <KV k={t('foodBurnedCap')} v={burned} unit={v.burned == null ? undefined : KC()} after={more ? undefined : <IconFlame />} />
+    <KV k={eat ? t('foodLeftCap') : t('foodEatenCap')} v={EN(d, eat ? Math.abs(v.left) : v.eaten)} unit={EL(d)} /><Hair />
+    <KV k={t('foodGoal')} v={EN(d, v.goal)} unit={EL(d)} /><Hair />
+    <KV k={t('foodBurnedCap')} v={burned} unit={v.burned == null ? undefined : EL(d)} after={more ? undefined : <IconFlame />} />
     {more ? <><Hair /><KV k={t('foodMealsCap')} v={String(v.logged)} unit={tx('foodOfN', { n: v.meals.length })} /></> : null}
   </View>;
   if (p.size === 'M') return <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18 }}>{g(118, 25, 9)}{kvs(9)}</View>;
@@ -73,8 +77,8 @@ const Calories: TileBody = ({ p, d }) => {
   return <View style={col}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>{g(140, 30, 11)}{kvs(8, true)}</View>
     <View style={{ marginTop: 'auto' }}>
-      <View style={{ flexDirection: 'row', marginBottom: 8 }}><Kick style={{ flex: 1 }}>{t('foodByMeal')}</Kick><Sub size={11.5}>{num(v.eaten)} {t('foodOf')} {num(tot)} {KC()}</Sub></View>
-      <View accessible accessibilityRole="image" accessibilityLabel={`${t('foodByMealA11y')} ${v.meals.map(m => `${m.name} ${m.empty ? t('foodNotLogged') : `${num(m.kcal)} ${KC()}`}`).join(', ')}`}
+      <View style={{ flexDirection: 'row', marginBottom: 8 }}><Kick style={{ flex: 1 }}>{t('foodByMeal')}</Kick><Sub size={11.5}>{EN(d, v.eaten)} {t('foodOf')} {EN(d, tot)} {EL(d)}</Sub></View>
+      <View accessible accessibilityRole="image" accessibilityLabel={`${t('foodByMealA11y')} ${v.meals.map(m => `${m.name} ${m.empty ? t('foodNotLogged') : `${EN(d, m.kcal)} ${EL(d)}`}`).join(', ')}`}
         style={{ flexDirection: 'row', gap: 2, height: 12, borderRadius: 999, overflow: 'hidden' }}>
         {v.meals.map((m, i) => m.kcal > 0 ? <View key={m.id} style={{ flex: m.kcal, backgroundColor: shade(i) }} /> : null)}
         {v.left > 0 ? <View style={{ flex: v.left, backgroundColor: k.dark ? mix(k.c.surface, '#000000', 0.66) : mix(k.c.bg, k.c.text, 0.93), borderTopRightRadius: 999, borderBottomRightRadius: 999 }} /> : null}
@@ -82,7 +86,7 @@ const Calories: TileBody = ({ p, d }) => {
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>{v.meals.slice(0, 4).map((m, i) => <View key={m.id} style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Dot color={shade(i)} /><Sub size={11.5}>{m.name}</Sub></View>
         <KitText weight={700} size={15} lineHeight={1.2} numeric color={m.empty ? 'text-muted' : 'text'} style={{ marginTop: 4 }}>
-          {m.empty ? t('foodNone') : num(m.kcal)}{m.empty ? null : <><TextGap pt={2} /><KitText weight={600} tracking={0} size={10.5} color="text-muted">{KC()}</KitText></>}
+          {m.empty ? t('foodNone') : EN(d, m.kcal)}{m.empty ? null : <><TextGap pt={2} /><KitText weight={600} tracking={0} size={10.5} color="text-muted">{EL(d)}</KitText></>}
         </KitText>
       </View>)}</View>
     </View>
@@ -198,11 +202,11 @@ function FoodQuickRow({ f, h, first, repo, d, sm, sub }: { f: Food; h: number; f
   const k = useKit(), kcal = kcalOf(f.energy_kj), pg = typeof f.protein_g === 'number' ? Math.round(f.protein_g) : null, name = String(f.name);
   const serving = typeof f.amount_g === 'number' ? `${grams(f.amount_g)} g` : t('foodOneServing');
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: h, borderTopWidth: first ? 0 : 1, borderTopColor: k.c.hair }}>
-    <Tappable dim="row" accessibilityRole="button" accessibilityLabel={`${name}, ${serving}${pg != null ? `, ${tx('foodGramsProtein', { g: pg })}` : ''}${kcal != null ? `, ${num(kcal)} ${KC()}` : ''}. ${t('foodShowDetails')}`}
+    <Tappable dim="row" accessibilityRole="button" accessibilityLabel={`${name}, ${serving}${pg != null ? `, ${tx('foodGramsProtein', { g: pg })}` : ''}${kcal != null ? `, ${EN(d, kcal)} ${EL(d)}` : ''}. ${t('foodShowDetails')}`}
       onPress={() => foodRoutes.item({ food: f, meal: d.next, day: d.today })} style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' }}>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Title size={sm ? 13.5 : 14}>{sm ? name.split(',')[0] : name}</Title>
-        <Sub size={11.5}>{sub ?? `${serving}${kcal != null ? ` · ${num(kcal)} ${KC()}` : ''}`}</Sub>
+        <Sub size={11.5}>{sub ?? `${serving}${kcal != null ? ` · ${EN(d, kcal)} ${EL(d)}` : ''}`}</Sub>
       </View>
       {sm && pg != null ? <KitText weight={700} size={14.5} lineHeight={1} numeric>{pg}<TextGap pt={3} /><KitText weight={600} tracking={0} size={11} color="text-muted">g</KitText></KitText> : null}
     </Tappable>
@@ -213,17 +217,17 @@ function FoodQuickRow({ f, h, first, repo, d, sm, sub }: { f: Food; h: number; f
 /* 4. Meals */
 const Meals: TileBody = ({ p, repo, d }) => {
   const k = useKit(), shade = useShade(), v = d.view, pv = p.options.value === 'p', today = d.isToday;
-  const val = (m: DayView['meals'][number]) => pv ? <>{roundOr(m.p)}<TextGap pt={3} /><KitText weight={600} tracking={0} size={11} color="text-muted">g</KitText></> : <>{num(m.kcal)}<TextGap pt={3} /><KitText weight={600} tracking={0} size={11} color="text-muted">{KC()}</KitText></>;
+  const val = (m: DayView['meals'][number]) => pv ? <>{roundOr(m.p)}<TextGap pt={3} /><KitText weight={600} tracking={0} size={11} color="text-muted">g</KitText></> : <>{EN(d, m.kcal)}<TextGap pt={3} /><KitText weight={600} tracking={0} size={11} color="text-muted">{EL(d)}</KitText></>;
   const open = (m: DayView['meals'][number]) => m.empty ? foodRoutes.log(m.id) : foodRoutes.meal(m.id);
   if (p.size === 'S') {
     const nx = v.meals.find(m => m.empty);
     if (!today || !nx) return <View style={col}><Num v={String(v.logged)} unit={tx('foodOfN', { n: v.meals.length })} fs={30} /><Sub style={{ marginTop: 4 }}>{t('foodMealsLogged')}</Sub>
       <View style={{ marginTop: 'auto', gap: 4 }}>{v.meals.map((m, i) => <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-        <Dot color={shade(i)} /><Sub size={11.5} style={{ flex: 1 }}>{m.name}</Sub><Sub size={11.5} color="text">{pv ? `${roundOr(m.p)} g` : num(m.kcal)}</Sub></View>)}</View></View>;
+        <Dot color={shade(i)} /><Sub size={11.5} style={{ flex: 1 }}>{m.name}</Sub><Sub size={11.5} color="text">{pv ? `${roundOr(m.p)} g` : EN(d, m.kcal)}</Sub></View>)}</View></View>;
     return <View style={col}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Ic name={nx.icon} /><Kick>{t('foodUpNext')}</Kick></View>
       <KitText weight={700} size={19} lineHeight={1.2} numberOfLines={1} style={{ marginTop: 10 }}>{nx.name}</KitText>
-      <Sub style={{ marginTop: 2 }}>{v.left > 0 ? pv ? tx('foodProteinLeft', { g: Math.max(0, Math.round(v.goals.p - known(v.p))) }) : `${num(v.left)} ${KC()} ${t('foodLeft')}` : t('foodGoalReached')}</Sub>
+      <Sub style={{ marginTop: 2 }}>{v.left > 0 ? pv ? tx('foodProteinLeft', { g: Math.max(0, Math.round(v.goals.p - known(v.p))) }) : `${EN(d, v.left)} ${EL(d)} ${t('foodLeft')}` : t('foodGoalReached')}</Sub>
       <View style={{ marginTop: 'auto' }}><TileButton sm full icon="plus" label={tx('foodAddMealNamed', { meal: nx.name.toLowerCase() })} onPress={() => foodRoutes.log(nx.id)} /></View>
     </View>;
   }
@@ -232,10 +236,10 @@ const Meals: TileBody = ({ p, repo, d }) => {
     return <View style={col}><View style={{ marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{v.meals.slice(0, 4).map(m => {
       const none = m.empty;
       return <Tappable key={m.id} dim="fill" disabled={!today} accessibilityRole={today ? 'button' : undefined}
-        accessibilityLabel={`${m.name}${none ? `, ${t('foodNothingLoggedAdd')}` : `, ${num(m.kcal)} ${KC()}, ${tx('foodGramsProtein', { g: roundOr(m.p) })}`}`} onPress={() => open(m)}>
+        accessibilityLabel={`${m.name}${none ? `, ${t('foodNothingLoggedAdd')}` : `, ${EN(d, m.kcal)} ${EL(d)}, ${tx('foodGramsProtein', { g: roundOr(m.p) })}`}`} onPress={() => open(m)}>
         <Plate w={w} h={55} none={none} style={{ flexDirection: 'row', alignItems: 'center', gap: 9, paddingLeft: 9, paddingRight: 8 }}>
           <Ic name={m.icon} outline={none} />
-          <View style={{ flex: 1, minWidth: 0 }}><Title size={13.5}>{m.name}</Title><Sub size={11.5}>{none ? t('foodNotLoggedCap') : pv ? tx('foodGProtein', { g: roundOr(m.p) }) : `${num(m.kcal)} ${KC()}`}</Sub></View>
+          <View style={{ flex: 1, minWidth: 0 }}><Title size={13.5}>{m.name}</Title><Sub size={11.5}>{none ? t('foodNotLoggedCap') : pv ? tx('foodGProtein', { g: roundOr(m.p) }) : `${EN(d, m.kcal)} ${EL(d)}`}</Sub></View>
           {none ? <View style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(k.c.food, 0.16) }}><PlusGlyph color={k.c.food} /></View> : null}
         </Plate>
       </Tappable>;
@@ -246,7 +250,7 @@ const Meals: TileBody = ({ p, repo, d }) => {
       const none = m.empty, sub = none ? t('foodNothingYet') : today ? foodsLine(m.items) : tx('foodGProtein', { g: roundOr(m.p) });
       return <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: 52, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
         <Tappable dim="row" disabled={!today} accessibilityRole={today ? 'button' : undefined} onPress={() => open(m)}
-          accessibilityLabel={`${m.name}${none ? `, ${t('foodNothingYetLower')}` : pv ? `, ${tx('foodGramsProtein', { g: roundOr(m.p) })}` : `, ${num(m.kcal)} ${KC()}`}`}
+          accessibilityLabel={`${m.name}${none ? `, ${t('foodNothingYetLower')}` : pv ? `, ${tx('foodGramsProtein', { g: roundOr(m.p) })}` : `, ${EN(d, m.kcal)} ${EL(d)}`}`}
           style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' }}>
           <Ic name={m.icon} outline={none} />
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -311,7 +315,7 @@ const Water: TileBody = ({ p, repo, d }) => {
 /* 6. This week */
 const Week: TileBody = ({ p, repo, d }) => {
   const k = useKit();
-  const pv = p.options.measure === 'p', lastMode = p.options.compare === 'last', u = pv ? 'g' : KC(), goal = pv ? d.view.goals.p : d.view.goal;
+  const pv = p.options.measure === 'p', lastMode = p.options.compare === 'last', u = pv ? 'g' : EL(d), goal = pv ? d.view.goals.p : d.view.goal;
   const days = weekDays(d.day), cur = daySums(repo, days), prevS = daySums(repo, days.map(x => shiftDay(x, -7)));
   const vals = cur.map((x, i) => days[i] > d.today ? null : pv ? x.p : x.kcal), prev = prevS.map(x => pv ? x.p : x.kcal);
   const liveI = days.indexOf(d.today), full = liveI >= 0 ? liveI : 7;
@@ -319,25 +323,25 @@ const Week: TileBody = ({ p, repo, d }) => {
   const avgOf = (a: (number | null)[]) => { const k2 = known(a); return k2.length ? Math.round(k2.reduce((x, y) => x + y, 0) / k2.length) : 0; };
   const avg = avgOf(vals), pavg = avgOf(prev), onT = known(vals).filter(x => Math.abs(x - goal) <= goal * 0.1).length;
   const mx = Math.max(goal * 1.18, ...[...vals, ...(lastMode ? prev : [])].map(x => (x ?? 0) * 1.04));
-  const VF = (x: number) => num(x), dlt = avg - pavg;
+  const VF = (x: number) => pv ? num(x) : EN(d, x), dlt = avg - pavg, logged = known(vals).length;
   const C = (H: number, cw: number, vl?: boolean, ls?: number) => <Cols vals={vals} H={H} cw={cw} max={mx} goal={lastMode ? null : goal} band={lastMode ? null : 0.1} last={lastMode ? prev : null}
-    sel={weekday(d.day)} live={liveI >= 0 ? liveI : null} vlab={vl} labels={WD1} labelSize={ls} vfmt={x => pv ? String(Math.round(x)) : `${(x / 1000).toFixed(1)}k`}
+    sel={weekday(d.day)} live={liveI >= 0 ? liveI : null} vlab={vl} labels={WD1} labelSize={ls} vfmt={x => pv ? String(Math.round(x)) : `${(enValue(x, d.eu) / 1000).toFixed(1)}k`}
     onDay={live(p) ? dayIndexTap(d) : undefined} label={pv ? t('foodProteinByDayPlain') : t('foodCaloriesByDay')}
     aria={(i, x) => `${DAYN[i]}, ${x == null ? t('foodNothingLogged') : `${VF(x)} ${u}${i === liveI ? ` ${t('foodSoFar')}` : ''}`}${lastMode ? `, ${t('foodWeekBefore')} ${prev[i] == null ? t('foodNothingLogged') : VF(prev[i]!)}` : ''}`} />;
-  const cmp = tx(dlt >= 0 ? 'foodMoreADay' : 'foodLessADay', { v: num(Math.abs(dlt)), u });
+  const cmp = tx(dlt >= 0 ? 'foodMoreADay' : 'foodLessADay', { v: VF(Math.abs(dlt)), u });
   if (p.size === 'S') return <View style={col}>
-    {lastMode ? <><Num v={VF(avg)} unit={u} fs={26} /><Sub style={{ marginTop: 4 }}>{dlt >= 0 ? '+' : '−'}{num(Math.abs(dlt))} {u} {t('foodADay')}</Sub></>
-      : <><Num v={String(onT)} unit={tx('foodOfN', { n: full })} fs={30} /><Sub style={{ marginTop: 4 }}>{t('foodDaysOnGoal')}</Sub></>}
+    {lastMode ? <><Num v={VF(avg)} unit={u} fs={26} /><Sub style={{ marginTop: 4 }}>{dlt >= 0 ? '+' : '−'}{VF(Math.abs(dlt))} {u} {t('foodADay')}</Sub></>
+      : <><Num v={String(onT)} unit={tx('foodOfN', { n: logged })} fs={30} /><Sub style={{ marginTop: 4 }}>{t('foodDaysOnGoal')}</Sub></>}
     <View style={{ marginTop: 'auto' }}>{C(48, 12, false, 9.5)}</View>
   </View>;
   if (p.size === 'M') return <View style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
     <View style={{ width: 104, ...col }}><Num v={VF(avg)} unit={u} fs={24} /><Sub style={{ marginTop: 4 }}>{t('foodDailyAverageLower')}</Sub>
-      <Sub lines={3} style={{ marginTop: 'auto', lineHeight: 16 }}>{lastMode ? <><B>{num(Math.abs(dlt))} {u}</B> {t(dlt >= 0 ? 'foodMoreThanLast' : 'foodLessThanLast')}</> : <><B>{tx('foodNOfM', { n: onT, m: full })}</B> {t('foodWithin10')}</>}</Sub></View>
+      <Sub lines={3} style={{ marginTop: 'auto', lineHeight: 16 }}>{lastMode ? <><B>{VF(Math.abs(dlt))} {u}</B> {t(dlt >= 0 ? 'foodMoreThanLast' : 'foodLessThanLast')}</> : <><B>{tx('foodNOfM', { n: onT, m: logged })}</B> {t('foodWithin10')}</>}</Sub></View>
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>{C(76, 18)}</View>
   </View>;
   return <View style={col}>
     <Num v={VF(avg)} unit={`${u} ${t('foodADay')}`} fs={30} />
-    <Sub style={{ marginTop: 5 }}>{lastMode ? cmp : tx('foodDaysWithin', { n: onT, m: full })}</Sub>
+    <Sub style={{ marginTop: 5 }}>{lastMode ? cmp : tx('foodDaysWithin', { n: onT, m: logged })}</Sub>
     <View style={{ marginTop: 'auto' }}>{C(150, 26, true)}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 14 }}>
         {lastMode ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><View style={{ width: 12, height: 2, backgroundColor: k.c.text, opacity: 0.6 }} /><KitText weight={600} size={11.5} color="text-muted">{t('foodWeekBeforeCap')}</KitText></View>
@@ -523,9 +527,9 @@ const Quick: TileBody = ({ p, repo, d }) => {
     const list = combos(repo).slice(0, cnt);
     if (!list.length) return <View style={[col, { justifyContent: 'center' }]}><Title>{t('foodNoSavedYet')}</Title><Sub lines={2} style={{ marginTop: 4 }}>{t('foodNoSavedHint')}</Sub></View>;
     return <View style={col}><View style={{ marginTop: 'auto' }}>{list.map((c, i) => <View key={c.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: rh, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
-      <Tappable dim="row" accessibilityRole="button" accessibilityLabel={`${c.name}, ${plural(c.foods.length, t('foodFood'), t('foodFoods'))}, ${num(comboKcal(c))} ${KC()}`} onPress={() => foodRoutes.saved(d.next)} style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center' }}>
+      <Tappable dim="row" accessibilityRole="button" accessibilityLabel={`${c.name}, ${plural(c.foods.length, t('foodFood'), t('foodFoods'))}, ${EN(d, comboKcal(c))} ${EL(d)}`} onPress={() => foodRoutes.saved(d.next)} style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center' }}>
         <Title size={p.size === 'S' ? 13 : 14}>{c.name}</Title>
-        <Sub size={11.5}>{p.size === 'S' ? `${num(comboKcal(c))} ${KC()}` : `${plural(c.foods.length, t('foodFood'), t('foodFoods'))} · ${num(comboKcal(c))} ${KC()} · ${tx('foodGProtein', { g: Math.round(comboProtein(c)) })}`}</Sub>
+        <Sub size={11.5}>{p.size === 'S' ? `${EN(d, comboKcal(c))} ${EL(d)}` : `${plural(c.foods.length, t('foodFood'), t('foodFoods'))} · ${EN(d, comboKcal(c))} ${EL(d)} · ${tx('foodGProtein', { g: Math.round(comboProtein(c)) })}`}</Sub>
       </Tappable>
       <Plus label={tx('foodAddTo', { food: c.name, meal: mn })} onPress={() => addSaved(repo, d.today, d.next, c)} />
     </View>)}</View></View>;
@@ -536,8 +540,8 @@ const Quick: TileBody = ({ p, repo, d }) => {
   return <View style={col}><View style={{ marginTop: 'auto' }}>{list.map((f, i) => {
     const kcal = kcalOf(f.energy_kj), pg = typeof f.protein_g === 'number' ? Math.round(f.protein_g) : null;
     const q = typeof f.amount_g === 'number' ? `${grams(f.amount_g)} g` : t('foodOneServing');
-    const sub = p.size === 'S' ? (kcal != null ? `${num(kcal)} ${KC()}` : pg != null ? tx('foodGProtein', { g: pg }) : q)
-      : [q, kcal != null ? `${num(kcal)} ${KC()}` : null, pg != null ? tx('foodGProtein', { g: pg }) : null].filter(Boolean).join(' · ') + (often ? ` · ${tx('foodTimes', { n: often[i].count })}` : '');
+    const sub = p.size === 'S' ? (kcal != null ? `${EN(d, kcal)} ${EL(d)}` : pg != null ? tx('foodGProtein', { g: pg }) : q)
+      : [q, kcal != null ? `${EN(d, kcal)} ${EL(d)}` : null, pg != null ? tx('foodGProtein', { g: pg }) : null].filter(Boolean).join(' · ') + (often ? ` · ${tx('foodTimes', { n: often[i].count })}` : '');
     return <QuickRow key={String(f.name)} f={f} first={i === 0} h={rh} repo={repo} d={d} sub={sub} title={p.size === 'L' ? String(f.name) : String(f.name).split(',')[0]} size={p.size === 'S' ? 13 : 14} />;
   })}</View></View>;
 };
@@ -556,19 +560,19 @@ function QuickRow({ f, first, h, repo, d, sub, title, size }: { f: Food; first: 
 const Net: TileBody = ({ p, repo, d }) => {
   const k = useKit(), v = d.view, burned = v.burned, net = burned == null ? null : v.eaten - burned, week = p.options.range === 'week';
   const days = weekDays(d.day), sums = daySums(repo, days), liveI = days.indexOf(d.today), full = liveI >= 0 ? liveI : 7;
-  const eat = sums.map((x, i) => days[i] > d.today ? null : x.kcal ?? 0), bw = days.map(x => x > d.today ? null : burnedOn(x));
+  const eat = sums.map((x, i) => days[i] > d.today ? null : x.kcal), bw = days.map(x => x > d.today ? null : burnedOn(x));
   const nets = eat.map((x, i) => x == null || bw[i] == null ? null : x - bw[i]!);
   const knownN = nets.slice(0, full).filter((x): x is number => x != null), avg = knownN.length ? Math.round(knownN.reduce((a, b) => a + b, 0) / knownN.length) : null;
   const mx = Math.max(1, ...eat.map(x => x ?? 0)) * 1.06;
-  const E = (x: number | null) => x == null ? '–' : num(x);
+  const E = (x: number | null) => x == null ? '–' : EN(d, x);
   const eb = (H: number) => { const m = Math.max(v.eaten, burned ?? 0) || 1;
     return <View style={{ gap: H > 8 ? 9 : 7 }}>{([[t('foodEatenCap'), v.eaten, k.c.food], [t('foodBurnedCap'), burned, k.c.warning]] as const).map(([name, x, c]) => <View key={name} style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8 }}>
       <Sub size={12} style={{ width: 52 }}>{name}</Sub><WellBar frac={(x ?? 0) / m} h={H} color={c} /><KitText weight={700} size={13.5} lineHeight={1} numeric style={{ width: 62, textAlign: 'right' }}>{E(x)}</KitText></View>)}</View>; };
   const weekCols = (H: number, cw: number, vl?: boolean, ls = 10.5) => <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>{eat.map((x, i) => {
     const hE = (x ?? 0) / mx * H, hB = Math.min(x ?? 0, bw[i] ?? 0) / mx * H, sel = weekday(d.day) === i, lv = i === liveI;
     return <Tappable key={i} dim="fill" disabled={!live(p) || days[i] > d.today} accessibilityRole="button" accessibilityState={{ selected: sel }} onPress={() => pickFoodDay(days[i])}
-      accessibilityLabel={`${DAYN[i]}, ${x == null ? t('foodNothingLogged') : tx('foodNetA11y', { eaten: E(x), burned: E(bw[i]), net: E(nets[i]) })}`} style={{ flex: 1, alignItems: 'center', gap: 5 }}>
-      {vl ? <KitText weight={700} size={10.5} lineHeight={1} numeric color={sel ? k.c.food : 'text-muted'} style={{ height: 11 }}>{nets[i] == null ? '' : `${(nets[i]! / 1000).toFixed(1)}k`}</KitText> : null}
+      accessibilityLabel={`${DAYN[i]}, ${x == null ? t('foodNothingLogged') : txe(d, 'foodNetA11y', { eaten: E(x), burned: E(bw[i]), net: E(nets[i]) })}`} style={{ flex: 1, alignItems: 'center', gap: 5 }}>
+      {vl ? <KitText weight={700} size={10.5} lineHeight={1} numeric color={sel ? k.c.food : 'text-muted'} style={{ height: 11 }}>{nets[i] == null ? '' : `${(enValue(nets[i]!, d.eu) / 1000).toFixed(1)}k`}</KitText> : null}
       <View style={[{ width: cw, height: H, borderRadius: cw / 2, overflow: 'hidden' }, sel && { boxShadow: `0px 0px 0px 2px ${k.c.surface}, 0px 0px 0px 3.5px ${k.c.food}` }]}>
         <WellBar frac={0} h={H} color={k.c.food} width={cw} />
         {hE ? <View style={{ position: 'absolute', left: 0, bottom: 0, width: cw, height: hE, opacity: lv ? 0.55 : 1, borderRadius: cw / 2, overflow: 'hidden' }}><View style={{ flex: 1, backgroundColor: k.c.food }} /></View> : null}
@@ -581,21 +585,21 @@ const Net: TileBody = ({ p, repo, d }) => {
   const math = (fs: number) => { const c = (name: string, x: number | null, color?: string) => <View style={{ minWidth: 0 }}><Sub size={11.5}>{name}</Sub>
       <KitText weight={700} size={fs} lineHeight={1.1} tracking={-0.02} numeric color={color} style={{ marginTop: 3 }}>{E(x)}</KitText></View>;
     const op = (s: string) => <KitText weight={500} size={fs - 4} lineHeight={1} color="text-muted" style={{ alignSelf: 'flex-end', paddingBottom: 3 }}>{s}</KitText>;
-    return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>{c(t('foodEatenCap'), v.eaten)}{op('−')}{c(t('foodBurnedCap'), burned)}{op('=')}{c(tx('foodNetUnit', { u: KC() }), net, k.c.food)}</View>; };
+    return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>{c(t('foodEatenCap'), v.eaten)}{op('−')}{c(t('foodBurnedCap'), burned)}{op('=')}{c(tx('foodNetUnit', { u: EL(d) }), net, k.c.food)}</View>; };
   if (p.size === 'S') {
-    if (week) return <View style={col}><Num v={E(avg)} unit={KC()} fs={26} /><Sub style={{ marginTop: 4 }}>{t('foodNetADay')}</Sub><View style={{ marginTop: 'auto' }}>{weekCols(46, 12, false, 9.5)}</View></View>;
-    return <View style={col}><Num v={E(net)} unit={KC()} fs={28} /><Sub style={{ marginTop: 4 }}>{d.isToday ? t('foodNetSoFar') : t('foodNetThatDay')}</Sub>
+    if (week) return <View style={col}><Num v={E(avg)} unit={EL(d)} fs={26} /><Sub style={{ marginTop: 4 }}>{t('foodNetADay')}</Sub><View style={{ marginTop: 'auto' }}>{weekCols(46, 12, false, 9.5)}</View></View>;
+    return <View style={col}><Num v={E(net)} unit={EL(d)} fs={28} /><Sub style={{ marginTop: 4 }}>{d.isToday ? t('foodNetSoFar') : t('foodNetThatDay')}</Sub>
       <View style={{ marginTop: 'auto' }}>{([[t('foodEatenCap'), v.eaten, k.c.food], [t('foodBurnedCap'), burned, k.c.warning]] as const).map(([name, x, c], i) => <View key={name} style={{ marginTop: i ? 9 : 0 }}>
         <View style={{ flexDirection: 'row', gap: 6 }}><Sub size={11.5} style={{ flex: 1 }}>{name}</Sub><KitText weight={700} size={12.5} numeric>{E(x)}</KitText></View>
         <View style={{ marginTop: 4 }}><WellBar frac={(x ?? 0) / (Math.max(v.eaten, burned ?? 0) || 1)} h={6} color={c} /></View></View>)}</View></View>;
   }
   if (p.size === 'M') {
-    if (week) return <View style={{ flex: 1, flexDirection: 'row', gap: 16 }}><View style={{ width: 104, ...col }}><Num v={E(avg)} unit={KC()} fs={24} /><Sub style={{ marginTop: 4 }}>{t('foodNetADay')}</Sub>
+    if (week) return <View style={{ flex: 1, flexDirection: 'row', gap: 16 }}><View style={{ width: 104, ...col }}><Num v={E(avg)} unit={EL(d)} fs={24} /><Sub style={{ marginTop: 4 }}>{t('foodNetADay')}</Sub>
       <Sub lines={3} style={{ marginTop: 'auto', lineHeight: 16 }}>{t('foodStripedTop')}</Sub></View><View style={{ flex: 1, justifyContent: 'flex-end' }}>{weekCols(80, 18)}</View></View>;
     return <View style={col}>{math(24)}<View style={{ marginTop: 'auto' }}>{eb(8)}</View></View>;
   }
   return <View style={col}>{math(26)}<View style={{ marginTop: 14 }}>{eb(8)}</View>
-    <View style={{ flexDirection: 'row', marginTop: 14 }}><Kick style={{ flex: 1 }}>{liveI >= 0 ? t('foodThisWeek') : t('foodThatWeek')}</Kick><Sub size={11.5}>{t('foodAverageNet')} <B>{E(avg)} {KC()}</B></Sub></View>
+    <View style={{ flexDirection: 'row', marginTop: 14 }}><Kick style={{ flex: 1 }}>{liveI >= 0 ? t('foodThisWeek') : t('foodThatWeek')}</Kick><Sub size={11.5}>{t('foodAverageNet')} <B>{E(avg)} {EL(d)}</B></Sub></View>
     <View style={{ marginTop: 'auto' }}>{weekCols(72, 22, true)}<Sub size={11.5} style={{ marginTop: 8 }}>{t('foodStripedTops')}</Sub></View>
   </View>;
 };
@@ -608,25 +612,25 @@ const Fits: TileBody = ({ p, repo, d }) => {
     .sort(p.options.by === 'p' ? (a, b) => b.p - a.p : (a, b) => b.kcal - a.kcal);
   if (left <= 0 || !list.length) return <View style={[col, { justifyContent: 'center' }]}>
     <Title>{left <= 0 ? t('foodReachedGoal') : t('foodNoneFits')}</Title>
-    <Sub lines={2} style={{ marginTop: 4 }}>{left <= 0 ? tx('foodGoesOver', { v: num(v.goal), u: KC() }) : tx('foodTryQuick', { v: num(left), u: KC() })}</Sub>
+    <Sub lines={2} style={{ marginTop: 4 }}>{left <= 0 ? tx('foodGoesOver', { v: EN(d, v.goal), u: EL(d) }) : tx('foodTryQuick', { v: EN(d, left), u: EL(d) })}</Sub>
   </View>;
   const row = (x: typeof list[number], h: number, i: number) => <View key={x.c.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: h, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
-    <Tappable dim="row" accessibilityRole="button" onPress={() => foodRoutes.saved(d.next)} accessibilityLabel={tx('foodFitsA11y', { name: x.c.name, kcal: num(x.kcal), p: Math.round(x.p), left: num(left - x.kcal) })}
+    <Tappable dim="row" accessibilityRole="button" onPress={() => foodRoutes.saved(d.next)} accessibilityLabel={txe(d, 'foodFitsA11y', { name: x.c.name, kcal: EN(d, x.kcal), p: Math.round(x.p), left: EN(d, left - x.kcal) })}
       style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' }}>
-      <View style={{ flex: 1, minWidth: 0 }}><Title size={14}>{x.c.name}</Title><Sub size={11.5}>{num(x.kcal)} {KC()} · {tx('foodGProtein', { g: Math.round(x.p) })}</Sub></View>
-      <View style={{ alignItems: 'flex-end' }}><Sub size={11}>{t('foodLeaves')}</Sub><KitText weight={700} size={13.5} numeric>{num(left - x.kcal)}<TextGap pt={2} /><KitText weight={600} tracking={0} size={10} color="text-muted">{KC()}</KitText></KitText></View>
+      <View style={{ flex: 1, minWidth: 0 }}><Title size={14}>{x.c.name}</Title><Sub size={11.5}>{EN(d, x.kcal)} {EL(d)} · {tx('foodGProtein', { g: Math.round(x.p) })}</Sub></View>
+      <View style={{ alignItems: 'flex-end' }}><Sub size={11}>{t('foodLeaves')}</Sub><KitText weight={700} size={13.5} numeric>{EN(d, left - x.kcal)}<TextGap pt={2} /><KitText weight={600} tracking={0} size={10} color="text-muted">{EL(d)}</KitText></KitText></View>
     </Tappable>
     <Plus label={tx('foodAddTo', { food: x.c.name, meal: mn })} onPress={() => addSaved(repo, d.today, d.next, x.c)} />
   </View>;
   if (p.size === 'S') { const b = list[0];
     return <View style={col}><Kick>{t('foodBestFit')}</Kick><KitText weight={700} size={16} lineHeight={1.2} numberOfLines={2} style={{ marginTop: 8 }}>{b.c.name}</KitText>
-      <Sub style={{ marginTop: 3 }}>{num(b.kcal)} {KC()} · {Math.round(b.p)} g</Sub>
+      <Sub style={{ marginTop: 3 }}>{EN(d, b.kcal)} {EL(d)} · {Math.round(b.p)} g</Sub>
       <View style={{ marginTop: 'auto' }}><TileButton sm full icon="plus" label={tx('foodAddToMeal', { meal: mn })} onPress={() => addSaved(repo, d.today, d.next, b.c)} /></View></View>; }
-  if (p.size === 'M') return <View style={col}><Sub><B>{num(left)} {KC()}</B> {t('foodAnd')} <B>{tx('foodGProtein', { g: pg })}</B> {t('foodLeftToday')}</Sub>
+  if (p.size === 'M') return <View style={col}><Sub><B>{EN(d, left)} {EL(d)}</B> {t('foodAnd')} <B>{tx('foodGProtein', { g: pg })}</B> {t('foodLeftToday')}</Sub>
     <View style={{ marginTop: 'auto' }}>{list.slice(0, 2).map((x, i) => row(x, 44, i))}</View></View>;
   return <View style={col}>
     <View style={{ flexDirection: 'row', gap: 16 }}>
-      <View style={{ flex: 1 }}><Num v={num(left)} unit={KC()} fs={22} /><Sub style={{ marginTop: 3, marginBottom: 8 }}>{tx('foodLeftOfGoal', { v: num(v.goal), u: KC() })}</Sub><WellBar frac={v.eaten / v.goal} h={6} color={k.c.food} /></View>
+      <View style={{ flex: 1 }}><Num v={EN(d, left)} unit={EL(d)} fs={22} /><Sub style={{ marginTop: 3, marginBottom: 8 }}>{tx('foodLeftOfGoal', { v: EN(d, v.goal), u: EL(d) })}</Sub><WellBar frac={v.eaten / v.goal} h={6} color={k.c.food} /></View>
       <View style={{ flex: 1 }}><Num v={String(pg)} unit="g" fs={22} /><Sub style={{ marginTop: 3, marginBottom: 8 }}>{t('foodProteinToGo')}</Sub><WellBar frac={known(v.p) / v.goals.p} h={6} color={k.c.food} /></View>
     </View>
     <View style={{ marginTop: 'auto' }}>{list.slice(0, 4).map((x, i) => row(x, 46, i))}</View>

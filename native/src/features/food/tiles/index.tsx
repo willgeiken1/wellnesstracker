@@ -4,11 +4,12 @@ import { implementTile } from '../../tiles/registry';
 import type { TileRenderProps } from '../../tiles/types';
 import { fill } from '../../tiles/ui';
 import { mealName } from '../actions';
-import { dayView, nextMealId, num } from '../day';
+import { dayView, nextMealId } from '../day';
 import { foodRoutes } from '../nav';
 import { attributedDay } from '../model';
 import { burnedOn, foodDay } from '../selection';
 import { FOOD_TILES, dayLabel, tile, weekOf } from './tiles';
+import { energyUnitOf, enNum, enText } from '../energy';
 
 /* Registers the Food tab's twelve tiles with the tile engine: what each draws, the grey text in its header and what a tap opens. */
 
@@ -32,7 +33,7 @@ const META: Record<keyof typeof FOOD_TILES, (p: TileRenderProps) => string> = {
   streak: () => t('foodLast5Weeks'),
   quick: () => repo ? fill(t('foodAddsTo'), { meal: mealName(repo, next()!).toLowerCase() }) : '',
   net: p => p.options.range === 'week' ? weekOf(sel().day) : label(),
-  fits: () => { const v = repo ? dayView(repo, attributedDay()) : null; return !v ? '' : v.left > 0 ? fill(t('foodKcalLeftMeta'), { v: num(v.left) }) : t('foodGoalReached'); },
+  fits: () => { const v = repo ? dayView(repo, attributedDay()) : null; return !v ? '' : v.left > 0 ? fill(enText(t('foodKcalLeftMeta'), energyUnitOf(repo)), { v: enNum(v.left, energyUnitOf(repo)) }) : t('foodGoalReached'); },
 };
 const OPEN: Record<keyof typeof FOOD_TILES, () => void> = {
   cal: toNutrition, macros: toNutrition, protein: toNutrition, week: toNutrition, micros: toNutrition, net: toNutrition,
