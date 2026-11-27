@@ -12,7 +12,7 @@ import { st } from './copy';
 import { deletionError } from './auth-errors';
 import { t } from '@/i18n/en';
 import { useDataActions } from './data-actions';
-import { RANGE_KINDS, canDeleteKind, deleteDateRange, isoDay, type RangeKind } from './delete-range';
+import { RANGE_KINDS, canDeleteKind, isoDay, runDateRangeDelete, type RangeKind } from './delete-range';
 import { APP_VERSION } from './home';
 import { LEGAL_LINKS, openPage } from './links';
 import { useSettingsPrefs } from './prefs';
@@ -181,8 +181,10 @@ export function DeleteRangePage() {
   const can = !!auth.repository && !auth.demo;
   const go = () => {
     const repo = auth.repository; if (!repo) return;
-    try { deleteDateRange(repo, isoDay(preset === 'all' ? new Date(1970, 0, 1) : from), isoDay(to), picked); }
-    catch { showToast(st('settingsRangeFailed'), { color: 'warning' }); return; }
+    const res = runDateRangeDelete(repo, isoDay(preset === 'all' ? new Date(1970, 0, 1) : from), isoDay(to), picked);
+    if (res.outcome === 'failed') { showToast(st('settingsRangeFailed'), { color: 'warning' }); return; }
+    // A photo whose file couldn't be deleted stays, so the sheet stays open and says so rather than announcing success.
+    if (res.outcome === 'photosKept') { showToast(st(res.kept === 1 ? 'settingsRangePhotoKept' : 'settingsRangePhotosKept', { n: res.kept }), { color: 'warning' }); return; }
     router.back(); showToast(st('settingsDeletedRange', { r: label(from, to) }), { color: 'warning' });
   };
   const tog = (key: RangeKind, title: string, icon: IconName, color: string) =>

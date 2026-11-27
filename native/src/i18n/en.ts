@@ -1641,7 +1641,7 @@ export const en = {
   settingsDelete1Type: 'Delete 1 type of data', settingsDeleteNTypes: 'Delete {n} types of data', settingsPickToDelete: 'Pick something to delete',
   settingsDeleteRangeQ: 'Delete {r}?', settingsDeleteRangeMsg: 'What you picked is deleted from this iPhone and your account. This cannot be undone.',
   settingsDeleteRangeMsgPhone: 'What you picked is deleted from this iPhone. This cannot be undone.',
-  settingsDelete: 'Delete', settingsDeletedRange: 'Deleted {r}', settingsRangeFailed: 'Nothing was deleted. Try again.',
+  settingsDelete: 'Delete', settingsDeletedRange: 'Deleted {r}', settingsRangeFailed: 'Nothing was deleted. Try again.', settingsRangePhotoKept: '1 photo couldn\'t be deleted. Try again.', settingsRangePhotosKept: '{n} photos couldn\'t be deleted. Try again.',
   settingsAboutTitle: 'About', settingsVersionN: 'Version {v}', settingsWhatsNew: 'What’s New', settingsRateInsight: 'Rate Insight', settingsSendFeedback: 'Send feedback',
   settingsHelp: 'Help and support', settingsAcknowledgements: 'Acknowledgements', settingsFreeAtLaunch: 'Free at launch, with no ads.', settingsCopied: 'Copied {v}',
   settingsVersionA11y: 'Version {v}. Tap to copy',

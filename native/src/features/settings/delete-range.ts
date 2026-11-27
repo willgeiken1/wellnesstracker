@@ -56,5 +56,22 @@ export function deleteDateRange(repo: Repository, from: string, to: string, kind
   return n;
 }
 
+/** Progress photos on these days still listed, because their files couldn't be deleted. */
+export function photosLeftInRange(repo: Repository, from: string, to: string): number {
+  const kept = repo.localGet<{ day?: string }[]>('progressPhotos');
+  return Array.isArray(kept) ? kept.filter(x => inDays(x?.day, from, to)).length : 0;
+}
+
+/**
+ * Delete a date range as the sheet runs it. `deleted` when everything picked went; `photosKept` when some photos' files
+ * couldn't be deleted, so those photos stay listed for a later try and the sheet must not say the range was deleted;
+ * `failed` when the delete threw.
+ */
+export function runDateRangeDelete(repo: Repository, from: string, to: string, kinds: readonly RangeKind[]): { outcome: 'deleted' | 'photosKept' | 'failed'; kept: number } {
+  try { deleteDateRange(repo, from, to, kinds); } catch { return { outcome: 'failed', kept: 0 }; }
+  const kept = kinds.includes('photos') ? photosLeftInRange(repo, from, to) : 0;
+  return { outcome: kept > 0 ? 'photosKept' : 'deleted', kept };
+}
+
 /** A local calendar day as YYYY-MM-DD. */
 export const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
