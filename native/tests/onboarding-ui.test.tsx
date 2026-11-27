@@ -32,6 +32,14 @@ test('a phone-only guest sets up on this phone with no account',async()=>{
  await wrap({...state(),phoneOnly:true,repository});
  expect(router.replace).not.toHaveBeenCalled();expect(screen.getByText(t('obbNameTitle'))).toBeTruthy();
 });
+test('a guest from Skip for now, Start as a guest, sets up on this phone with no account',async()=>{
+ const repository=memoryRepository();
+ await wrap({...state(),guest:true,repository});
+ expect(router.replace).not.toHaveBeenCalled();expect(screen.getByText(t('obbNameTitle'))).toBeTruthy();
+ // A guest already set up goes Home, as an account does.
+ repository.localSave('onboardingComplete',true);
+ await wrap({...state(),guest:true,repository});expect(router.replace).toHaveBeenCalledWith('/');
+});
 
 test('Settings profile edits persist, preserve historical rows, and never require optional stats',async()=>{
   const {Profile}=require('../src/features/onboarding/profile') as typeof import('../src/features/onboarding/profile');
