@@ -5,7 +5,7 @@ import { WorkoutOptions } from '../../data/workout/options';
 import { WorkoutStore, type Draft } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
 import { SplitStore } from '../splits/store';
-import { entryVolumeKg } from './volume';
+import { entryVolume, entryVolumeKg } from './volume';
 import { loadSettingsPrefs, SETTINGS_PREFS_KEY, withPref } from '../settings/prefs-model';
 
 /** The ten muscle groups the Training tab counts, and the library muscles each one gathers. */
@@ -256,11 +256,13 @@ export class TrainingData {
     return this.memo(`lift:${lift}`, () => {
       const names = liftNames(lift), out: { day: string; weight: number; reps: number; est: number; volume: number }[] = [];
       for (const s of this.history().slice().reverse()) {
-        const sets = this.workout.entries(s.id).filter(e => names.includes(String(e.data.exercise).toLowerCase())).flatMap(e => this.workout.working(e)).filter(w => !w.warmup && w.reps > 0);
+        const entries = this.workout.entries(s.id).filter(e => names.includes(String(e.data.exercise).toLowerCase()));
+        const sets = entries.flatMap(e => this.workout.working(e)).filter(w => !w.warmup && w.reps > 0);
         if (!sets.length) continue;
         const best = sets.slice().sort((a, b) => epley(b.weight, b.reps) - epley(a.weight, a.reps))[0];
+        // Volume counts both sides of a one-arm or one-leg set, as the workout summary does.
         out.push({ day: String(s.data.day), weight: this.kg(best.weight), reps: best.reps, est: this.kg(epley(best.weight, best.reps)),
-          volume: sets.reduce((n, w) => n + fromKg(w.weight, this.unit) * w.reps, 0) });
+          volume: entries.reduce((n, e) => n + entryVolume(this.workout, e, kg => fromKg(kg, this.unit)), 0) });
       }
       return out;
     });
@@ -276,7 +278,8 @@ export class TrainingData {
       const ex = prefs.exercise(String(e.data.exercise));
       const sets = this.workout.working(e).filter(w => !w.warmup && w.reps > 0);
       if (!sets.length) continue;
-      const v = measure === 'lb' ? sets.reduce((n, w) => n + fromKg(w.weight, this.unit) * w.reps, 0) : sets.length;
+      // Volume counts both sides of a one-arm or one-leg set, as the workout summary does.
+      const v = measure === 'lb' ? entryVolume(this.workout, e, kg => fromKg(kg, this.unit)) : sets.length;
       const main = muscleGroup(ex.main);
       if (main) out.set(main, out.get(main)! + v);
       if (both) for (const h of new Set(ex.helpers.map(muscleGroup).filter((g): g is MuscleGroup => !!g && g !== main))) out.set(h, out.get(h)! + v / 2);
