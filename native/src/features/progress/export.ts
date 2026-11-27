@@ -60,7 +60,7 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
     } else if (kind === 'sleep') {
       // Each night says where it came from: Oura, or Apple Health where the ring had nothing that night.
       const v = d.days.sleep, from = (day: string) => d.sleepFrom && d.sleepFrom.length === v.length ? d.sleepFrom[v.length - 1 - daysBetween(day, d.today)] : null;
-      files.push({ name: 'sleep.csv', csv: csv(['date', 'hours_in_bed', 'source'], daily('sleep').map(([day, h]) => [day, h, from(day) ?? metricView(d, 'sleep').src])) });
+      files.push({ name: 'sleep.csv', csv: csv(['date', 'hours_asleep', 'source'], daily('sleep').map(([day, h]) => [day, h, from(day) ?? metricView(d, 'sleep').src])) });
     } else if (kind === 'heart') {
       // HRV keeps its one source: Apple Health's is SDNN and Oura's is RMSSD, so the column says which.
       const hrv = new Map(daily('hrv')), rhr = new Map(daily('rhr')), days = [...new Set([...hrv.keys(), ...rhr.keys()])].sort();
