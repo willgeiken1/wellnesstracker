@@ -268,7 +268,7 @@ export class WorkoutStore {
   private content(id: string) {
     const s = this.repo.get('sessions', id);
     return JSON.stringify({session:s?.data, entries:this.entries(id).map(e => ({
-      data:e.data, skipped:this.skipped(e.id), sets:this.sets(e.id).map(s => ({...s.data, tag:this.repo.syncFlags?.syncedV1Columns ? s.data.tag ?? null : this.drafts(e.id)[Number(s.data.position)]?.tag ?? (this.drafts(e.id)[Number(s.data.position)]?.warmup ? 'warmup' : null)}))
+      data:e.data, skipped:this.skipped(e.id), sets:this.sets(e.id).map(s => ({...s.data, tag:this.setTag(e.id, s)}))
     }))});
   }
   beginEditing(id: string) {
@@ -469,6 +469,12 @@ export class WorkoutStore {
       this.repo.localSave(`draft:${entryId}`, drafts);
     });
     this.recompute();
+  }
+  /** A logged set's tag: on the row when synced columns are on, otherwise in the exercise's local drafts (or their older warm-up flag). */
+  setTag(entryId: string, set: Row): Draft['tag'] {
+    if (this.repo.syncFlags?.syncedV1Columns) return this.tag(set.data.tag);
+    const d = this.drafts(entryId)[Number(set.data.position)];
+    return d?.tag ?? (d?.warmup ? 'warmup' : null);
   }
   private tag(value: unknown): Draft['tag'] { return value === 'warmup' || value === 'failure' || value === 'drop' ? value : null; }
   private setData(entryId: string, index: number, d: Draft): Row['data'] {

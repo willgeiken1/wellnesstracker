@@ -112,6 +112,17 @@ describe('export', () => {
     expect(out[1]).toMatch(/,20,kg,8,,,20,8,22\.5,10$/);
     expect(out[2]).toMatch(/,60,kg,5,,,,,,$/);
   });
+  test('a warm-up logged on the phone exports its tag, with synced set columns off', () => {
+    const repo = memoryRepository(), store = new WorkoutStore(repo), start = Date.now() - 3_600_000;
+    const s = store.start(undefined, start), e = store.addExercise(s.id, 'Squat', 2);
+    store.editDraft(e.id, 0, { weight: '40', reps: '5', tag: 'warmup' }); store.toggleDone(e.id, 0);
+    store.editDraft(e.id, 1, { weight: '100', reps: '5' }); store.toggleDone(e.id, 1);
+    store.finish(s.id, { startedAt: start, finishedAt: start + 30 * 60_000, notes: '' });
+    expect(repo.syncFlags?.syncedV1Columns).toBeFalsy();
+    const out = lines(buildCsvs(repo as never, emptyProgress(today, 'kg'), ['work'], 'all').find(f => f.name === 'workouts-and-sets.csv')!.csv);
+    expect(out[1].split(',')[8]).toBe('warmup');
+    expect(out[2].split(',')[8]).toBe('');
+  });
   test('with no cardio there is no cardio file', () => {
     expect(buildCsvs(memoryRepository() as never, emptyProgress(today, 'kg'), ['work'], 'all').map(f => f.name)).toEqual(['workouts-and-sets.csv']);
   });

@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { randomUUID } from 'expo-crypto';
 import type { Repository } from '@/data/repository';
 import type { Row } from '@/data/rows';
+import { WorkoutStore } from '@/data/workout/store';
 import { meals } from '@/features/food/model';
 import { normalize, type RoutinesState } from '@/features/routines/model';
 import { ROUTINES_KEY } from '@/features/routines/store';
@@ -77,7 +78,8 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
       });
       files.push({ name: 'food-log.csv', csv: csv(['date', 'meal', 'food', 'amount_g', 'kcal', 'protein_g', 'carbs_g', 'fat_g', 'fiber_g', 'sugar_g', 'sodium_mg'], rows) });
     } else if (kind === 'work') {
-      const entries = group(repo.list('entries'), 'session_id'), sets = group(repo.list('sets'), 'entry_id'), rows: unknown[][] = [];
+      const entries = group(repo.list('entries'), 'session_id'), sets = group(repo.list('sets'), 'entry_id'), rows: unknown[][] = []
+      const store = new WorkoutStore(repo);
       for (const s of repo.list('sessions').filter(s => s.data.finished_at != null && keep(s.data.day)).sort(byDay)) {
         for (const e of (entries.get(s.id) ?? []).sort(byPos)) for (const st of (sets.get(e.id) ?? []).sort(byPos)) {
           const kg = num(st.data.weight_kg), reps = num(st.data.reps);
@@ -86,7 +88,7 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
           const position = Number(st.data.position ?? 0), rpe = num(st.data.rpe) ?? num(localRpe(repo, e.id, position));
           // A one-side-at-a-time set keeps each side's result; weight and reps are the weaker side's, as the logger shows.
           const lk = num(st.data.left_weight_kg), rk = num(st.data.right_weight_kg), side = (k: number | null) => k == null ? null : kgTo(k);
-          rows.push([s.data.day, s.data.name, e.data.exercise, position + 1, kg == null ? null : kgTo(kg), unit, reps, rpe, st.data.tag ?? '',
+          rows.push([s.data.day, s.data.name, e.data.exercise, position + 1, kg == null ? null : kgTo(kg), unit, reps, rpe, store.setTag(e.id, st) ?? '',
             side(lk), num(st.data.left_reps), side(rk), num(st.data.right_reps)]);
         }
       }
