@@ -75,6 +75,27 @@ describe('logger model', () => {
     checkSet(store, e, e.sets[0]);
     expect(loggerView(store, session).exercises[0].sets[0].pr).toBe(true);
   });
+  test('a one-side set is a record only when its weaker side beats the best before', () => {
+    mockRepository = memoryRepository();
+    const store = new WorkoutStore(mockRepository);
+    const log = (start: number | undefined, left: string, right: string) => {
+      const s = store.start(undefined, start), e = store.addExercise(s.id, 'Bulgarian Split Squat', 1);
+      store.setUnilateral(e.id, true);
+      store.editDraft(e.id, 0, { weight: left, reps: '10', rightWeight: right, rightReps: '10' });
+      return { s, e };
+    };
+    const past = log(Date.now() - 7 * 86_400_000, '55', '45');
+    store.toggleDone(past.e.id, 0);
+    store.finish(past.s.id, { startedAt: Date.now() - 7 * 86_400_000, finishedAt: Date.now() - 7 * 86_400_000 + 3_600_000, notes: '' });
+    const now = log(undefined, '55', '45');
+    const e = loggerView(store, now.s).exercises[0];
+    checkSet(store, e, e.sets[0]);
+    const view = loggerView(store, now.s).exercises[0];
+    expect(view.sets[0].pr).toBe(false);
+    expect(view.best).toMatchObject({ w: 45, r: 10 });
+    store.editDraft(now.e.id, 0, { rightWeight: '50' });
+    expect(loggerView(store, now.s).exercises[0].sets[0].pr).toBe(true);
+  });
   test('a set without numbers or history is not checked off', () => {
     const { store, session } = sample();
     const e = loggerView(store, session).exercises[1];

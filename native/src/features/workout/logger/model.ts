@@ -108,11 +108,18 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
       return { index, draft, done: !!draft.setId, warm, failure: draft.tag === 'failure', num: warm ? 0 : ++n,
         weightHint, repsHint, rpe: store.repo.localGet<number>(rpeKey(entry.id, index)) ?? null, lastRpe, pr: false };
     });
-    const work = sets.filter(s => !s.warm), checked = work.filter(s => s.done);
+    const work = sets.filter(s => !s.warm), checked = work.filter(s => s.done), one = store.isUnilateral(entry.id);
+    // A one-side set is judged by its weaker side, as it is saved and as earlier sessions' records were, so an unchanged set is never a record.
+    const result = (s: SetView) => {
+      const l = { w: +s.draft.weight, r: +s.draft.reps };
+      if (!one) return l;
+      const rt = { w: +(s.draft.rightWeight || s.draft.weight), r: +(s.draft.rightReps || s.draft.reps) };
+      return epley(rt.w, rt.r) < epley(l.w, l.r) ? rt : l;
+    };
     let best: SetView | null = null;
-    for (const s of checked) if (!best || epley(+s.draft.weight, +s.draft.reps) > epley(+best.draft.weight, +best.draft.reps)) best = s;
+    for (const s of checked) if (!best || epley(result(s).w, result(s).r) > epley(result(best).w, result(best).r)) best = s;
     const before = checked.length ? priorBest(store, name, session, unit) : 0;
-    if (best && before > 0 && epley(+best.draft.weight, +best.draft.reps) > before + 0.5) best.pr = true;
+    if (best && before > 0 && epley(result(best).w, result(best).r) > before + 0.5) best.pr = true;
     let prev: ExerciseView['prev'] = null;
     for (const p of previous) {
       const w = displayWeight(Number(p.data.weight_kg), unit), r = Number(p.data.reps);
@@ -122,13 +129,12 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
     // Drafts are in this exercise's unit; the total is in the workout's, so convert before adding.
     const toTotal = (w: number) => unit === totalUnit ? w : fromKg(toKg(w, unit), totalUnit);
     // A one-side set counts both sides, as Progress and the workout summary do.
-    const one = store.isUnilateral(entry.id);
     volume += checked.reduce((v, s) => v + toTotal(+s.draft.weight || 0) * (+s.draft.reps || 0)
       + (one ? toTotal(+(s.draft.rightWeight || s.draft.weight) || 0) * (+(s.draft.rightReps || s.draft.reps) || 0) : 0), 0);
     const opened = store.repo.localGet<boolean>(noteOpenKey(entry.id)) === true;
     return { entry, name, label: exLabel(name), unit, sets, unilateral: one, total: work.length, done: checked.length,
       all: sets.length > 0 && sets.every(s => s.done),
-      best: best ? { w: +best.draft.weight, r: +best.draft.reps, rpe: best.rpe } : null, prev,
+      best: best ? { ...result(best), rpe: best.rpe } : null, prev,
       rest: store.rest(name).seconds, note: entry.data.notes != null ? String(entry.data.notes) : opened ? '' : null,
       barbell: store.preferences().exercise(name).equipment === 'barbell' };
   });
