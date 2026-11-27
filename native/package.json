@@ -84,5 +84,15 @@
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "check:free-iphone": "node scripts/check-free-iphone.cjs"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "expo-live-activity",
+          "@react-native-healthkit/core"
+        ]
+      }
+    }
+  }
 }

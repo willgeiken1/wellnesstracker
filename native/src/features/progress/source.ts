@@ -11,6 +11,7 @@ import { liftRecords } from '@/features/progress/records';
 import { dayScore } from '@/features/score/day';
 import { withDemoSleep } from '@/features/home/demo-sleep';
 import { foodDays, scoreDays } from '@/features/score/days';
+import { loadSettingsPrefs } from '@/features/settings/prefs';
 import { t } from '@/i18n/en';
 import { fill, hm } from './format';
 import { readBodyFat, readMeasures, readPhotos } from './local';
@@ -22,6 +23,13 @@ export interface SourceInput {
   store: WorkoutStore; now: Date; demo: boolean;
   /** Read for the last 30 days, oldest first, ending today. Null when not connected or not read. */
   health: HealthDays | null; recovery: Recovery | null; ring: OuraRecovery | null;
+  /** The sleep goal in minutes from Settings › Goals; read from the saved choices when left out. */
+  sleepGoalMin?: number;
+}
+/** The sleep goal in minutes the person chose, or eight hours. */
+export function sleepGoalOf(repo: Parameters<typeof loadSettingsPrefs>[0]): number {
+  const v = loadSettingsPrefs(repo).goals.sleep;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 480;
 }
 /** The last `n` values of a 30-day list placed at the end of a 365-day list. */
 function tail(list: readonly (number | null)[] | null | undefined): Daily {
@@ -46,10 +54,11 @@ const minutesOf = (s: Row) => {
 };
 
 /** Progress from what is logged on this phone, plus steps, sleep and heart readings held in memory. Saves nothing. */
-export function buildProgress({ store, now, demo, health, recovery, ring }: SourceInput): ProgressData {
+export function buildProgress({ store, now, demo, health, recovery, ring, sleepGoalMin }: SourceInput): ProgressData {
   const repo = store.repo, unit = readProfile(repo).unit, today = addDays(dayKeyOf(now), 0);
   const days = daysEnding(today, HISTORY), index = new Map(days.map((d, i) => [d, i]));
   const base = demo ? sampleProgress(today, unit, now.getTime()) : emptyProgress(today, unit, now.getTime());
+  base.sleepGoalMin = sleepGoalMin != null && Number.isFinite(sleepGoalMin) && sleepGoalMin > 0 ? sleepGoalMin : sleepGoalOf(repo);
   const d: ProgressData = demo ? base : { ...base };
 
   /* weight */

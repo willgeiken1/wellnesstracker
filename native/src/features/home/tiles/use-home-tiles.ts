@@ -112,7 +112,7 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
   const repo = store?.repo ?? null;
   // The Apple read is a new object on each draw until it lands, so only its parts are watched.
   const appleAccess = apple.access, appleRecovery = apple.recovery;
-  const hide = useSettingsPrefs()[0].priv.hide;
+  const prefs = useSettingsPrefs()[0], hide = prefs.priv.hide, sleepGoal = prefs.goals.sleep;
   const state = useMemo(() => {
     if (!reader) return null;
     const now = new Date(minute * 60_000);
@@ -123,12 +123,12 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
       health: health ? { steps: health.steps, activeKcal: health.activeKcal, exerciseMinutes: health.exerciseMinutes, sleepHours: health.sleepHours, mindfulMinutes: health.mindfulMinutes } : null,
       detail: detailFor(detailRaw, !!oura), recovery,
       sources: { activity: appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura', sleep: oura ? 'Oura' : 'Apple Health', body: 'Apple Health' },
-      goals: HOME_GOALS,
+      goals: { ...HOME_GOALS, sleepHours: Number.isFinite(sleepGoal) && sleepGoal > 0 ? sleepGoal / 60 : HOME_GOALS.sleepHours },
     };
     const nextMeal = input.nextMeal;
     const scores = weekScores(reader, now, health);
     return { ...buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit }, data => homeTileAction(repo, nextMeal, data), hide), scores };
-  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide]);
+  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide, sleepGoal]);
   useEffect(() => { setHomeTileState(state); }, [state]);
   return state;
 }
