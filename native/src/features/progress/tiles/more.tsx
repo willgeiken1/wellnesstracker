@@ -58,7 +58,8 @@ export function whenWord(key: MetricKey, r: string) {
 function TrendTile({ size, options, body }: TileRenderProps) {
   const d = useProgressData(), k = useKit(), key = (options.metric ?? 'steps') as MetricKey, m = METRICS[key], mv = metricView(d, key), r = rangeOf(options, usePageRange());
   const se = series(d, key, r), li = lastIndex(se.v), now = se.v[li], S0 = stats(se.v), col = k.tok(m.color);
-  const when = whenWord(key, r), vt = (x: number | null) => vText(d, key, x);
+  // An older reading, when today (or this month) has none yet, is labelled with its own date, never as today's.
+  const when = finite(now) && li !== se.v.length - 1 ? se.labels[li] : whenWord(key, r), vt = (x: number | null) => vText(d, key, x);
   const aria = `${mv.short}, ${vt(now)}, ${when.toLowerCase()}. ${fill(t('progressRangeAvg'), { range: rangeShort(r), v: vt(S0.avg) })}`;
   const kind = size === 'S' ? (m.mini ?? m.kind) : m.kind;
   const ch = (W: number, H: number, tk: boolean) => <Chart values={se.v} kind={kind} color={m.color} mini W={W} H={H} partial={se.partial} band={mv.band}
