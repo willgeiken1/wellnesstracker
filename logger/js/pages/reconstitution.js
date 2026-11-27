@@ -70,6 +70,7 @@ export function reconstitutionResult({ vialAmount, waterMl, doseAmount, vialUnit
   const doseInVialText = formatCalcNumber(doseInVial);
   const concText = formatCalcNumber(concentration);
   const volumeText = formatCalcNumber(volumeMl);
+  const unitsText = formatCalcNumber(Number(volumeText) * 100);
   const lines = [
     `Vial: ${vialText} ${vialUnit}`,
     `Water: ${waterText} mL`,
@@ -78,7 +79,26 @@ export function reconstitutionResult({ vialAmount, waterMl, doseAmount, vialUnit
   if (!same) lines.push(`${doseText} ${doseUnit} = ${doseInVialText} ${vialUnit}. 1 mg = 1000 mcg.`);
   lines.push(`Concentration: ${vialText} ${vialUnit} ÷ ${waterText} mL = ${concText} ${vialUnit}/mL`);
   lines.push(`Volume to draw: ${doseInVialText} ${vialUnit} ÷ ${concText} ${vialUnit}/mL = ${volumeText} mL`);
-  return { ok: true, note: NOTE, detail: "", lines, concentration, volumeMl, doseInVial };
+  lines.push(`U-100 units for what you entered: ${volumeText} mL × 100 = ${unitsText}`);
+  return {
+    ok: true,
+    note: NOTE,
+    detail: "",
+    lines,
+    concentration,
+    volumeMl,
+    doseInVial,
+    syringeUnits: Number(unitsText),
+  };
+}
+
+/* The row note repeats the volume and the U-100 units. It is not a log. */
+export function reconstitutionNoteText(result) {
+  if (!result || result.ok !== true) return "";
+  const volume = formatCalcNumber(result.volumeMl);
+  const units = formatCalcNumber(result.syringeUnits);
+  if (!volume || volume === "0" || units === "" || units === "0") return "";
+  return `${volume} mL · ${units} U-100 units. What you entered. Not a recommendation.`;
 }
 
 export function reconstitutionResultHTML(result) {

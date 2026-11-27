@@ -1,5 +1,6 @@
 import { app } from "../runtime.js";
 import { DAYS_FOR_A_PATTERN, UNFAVORABLE_MARK, correlate, findingsForView, loggedDays, pickForToday, todayLine, weightTrend } from "./correlate.js";
+import { isRoutineTileId, renderRoutineTileHTML, routineAsideHTML, routineDefaultSize, routineTileOnNow, sanitizeRoutineGates } from "./routine-home-tiles.js";
 
 /* Home widget registry.
    Painting is per user: homeRegistryActive is true only for a stored homeV2
@@ -598,6 +599,14 @@ export const HOME_WIDGETS = {
 
 const CATALOG_IDS = Object.keys(HOME_WIDGETS);
 
+/* Catalog ids, plus routine tile ids only while the flag is on.
+   Flag off, a routine tile id stays unknown and follows the old keep rules. */
+function recognizedHomeId(id) {
+  if (typeof id !== "string" || !id) return false;
+  if (HOME_WIDGETS[id]) return true;
+  return app.ROUTINES_ENABLED === true && isRoutineTileId(id);
+}
+
 function isHomeV2(raw) {
   return !!(raw && raw.v === 2 && Array.isArray(raw.items));
 }
@@ -607,7 +616,7 @@ function isHomeV2(raw) {
 function widgetIds(list) {
   const out = [];
   (Array.isArray(list) ? list : []).forEach((id) => {
-    if (typeof id === "string" && HOME_WIDGETS[id] && !out.includes(id)) out.push(id);
+    if (recognizedHomeId(id) && !out.includes(id)) out.push(id);
   });
   return out;
 }
@@ -627,7 +636,7 @@ function withPreservedUnknown(prevList, nextList) {
   const prev = stringIds(prevList);
   const have = new Set(next);
   prev.forEach((id, index) => {
-    if (HOME_WIDGETS[id] || have.has(id)) return;
+    if (recognizedHomeId(id) || have.has(id)) return;
     let at = next.length;
     let placed = false;
     for (let j = index - 1; j >= 0; j--) {
@@ -656,7 +665,7 @@ function sanitizeSizes(draftSizes, prevSizes) {
   const prev = prevSizes && typeof prevSizes === "object" && !Array.isArray(prevSizes) ? prevSizes : {};
   const draft = draftSizes && typeof draftSizes === "object" && !Array.isArray(draftSizes) ? draftSizes : null;
   Object.keys(prev).forEach((id) => {
-    if (HOME_WIDGETS[id]) return;
+    if (recognizedHomeId(id)) return;
     const choice = sizeChoice(prev[id]);
     if (choice) out[id] = choice;
   });
@@ -665,7 +674,14 @@ function sanitizeSizes(draftSizes, prevSizes) {
     const choice = sizeChoice(source[id]);
     if (!choice) return;
     const entry = HOME_WIDGETS[id];
-    if (!entry) { out[id] = choice; return; }
+    if (!entry) {
+      if (app.ROUTINES_ENABLED === true && isRoutineTileId(id)) {
+        if (choice !== routineDefaultSize(id)) out[id] = choice;
+        return;
+      }
+      out[id] = choice;
+      return;
+    }
     const allowed = entry.sizes || [entry.size];
     if (!allowed.includes(choice) || choice === entry.size) return;
     out[id] = choice;
@@ -675,7 +691,14 @@ function sanitizeSizes(draftSizes, prevSizes) {
 
 export function widgetSize(id, layout) {
   const entry = HOME_WIDGETS[id];
-  if (!entry) return "medium";
+  if (!entry) {
+    if (app.ROUTINES_ENABLED === true && isRoutineTileId(id)) {
+      const choice = layout && layout.sizes && layout.sizes[id];
+      if (choice === "small" || choice === "medium") return choice;
+      return routineDefaultSize(id);
+    }
+    return "medium";
+  }
   const allowed = entry.sizes || [entry.size];
   const choice = layout && layout.sizes && layout.sizes[id];
   if (typeof choice === "string" && allowed.includes(choice)) return choice;
@@ -716,7 +739,7 @@ export function homeEditorDraft(state) {
   const layout = stored ? getHomeLayout(state) : equivalentLayout(state);
   const hiddenSet = new Set(layout.hidden);
   let items = layout.items.filter((id) => !hiddenSet.has(id));
-  let hidden = layout.hidden.filter((id) => HOME_WIDGETS[id]);
+  let hidden = layout.hidden.filter((id) => recognizedHomeId(id));
   const stripOura = () => {
     const oura = (id) => !!(HOME_WIDGETS[id] && HOME_WIDGETS[id].needsOura);
     items = items.filter((id) => !oura(id));
@@ -738,15 +761,22 @@ export function homeEditorDraft(state) {
   }
   const raw = state && state.layout && state.layout.homeV2;
   const sizes = raw && raw.sizes && typeof raw.sizes === "object" && !Array.isArray(raw.sizes) ? { ...raw.sizes } : {};
-  return { items, hidden, sizes };
+  if (app.ROUTINES_ENABLED === true && raw && raw.routineNextAside === true) {
+    const aside = "routine-next";
+    if (!items.includes(aside) && !hidden.includes(aside)) items = items.concat(aside);
+  }
+  const draft = { items, hidden, sizes };
+  if (app.ROUTINES_ENABLED === true) draft.gates = sanitizeRoutineGates(raw && raw.routineGates) || {};
+  return draft;
 }
 
 /* True when Save would store the same cards, order, hidden set, and sizes. */
 export function homeDraftUnchanged(draft, base) {
-  const items = stringIds(draft && draft.items).filter((id) => HOME_WIDGETS[id]);
-  const baseItems = stringIds(base && base.items).filter((id) => HOME_WIDGETS[id]);
+  const keepId = (id) => recognizedHomeId(id);
+  const items = stringIds(draft && draft.items).filter(keepId);
+  const baseItems = stringIds(base && base.items).filter(keepId);
   if (items.length !== baseItems.length || items.some((id, i) => id !== baseItems[i])) return false;
-  const hide = (list, shown) => stringIds(list).filter((id) => HOME_WIDGETS[id] && !shown.includes(id)).sort();
+  const hide = (list, shown) => stringIds(list).filter((id) => keepId(id) && !shown.includes(id)).sort();
   const hidden = hide(draft && draft.hidden, items);
   const baseHidden = hide(base && base.hidden, baseItems);
   if (hidden.length !== baseHidden.length || hidden.some((id, i) => id !== baseHidden[i])) return false;
@@ -754,15 +784,26 @@ export function homeDraftUnchanged(draft, base) {
   const baseSizes = sanitizeSizes(base && base.sizes, null);
   const keys = Object.keys(sizes).sort();
   const baseKeys = Object.keys(baseSizes).sort();
-  return keys.length === baseKeys.length && keys.every((key, i) => key === baseKeys[i] && sizes[key] === baseSizes[key]);
+  if (keys.length !== baseKeys.length || keys.some((key, i) => key !== baseKeys[i] || sizes[key] !== baseSizes[key])) return false;
+  if (app.ROUTINES_ENABLED === true || (draft && draft.gates) || (base && base.gates)) {
+    const left = sanitizeRoutineGates(draft && draft.gates) || {};
+    const right = sanitizeRoutineGates(base && base.gates) || {};
+    const gateKeys = Object.keys(left).sort();
+    const baseGateKeys = Object.keys(right).sort();
+    if (gateKeys.length !== baseGateKeys.length || gateKeys.some((key, i) => key !== baseGateKeys[i] || left[key].start !== right[key].start || left[key].end !== right[key].end)) return false;
+  }
+  return true;
 }
 
 /* Writes a real edit. Unknown ids already stored are put back by setHomeLayout. */
 export function commitHomeEditor(state, draft) {
   if (!state || typeof state !== "object") throw new Error("commitHomeEditor needs a state object");
-  const items = stringIds(draft && draft.items).filter((id) => HOME_WIDGETS[id]);
-  const hidden = stringIds(draft && draft.hidden).filter((id) => HOME_WIDGETS[id] && !items.includes(id));
-  return setHomeLayout(state, { items, hidden, sizes: draft && draft.sizes });
+  const keepId = (id) => recognizedHomeId(id);
+  const items = stringIds(draft && draft.items).filter(keepId);
+  const hidden = stringIds(draft && draft.hidden).filter((id) => keepId(id) && !items.includes(id));
+  const layout = { items, hidden, sizes: draft && draft.sizes };
+  if (draft && Object.prototype.hasOwnProperty.call(draft, "gates")) layout.gates = draft.gates;
+  return setHomeLayout(state, layout);
 }
 
 function cloneHomeV2(raw) {
@@ -837,6 +878,11 @@ export function setHomeLayout(state, layout) {
   if (layout && layout.ouraSeeded === true) next.ouraSeeded = true;
   if (Object.keys(sizes).length) next.sizes = sizes;
   else delete next.sizes;
+  if (layout && Object.prototype.hasOwnProperty.call(layout, "gates")) {
+    const gates = sanitizeRoutineGates(layout.gates);
+    if (gates) next.routineGates = gates;
+    else delete next.routineGates;
+  }
   state.layout = state.layout && typeof state.layout === "object" && !Array.isArray(state.layout) ? state.layout : {};
   state.layout.homeV2 = next;
   return next;
@@ -845,16 +891,30 @@ export function setHomeLayout(state, layout) {
 export function renderHomeWidgets(layout, data) {
   const hidden = new Set((layout && layout.hidden) || []);
   const items = (layout && layout.items) || [];
+  const when = data && data.date instanceof Date ? data.date : new Date();
   const body = items.map((id) => {
     if (hidden.has(id)) return "";
-    const entry = HOME_WIDGETS[id];
-    if (!entry) return "";
-    const html = entry.render(data) || "";
+    let html = "";
+    if (app.ROUTINES_ENABLED === true && isRoutineTileId(id)) {
+      if (!routineTileOnNow(id, layout, when)) return "";
+      html = renderRoutineTileHTML(id, {
+        state: data && data.routinesState ? data.routinesState : app.state,
+        layout,
+        date: when,
+        day: data && data.day,
+        size: widgetSize(id, layout),
+      });
+    } else {
+      const entry = HOME_WIDGETS[id];
+      if (!entry) return "";
+      html = entry.render(data) || "";
+    }
     if (!String(html).trim() || String(html).includes("hw-miss")) return "";
     const span = widgetSize(id, layout) === "medium" ? " span-m" : "";
     return `<div class="hw-slot${span}" data-hw="${id}">${html}</div>`;
   }).join("");
-  return `<div class="home-v2">${body}</div>`;
+  const aside = routineAsideHTML(layout, data);
+  return `<div class="home-v2">${body}${aside}</div>`;
 }
 
 /* True when the ring is connected and no Oura day has arrived yet. */

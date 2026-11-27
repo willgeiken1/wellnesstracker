@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import { chartLineOptInHTML, startedChartMarkers } from "./routine-chart-lines.js";
 
 /* Profile, units, and weigh-ins. */
 /* ================= Profile, units, bodyweight ================= */
@@ -273,10 +274,15 @@ function bodyweightCardHTML() {
   const base = w.filter((x) => x.date <= cut).pop() || w[0];
   const ch = app.kgToDisp(last.kg) - app.kgToDisp(base.kg);
   const pts = w.filter((x) => x.date >= app.addDays(app.today(), -120));
-  return `<div class="sec-h"><h3>Bodyweight</h3><button class="link-inline" data-action="weigh-open">Log weigh-in</button></div>
+  const labels = pts.map((x) => x.date);
+  const lines = chartLineOptInHTML(app.state && app.state.dailyRoutines, "weight");
+  const chart = pts.length > 1
+    ? app.chartSVG({ labels, series: [{ data: pts.map((x) => app.kgToDisp(x.kg)), cls: "ln alt" }], h: 110, fmt: (v) => v.toFixed(0), markers: startedChartMarkers(app.state && app.state.dailyRoutines, labels) })
+    : `<p class="sub small">Log a few more weigh-ins to see your trend.</p>`;
+  return `${lines}<div class="sec-h"><h3>Bodyweight</h3><button class="link-inline" data-action="weigh-open">Log weigh-in</button></div>
     <div class="card"><div class="bw-top"><b>${app.fmtW(app.kgToDisp(last.kg))}</b>
       <span>${base !== last ? `${app.signed(ch, 1)} ${app.wUnit()} since ${app.fmtDate(base.date, { month: "short", day: "numeric" })}` : "First weigh-in"}</span></div>
-      ${pts.length > 1 ? app.chartSVG({ labels: pts.map((x) => x.date), series: [{ data: pts.map((x) => app.kgToDisp(x.kg)), cls: "ln alt" }], h: 110, fmt: (v) => v.toFixed(0) }) : `<p class="sub small">Log a few more weigh-ins to see your trend.</p>`}
+      ${chart}
       ${app.weightRateHTML()}</div>`;
 }
 app.bodyweightCardHTML = bodyweightCardHTML;

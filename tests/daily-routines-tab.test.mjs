@@ -317,7 +317,7 @@ test("signed out with the flag on asks for sign-in and creates no store", () => 
   assert.equal(state.dailyRoutines, null);
 });
 
-test("signed in with the flag on paints the shell and seeds the three default blocks", () => {
+test("signed in with the flag on paints the shell and seeds the two default routines", () => {
   const state = { dailyRoutines: null };
   app.state = state;
   app.ROUTINES_ENABLED = true;
@@ -330,15 +330,20 @@ test("signed in with the flag on paints the shell and seeds the three default bl
   assert.match(html, /data-routines-shell="signed-in"/);
   assert.match(html, /Now · Morning · 8:30 AM/);
   assert.match(html, /Morning routine/);
-  assert.match(html, /Next · Supplement &amp; enhancer stack<span class="dr-wait">in 3 hr 30 min<\/span>/);
-  assert.match(html, /<b>0<\/b> logged today/);
+  assert.match(html, /Nothing to log yet/);
+  assert.match(html, /<b>0<\/b> of 0 today/);
+  assert.match(html, /data-due="0"/);
   assert.match(html, /aria-label="Routines settings"/);
-  assert.match(html, /data-action="routines-discover"/);
-  assert.match(html, /Add the first item/);
+  assert.match(html, /Add your first item/);
+  assert.match(html, /data-action="routines-add-item"/);
+  assert.doesNotMatch(html, /data-action="routines-discover"/);
+  assert.match(html, /No items yet/);
+  assert.match(html, /class="dr-sun"/);
+  assert.match(html, /NOTHING PLANNED/);
   assert.doesNotMatch(html, /check-in/i);
   assert.doesNotMatch(html, /Daily check-in/);
   const names = state.dailyRoutines.blocks.map((block) => block.name);
-  assert.deepEqual(names, ["Morning routine", "Supplement & enhancer stack", "Night routine"]);
+  assert.deepEqual(names, ["Morning routine", "Night routine"]);
   assert.equal(saves, 1);
   const ids = state.dailyRoutines.blocks.map((block) => block.id);
   app.save = () => { throw new Error("seeded store should not save again"); };
@@ -352,7 +357,7 @@ test("signed in with the flag on paints the shell and seeds the three default bl
     { id: "log-skip", itemId: "item-a", day: "2026-11-19", status: "skipped", amount: 9, unit: "mg", updatedAt: 4, deletedAt: null },
   );
   const counted = dailyRoutinesHTML();
-  assert.match(counted, /<b>1<\/b> logged today/);
+  assert.match(counted, /<b>0<\/b> of 0 today/);
   assert.doesNotMatch(counted, /0\.25|mcg|>9</);
   assert.equal(loggedTodayCount(state.dailyRoutines.logs, "2026-11-19"), 1);
 });
@@ -362,7 +367,7 @@ test("a night clock names the night block and the morning that follows", () => {
   const html = dailyRoutinesHTML();
   assert.match(html, /Now · Night · 9:15 PM/);
   assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Night routine<\/h2>/);
-  assert.match(html, /Next · Morning routine<span class="dr-wait">in 7 hr 45 min<\/span>/);
+  assert.match(html, /Nothing to log yet/);
   const moment = routineNowNext(app.state.dailyRoutines.blocks, new Date(2026, 10, 19, 3, 0));
   assert.equal(moment.nowBlock.name, "Night routine");
   assert.equal(moment.nextBlock.name, "Morning routine");
@@ -388,14 +393,14 @@ test("a signed-in pull in flight does not seed or save", () => {
   app.save = () => { saves += 1; };
   const ready = dailyRoutinesHTML();
   assert.match(ready, /data-routines-shell="signed-in"/);
-  assert.equal(state.dailyRoutines.blocks.length, 3);
+  assert.equal(state.dailyRoutines.blocks.length, 2);
   assert.equal(saves, 1);
   app.cloudPullOk = false;
   app.save = () => { throw new Error("an existing store must not save during pull"); };
   const held = dailyRoutinesHTML();
   assert.match(held, /data-routines-shell="signed-in"/);
   assert.match(held, /Morning routine/);
-  assert.equal(state.dailyRoutines.blocks.length, 3);
+  assert.equal(state.dailyRoutines.blocks.length, 2);
   app.sb = null;
   app.cloudPullOk = false;
 });
@@ -419,7 +424,7 @@ test("deleted default blocks are not seeded again and a paint does not save", ()
   const html = dailyRoutinesHTML();
   assert.match(html, /data-routines-shell="signed-in"/);
   assert.doesNotMatch(html, /Morning routine/);
-  assert.equal(state.dailyRoutines.blocks.length, 3);
+  assert.equal(state.dailyRoutines.blocks.length, 2);
   assert.equal(state.dailyRoutines.blocks.every((block) => block.deletedAt === 2_000), true);
 });
 
@@ -435,7 +440,7 @@ test("flag off does not paint the shell or write a store", () => {
 });
 
 test("settings includes focus mode and Discover stays a placeholder", () => {
-  assert.match(routinesSettingsSheetHTML(), /Notifications stay off/);
+  assert.match(routinesSettingsSheetHTML(), /Routines does not send reminders/);
   assert.match(routinesDiscoverSheetHTML(), /does not suggest a dose/);
   app.$ = (sel) => document.querySelector(sel);
   app.stopBarcode = () => {};
@@ -445,11 +450,12 @@ test("settings includes focus mode and Discover stays a placeholder", () => {
   assert.match(sheet.innerHTML, /aria-label="Routines settings"/);
   assert.match(sheet.innerHTML, /Focus mode/);
   assert.match(sheet.innerHTML, /aria-checked="false"/);
-  assert.match(sheet.innerHTML, /Notifications stay off/);
+  assert.match(sheet.innerHTML, /Routines does not send reminders/);
   app.ui.sheet = "routines-discover";
   app.renderSheet();
   assert.match(sheet.innerHTML, /aria-label="Discover"/);
-  assert.match(sheet.innerHTML, /Study-backed entries are not in the app yet/);
+  assert.match(sheet.innerHTML, /Discover is not open yet/);
+  assert.match(sheet.innerHTML, /does not suggest a dose/);
 });
 
 test("static files keep the flag-off tab bar and cache the new shell", () => {
@@ -467,8 +473,8 @@ test("static files keep the flag-off tab bar and cache the new shell", () => {
   assert.match(css, /repeat\(var\(--tab-count, 5\)/);
   assert.match(css, /100% \/ var\(--tab-count, 5\) - 8px/);
   assert.doesNotMatch(css, /text-transform\s*:/i);
-  assert.match(sw, /const CACHE = "insight-shell-v81"/);
-  assert.match(sentry, /insight-shell-v81/);
+  assert.match(sw, /const CACHE = "insight-shell-v91"/);
+  assert.match(sentry, /insight-shell-v91/);
   assert.match(sw, /js\/pages\/daily-routines\.js/);
   assert.match(sw, /css\/routines\.css/);
   assert.match(main, /import "\.\/pages\/daily-routines\.js";/);
@@ -527,7 +533,7 @@ test("the Now card refreshes when the minute crosses noon", (t) => {
   html = dailyRoutinesHTML();
   assert.match(html, /Now · Morning · 11:59 AM/);
   assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Morning routine<\/h2>/);
-  assert.match(html, /Next · Supplement &amp; enhancer stack<span class="dr-wait">in 1 min<\/span>/);
+  assert.match(html, /Nothing to log yet/);
   syncRoutineNowRefresh();
   assert.equal(typeof events.visibilitychange, "function");
 
@@ -537,8 +543,9 @@ test("the Now card refreshes when the minute crosses noon", (t) => {
   t.mock.timers.tick(1);
   assert.equal(paints, 1);
   assert.match(html, /Now · Afternoon · 12:00 PM/);
-  assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Supplement &amp; enhancer stack<\/h2>/);
-  assert.match(html, /Next · Night routine<span class="dr-wait">in 5 hr<\/span>/);
+  /* Morning stays the routine for now until Night starts. */
+  assert.match(html, /<h2 class="dr-now-title" id="dr-now-title">Morning routine<\/h2>/);
+  assert.match(html, /Nothing to log yet/);
 
   const atNoon = paints;
   app.ui.tab = "home";
@@ -561,7 +568,7 @@ test("the Now card refreshes when the minute crosses noon", (t) => {
   t.mock.timers.tick(1);
   assert.equal(paints, atNoon + 1);
   assert.match(html, /Now · Afternoon · 12:02 PM/);
-  assert.match(html, /Supplement &amp; enhancer stack/);
+  assert.match(html, />12:02</);
 });
 
 test("the minute refresh waits for an open sheet, a focused field, edit mode, and a session", (t) => {

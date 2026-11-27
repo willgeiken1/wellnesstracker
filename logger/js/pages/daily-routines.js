@@ -11,13 +11,28 @@ import {
   markLogUndone,
   futureCarry,
   routineLogId,
+  routineSiteId,
   tombstoneLog,
   routinePlacementId,
   dedupePlacementPairs,
   seedDefaultBlocks,
   upsertEntity,
+  routineParkedItemIds,
 } from "../shared/daily-routines-store.js";
-import { nextDoseCountdown, ROUTINE_BLOCK_START_MIN } from "../shared/routine-dose.js";
+import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, nextItemCountdown, routineBlockRunsOn, routineBlockStartMin, routineBlockWindow, routineDayKey, routineDayRolloverHour, routineMinuteOfDay } from "../shared/routine-dose.js";
+import {
+  CUSTOM_TYPE_MAX,
+  migrateRoutineTypes,
+  routineClock24,
+  routineItemType,
+  routineShortName,
+  routineTypeName,
+  routineTypeTabs,
+  routineTypedItems,
+  routineWindowLabel,
+} from "../shared/routine-types.js";
+import { routineSupplyView, supplyFromDraft } from "../shared/routine-supply.js";
+import { reconstitutionNoteText, reconstitutionResult } from "./reconstitution.js";
 import { addRoutinePart, applySetup, readSetup, routineParts, routineSetupShows, SETUP_BLOCK_IDS } from "../shared/routine-setup.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
@@ -30,16 +45,26 @@ import { addRoutinePart, applySetup, readSetup, routineParts, routineSetupShows,
    unit, and note and marks that log undone, on every live log for that item
    (or rest) and day. Restore writes those fields back.
 
-   The day key is app.today(). The clock face is app.routineNow(). Do not
-   derive the day from the clock's UTC instant. */
+   The day key is the local clock plus the rollover hour (4 AM unless the
+   user picked another hour). The clock face is app.routineNow(). Do not
+   derive the day from the clock's UTC instant, and do not use app.today(),
+   which rolls at midnight.
+
+   Log all writes one done log per open item in that block. A skip already
+   covers its item. A whole-day rest covers the day, so Log all writes
+   nothing on a rest day and does not rewrite a rest row. A log tap shows
+   "Logged · Undo" for 3 seconds. This file does not listen for the pointer,
+   so a long press stays available for rename and details. */
 
 const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
 export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
 export const ROUTINE_DOSE_UNITS = Object.freeze(["mcg", "mg", "IU", "mL", "units"]);
 const DOSE_UNIT_SET = new Set(ROUTINE_DOSE_UNITS);
-const DEFAULT_START = new Map(Object.entries(ROUTINE_BLOCK_START_MIN).map(([name, minutes]) => [name, minutes / 60]));
 const SLOT_LABEL = ["Morning", "Afternoon", "Night"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+export const ROUTINE_LOG_TOAST_MS = 3000;
+let logToast = null;
+let logToastTimer = 0;
 function esc(value) {
   if (typeof app.esc === "function") return app.esc(value);
   return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -53,15 +78,14 @@ function shellDate() {
   return new Date();
 }
 
+function rolloverHour(store) {
+  return routineDayRolloverHour(store && store.settings && store.settings.dayRolloverHour);
+}
+
 function todayKey(date) {
-  if (typeof app.today === "function") {
-    const day = app.today();
-    if (typeof day === "string" && day) return day;
-  }
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const clock = date instanceof Date && !Number.isNaN(date.getTime()) ? date : shellDate();
+  const store = app.state && app.state.dailyRoutines;
+  return routineDayKey(clock, rolloverHour(store));
 }
 
 export function routineClock() {
@@ -73,6 +97,11 @@ export function routineClock() {
     day: typeof day === "string" ? day : "",
     now: Number.isFinite(stamp) ? stamp : 0,
   };
+}
+
+function toastNow() {
+  const clock = routineClock();
+  return clock.now > 0 ? clock.now : Date.now();
 }
 
 function stampAfter(now, previous) {
@@ -221,27 +250,46 @@ export function formatRoutineWait(waitMin) {
   return mins === 1 ? "in 1 min" : `in ${mins} min`;
 }
 
-/* Which block is current follows block order and the time of day.
-   Slot 0 is morning (05:00), slot 1 afternoon (12:00), slot 2 night (17:00).
-   The countdown uses the default block name. A renamed block has no countdown. */
-export function routineNowNext(blocks, date) {
-  const live = (Array.isArray(blocks) ? blocks : []).filter((block) => isLive(block));
+/* Which routine is current follows its window. Inside a window, that
+   routine is now. Between windows, the one that started last stays now
+   until the next one starts. Before the first start of the day, the last
+   routine of the evening is still now. A routine with no window falls back
+   to block order by time of day (morning, afternoon, night). A day key
+   leaves out routines that do not run that weekday. */
+export function routineNowNext(blocks, date, day) {
+  const live = (Array.isArray(blocks) ? blocks : []).filter((block) => isLive(block) && block.hidden !== true && (!day || routineBlockRunsOn(block, day)));
   const sorted = live.slice().sort((a, b) => (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  if (!sorted.length) return { nowBlock: null, nextBlock: null, waitMin: null, slot: routineSlotIndex(date) };
   const slot = routineSlotIndex(date);
-  const index = Math.min(slot, sorted.length - 1);
-  const nowBlock = sorted[index];
-  const nextBlock = sorted[(index + 1) % sorted.length];
-  const same = nextBlock.id === nowBlock.id;
-  const start = same ? null : DEFAULT_START.get(nextBlock.name);
-  let waitMin = null;
-  if (typeof start === "number") {
-    const nowMin = date.getHours() * 60 + date.getMinutes();
-    let target = start * 60;
-    if (target <= nowMin) target += 24 * 60;
-    waitMin = target - nowMin;
+  if (!sorted.length) return { nowBlock: null, nextBlock: null, waitMin: null, slot };
+  const nowMin = date.getHours() * 60 + date.getMinutes();
+  const timed = sorted.map((block) => ({ block, window: routineBlockWindow(block) })).filter((row) => row.window);
+  let nowBlock = null;
+  if (timed.length) {
+    /* When windows overlap, the one that started last is now, whatever
+       their order on the page. */
+    const elapsed = (window) => ((nowMin - window.startMin) % 1440 + 1440) % 1440;
+    const inside = timed.filter(({ window }) => (nowMin >= window.startMin && nowMin < window.endMin)
+      || (nowMin + 1440 >= window.startMin && nowMin + 1440 < window.endMin))
+      .sort((a, b) => elapsed(a.window) - elapsed(b.window))[0];
+    const started = timed.filter(({ window }) => window.startMin <= nowMin).sort((a, b) => b.window.startMin - a.window.startMin)[0];
+    const latest = timed.slice().sort((a, b) => b.window.startMin - a.window.startMin)[0];
+    nowBlock = (inside || started || latest).block;
+  } else {
+    nowBlock = sorted[Math.min(slot, sorted.length - 1)];
   }
-  return { nowBlock, nextBlock: same ? null : nextBlock, waitMin, slot };
+  const others = timed.filter((row) => row.block.id !== nowBlock.id);
+  let nextBlock = null;
+  let waitMin = null;
+  if (others.length) {
+    const ahead = others.map((row) => ({ block: row.block, wait: ((row.window.startMin - nowMin) % 1440 + 1440) % 1440 || 1440 }))
+      .sort((a, b) => a.wait - b.wait)[0];
+    nextBlock = ahead.block;
+    waitMin = ahead.wait;
+  } else if (!timed.length && sorted.length > 1) {
+    const index = sorted.indexOf(nowBlock);
+    nextBlock = sorted[(index + 1) % sorted.length];
+  }
+  return { nowBlock, nextBlock, waitMin, slot };
 }
 
 /* Count of doses logged today. One item counts once. Skips and rest are not doses. Amounts are not summed. */
@@ -265,6 +313,120 @@ function parseRoutineLogId(id) {
   return match ? { itemId: match[1], day: match[2] } : null;
 }
 
+/* One row per placed item. Two blocks that share an item are still one dose.
+   With a day, a routine that does not run that weekday is left out. A typed
+   item no routine holds lives on its tab and is due every day, as in
+   History, so it counts too. */
+function placedItems(projected, day) {
+  const shown = (projected && projected.blocks ? projected.blocks : []).filter((block) => isLive(block) && block.hidden !== true);
+  const shownIds = new Set(shown.map((block) => block.id));
+  const blocks = new Set(shown.filter((block) => !day || routineBlockRunsOn(block, day)).map((block) => block.id));
+  const items = new Map((projected && projected.items ? projected.items : []).filter((item) => isLive(item)).map((item) => [item.id, item]));
+  const seen = new Set();
+  const held = new Set();
+  const out = [];
+  for (const place of projected && projected.placements ? projected.placements : []) {
+    if (!isLive(place) || !items.has(place.itemId)) continue;
+    if (shownIds.has(place.blockId)) held.add(place.itemId);
+    if (!blocks.has(place.blockId) || seen.has(place.itemId)) continue;
+    seen.add(place.itemId);
+    out.push(items.get(place.itemId));
+  }
+  const prefs = projected && projected.prefs;
+  /* One only hidden routines hold is parked: due on no day. */
+  const parked = routineParkedItemIds(projected);
+  const loose = [...items.values()]
+    .filter((item) => !held.has(item.id) && !parked.has(item.id) && routineItemType(item, prefs))
+    .sort((a, b) => ((a.name || "") < (b.name || "") ? -1 : (a.name || "") > (b.name || "") ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return out.concat(loose);
+}
+
+/* Logged doses out of doses due today. A skip is due and not logged.
+   The numbers are counts. They are never a sum of amounts. */
+export function routineDoseProgress(projected, day) {
+  const doses = placedItems(projected, day).filter((item) => item.kind === "dose");
+  let logged = 0;
+  for (const item of doses) {
+    const log = coveringLog(projected && projected.logs, item.id, day);
+    if (log && log.status !== "skipped") logged += 1;
+  }
+  return { logged, due: doses.length };
+}
+
+/* The day is done when every placed item is logged. A skip is handled and
+   still not logged, so it does not finish the day. No items is not done. */
+export function routineDayComplete(projected, day) {
+  const items = placedItems(projected, day);
+  if (!items.length || typeof day !== "string") return false;
+  return items.every((item) => {
+    const log = coveringLog(projected && projected.logs, item.id, day);
+    return !!(log && log.status !== "skipped");
+  });
+}
+
+/* Overdue means every time today's routine day had for this item has
+   passed unlogged. A later block the same day is still upcoming, and a
+   day none of its routines runs is not overdue. A renamed block has no
+   start, so it is not overdue and has no countdown. */
+/* Ranking passes no logs, so every item still counts from its own time.
+   A label for an item already handled today passes the real logs, so it
+   moves on to the next time. */
+function itemTiming(projected, item, date, day, logs = null) {
+  if (!item || !(date instanceof Date) || Number.isNaN(date.getTime())) return { waitMin: null, overdue: false };
+  /* Doses and checks share one clock: the rollover hour decides which
+     routine day a time belongs to, and an off day is not overdue. */
+  const result = nextItemCountdown({
+    item,
+    blocks: countdownBlocks(projected),
+    placements: projected && projected.placements,
+    logs: Array.isArray(logs) ? logs : [],
+    date,
+    day,
+    hour: projected && projected.settings && projected.settings.dayRolloverHour,
+  });
+  if (!result || typeof result.waitMin !== "number") return { waitMin: null, overdue: false };
+  return { waitMin: result.waitMin, overdue: result.missed === true, today: result.tomorrow !== true };
+}
+
+function placementOrder(projected, itemId) {
+  let best = Number.POSITIVE_INFINITY;
+  for (const place of projected && projected.placements ? projected.placements : []) {
+    if (isLive(place) && place.itemId === itemId && typeof place.order === "number" && place.order < best) best = place.order;
+  }
+  return best;
+}
+
+/* The next line names an item, not a block. Upcoming items come before
+   overdue ones. The wait is the same block clock the row countdown uses. */
+export function routineNextItem(projected, date, day) {
+  if (!projected || !(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const open = placedItems(projected, day).filter((item) => !coveringLog(projected.logs, item.id, day));
+  if (!open.length) return null;
+  const ranked = open.map((item) => ({ item, ...itemTiming(projected, item, date, day), order: placementOrder(projected, item.id) }));
+  ranked.sort((a, b) => {
+    const group = (row) => (row.overdue ? 1 : row.waitMin == null ? 2 : 0);
+    const ag = group(a);
+    const bg = group(b);
+    if (ag !== bg) return ag - bg;
+    const aw = a.waitMin == null ? Number.POSITIVE_INFINITY : a.waitMin;
+    const bw = b.waitMin == null ? Number.POSITIVE_INFINITY : b.waitMin;
+    if (aw !== bw) return aw - bw;
+    if (a.order !== b.order) return a.order - b.order;
+    if (a.item.id === b.item.id) return 0;
+    return a.item.id < b.item.id ? -1 : 1;
+  });
+  return ranked[0];
+}
+
+export function lastDoseLabel(log) {
+  if (!log || log.rest === true || log.status === "skipped") return "";
+  if (log.status !== "done" && log.status !== "partial") return "";
+  if (typeof log.at !== "number" || !Number.isFinite(log.at) || log.at <= 0) return "";
+  const date = new Date(log.at);
+  if (Number.isNaN(date.getTime())) return "";
+  return `last: ${formatRoutineClock(date)}`;
+}
+
 /* Calendar steps stay on the year-month-day fields. The UTC date is only
    the calculator, so a US evening that is already the next UTC day does
    not skip a local day. */
@@ -277,33 +439,71 @@ export function shiftRoutineDay(day, delta) {
   return utc.toISOString().slice(0, 10);
 }
 
-function logTouchesDay(log) {
-  if (!isLive(log) || typeof log.day !== "string" || !DAY.test(log.day)) return false;
-  if (log.rest === true) return true;
+function countedLog(log) {
+  if (!isLive(log) || log.rest === true || typeof log.day !== "string" || !DAY.test(log.day)) return false;
   return log.status === "done" || log.status === "partial" || log.status === "skipped";
 }
 
-/* Consecutive days touched by a done, partial, skip, or rest log.
-   Today counts only once something is logged. A day with no log, after
-   the first touched day, is a full miss and stops the run. A skip touches
-   the day, so it does not stop the run. */
+/* The live rest for that day, if one exists. One rest covers the whole day.
+   A newer stamp wins. The same stamp keeps the smaller id. */
+export function routineRestLog(logs, day) {
+  if (typeof day !== "string" || !DAY.test(day)) return null;
+  let best = null;
+  for (const log of Array.isArray(logs) ? logs : []) {
+    if (!isLive(log) || log.rest !== true || log.day !== day) continue;
+    if (!best) {
+      best = log;
+      continue;
+    }
+    const at = log.updatedAt || 0;
+    const prev = best.updatedAt || 0;
+    if (at > prev || (at === prev && log.id < best.id)) best = log;
+  }
+  return best;
+}
+
+/* Done, partial, and skip days add one. A skip adds one, so it does not
+   stop the run. A rest day with no item log pauses: it does not add a day
+   and it does not stop the run. An item log on that same day still counts,
+   and the rest does not add a second day. Today adds one only when a
+   non-rest log is there. A day with no log, after the first counted or
+   paused day, is a full miss and stops the run. An open today does not
+   stop it. */
 export function routineStreak(logs, day) {
   if (typeof day !== "string" || !DAY.test(day)) return 0;
-  const touched = new Set();
+  const paused = new Set();
+  const counted = new Set();
   for (const log of Array.isArray(logs) ? logs : []) {
-    if (logTouchesDay(log)) touched.add(log.day);
+    if (!isLive(log) || typeof log.day !== "string" || !DAY.test(log.day)) continue;
+    if (log.rest === true) paused.add(log.day);
+    else if (countedLog(log)) counted.add(log.day);
   }
+  for (const key of counted) paused.delete(key);
   let earliest = "";
-  for (const key of touched) if (!earliest || key < earliest) earliest = key;
+  for (const key of paused) if (!earliest || key < earliest) earliest = key;
+  for (const key of counted) if (!earliest || key < earliest) earliest = key;
   if (!earliest) return 0;
-  let streak = touched.has(day) ? 1 : 0;
-  let cursor = shiftRoutineDay(day, -1);
+  let streak = 0;
+  let cursor = day;
   let guard = 0;
   while (cursor && cursor >= earliest && guard < 4000) {
-    if (!touched.has(cursor)) break;
-    streak += 1;
-    cursor = shiftRoutineDay(cursor, -1);
-    guard += 1;
+    if (paused.has(cursor)) {
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    if (counted.has(cursor)) {
+      streak += 1;
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    if (cursor === day) {
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    break;
   }
   return streak;
 }
@@ -382,16 +582,53 @@ function amountMarkup(text) {
   return text ? `<span class="dr-dose"> · ${esc(text)}</span>` : "";
 }
 
-export function doseCountdownText(projected, item, date, day) {
-  if (!projected || !item) return "";
-  const result = nextDoseCountdown({
+/* The saved inputs are redrawn with the item's current dose, so a later
+   amount change does not leave the old U-100 units on the row. */
+function freshCalculatorNote(item, compound) {
+  if (!item || typeof item.calcVial !== "number" || typeof item.calcWater !== "number") return "";
+  if (!compound || typeof compound.amount !== "number" || typeof compound.unit !== "string" || !compound.unit) return "";
+  return reconstitutionNoteText(reconstitutionResult({
+    vialAmount: item.calcVial,
+    waterMl: item.calcWater,
+    doseAmount: compound.amount,
+    vialUnit: item.calcVialUnit,
+    doseUnit: compound.unit,
+  }));
+}
+
+/* Calculator note on the item. A per-dose log note stays off this row.
+   Once the calculator inputs are saved, a failed redraw shows nothing
+   rather than the previous units. */
+function itemNoteMarkup(item, compound) {
+  if (!item || item.kind !== "dose") return "";
+  const hasCalc = typeof item.calcVial === "number" && typeof item.calcWater === "number";
+  const note = hasCalc ? freshCalculatorNote(item, compound) : (typeof item.note === "string" ? item.note.trim() : "");
+  if (!note) return "";
+  return `<span class="dr-item-note">${esc(note)}</span>`;
+}
+
+/* Shown and hidden routines both, so the countdown can tell an item that
+   only a hidden routine holds (parked) from one in no routine (standalone). */
+function countdownBlocks(projected) {
+  if (!projected) return [];
+  return (Array.isArray(projected.blocks) ? projected.blocks : []).concat(Array.isArray(projected.hiddenBlocks) ? projected.hiddenBlocks : []);
+}
+
+function countdownQuery(projected, item, date, day) {
+  return {
     item,
-    blocks: projected.blocks,
+    blocks: countdownBlocks(projected),
     placements: projected.placements,
     logs: projected.logs,
     date,
     day,
-  });
+    hour: projected.settings && projected.settings.dayRolloverHour,
+  };
+}
+
+export function doseCountdownText(projected, item, date, day) {
+  if (!projected || !item) return "";
+  const result = nextDoseCountdown(countdownQuery(projected, item, date, day));
   if (!result || typeof result.waitMin !== "number") return "";
   const wait = formatRoutineWait(result.waitMin);
   if (!wait) return "";
@@ -400,18 +637,57 @@ export function doseCountdownText(projected, item, date, day) {
 
 function countdownMarkup(projected, row, date, day) {
   if (!row.item || row.item.kind !== "dose") return "";
-  const result = nextDoseCountdown({
-    item: row.item,
-    blocks: projected.blocks,
-    placements: projected.placements,
-    logs: projected.logs,
-    date,
-    day,
-  });
+  const result = nextDoseCountdown(countdownQuery(projected, row.item, date, day));
   if (!result || typeof result.waitMin !== "number") return "";
   const text = doseCountdownText(projected, row.item, date, day);
   if (!text) return "";
   return `<span class="dr-next-dose" data-next-dose="${result.waitMin}">${esc(text)}</span>`;
+}
+
+const OVERDUE_ICON = `<svg class="dr-overdue-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5"/><path d="M12 16.2h.01"/></svg>`;
+const DONE_MARK = `<svg class="dr-all-done-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.2 16.7 19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function overdueMarkup() {
+  return `<span class="dr-overdue">${OVERDUE_ICON}<span class="dr-overdue-text">overdue</span></span>`;
+}
+
+function latestTakenLog(logs, itemId) {
+  const rows = (Array.isArray(logs) ? logs : []).filter((log) => {
+    if (!isLive(log) || log.itemId !== itemId || log.rest === true) return false;
+    if (log.status !== "done" && log.status !== "partial") return false;
+    return typeof log.at === "number" && log.at > 0;
+  });
+  rows.sort((a, b) => {
+    if (a.day !== b.day) return a.day < b.day ? 1 : -1;
+    if (a.at !== b.at) return b.at - a.at;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  return rows[0] || null;
+}
+
+/* An open row that is still upcoming shows the countdown. A taken row shows
+   the clock time stored on that log. Overdue replaces the countdown and
+   keeps a previous clock time when one exists. */
+function rowDetailMarkup(projected, row, date, day) {
+  const open = !!row.open;
+  const timing = open && row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
+  const state = open ? "open" : rowState(row.log);
+  const overdue = open && timing.overdue;
+  const countdown = !overdue && state !== "done" && state !== "partial" ? countdownMarkup(projected, row, date, day) : "";
+  const taken = state === "done" || state === "partial" ? row.log : (!countdown && row.item ? latestTakenLog(projected && projected.logs, row.item.id) : null);
+  const last = !countdown ? lastDoseLabel(taken) : "";
+  const lastHTML = last ? `<span class="dr-last">${esc(last)}</span>` : "";
+  const tag = overdue ? overdueMarkup() : "";
+  const supply = supplyMarkup(projected, row, day);
+  if (!tag && !countdown && !lastHTML && !supply) return "";
+  return `<span class="dr-meta">${tag}${countdown}${lastHTML}${supply}</span>`;
+}
+
+function supplyMarkup(projected, row, day) {
+  if (!row || !row.item) return "";
+  const supply = routineSupplyView({ item: row.item, logs: projected && projected.logs, today: day });
+  if (!supply.text) return "";
+  return `<span class="dr-supply" data-supply="${esc(supply.state)}">${esc(supply.text)}</span>`;
 }
 
 function rowState(log) {
@@ -598,6 +874,126 @@ export function restoreRoutineLog(state, logId) {
   });
 }
 
+/* One done log per open item in the block. Skipped and already logged items
+   are not open. A rest day covers every block, so nothing is written. A rest
+   row is not an item row. Edit mode does not log. */
+export function logAllRoutineBlock(state, blockId) {
+  if (layoutEditing()) return false;
+  if (typeof blockId !== "string" || !blockId) return false;
+  if (refuseWrite() || !state || typeof state !== "object") return false;
+  const clock = routineClock();
+  if (!DAY.test(clock.day)) return false;
+  const current = normalizeDailyRoutines(state.dailyRoutines);
+  if (!current) return false;
+  const view = projectDailyRoutines(current);
+  if (!view || !(view.blocks || []).some((block) => block.id === blockId)) return false;
+  if (routineRestLog(view.logs, clock.day)) return false;
+  const seen = new Set();
+  const rows = [];
+  for (const row of routineBlockRows(view, blockId, clock.day)) {
+    if (!row.open || !row.item || seen.has(row.item.id)) continue;
+    seen.add(row.item.id);
+    rows.push(row);
+  }
+  if (!rows.length) return false;
+  let next = current;
+  let at = stampAfter(clock.now, current.updatedAt);
+  const ids = [];
+  for (const row of rows) {
+    const id = checkOffId(next, row.item.id, clock.day);
+    if (!id) return false;
+    const dose = loggedDose(view, row.item);
+    ids.push(id);
+    const stamped = writeStamp(next, clock, id);
+    const atWrite = stamped > at ? stamped : at;
+    next = upsertEntity(next, "logs", carryFuture({
+      id,
+      itemId: row.item.id,
+      compoundId: dose.compoundId,
+      day: clock.day,
+      status: "done",
+      amount: dose.amount,
+      unit: dose.unit,
+      at: clock.now,
+      deletedAt: null,
+    }, next, id), atWrite);
+    at = atWrite;
+    const saved = (next.logs || []).find((log) => log.id === id);
+    if (!saved || saved.updatedAt !== atWrite || saved.deletedAt != null || saved.rest === true) return false;
+    at = atWrite + 1;
+  }
+  if (!putDailyRoutines(state, next)) return false;
+  return ids;
+}
+
+export function undoRoutineLogs(state, logIds) {
+  if (!Array.isArray(logIds) || !logIds.length) return false;
+  const seen = new Set();
+  let any = false;
+  for (const id of logIds) {
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    if (undoRoutineLog(state, id)) any = true;
+  }
+  return any;
+}
+
+export function clearRoutineLogToast() {
+  if (logToastTimer) clearTimeout(logToastTimer);
+  logToastTimer = 0;
+  logToast = null;
+}
+
+/* Visible while the pinned clock is still inside the 3 second window.
+   The timer hides it in the live app. Reduce Motion skips the fade only. */
+export function routineLogToast(now) {
+  if (!logToast) return null;
+  const at = typeof now === "number" && Number.isFinite(now) ? now : toastNow();
+  if (at >= logToast.until) return null;
+  return { ids: logToast.ids.slice(), until: logToast.until };
+}
+
+export function showRoutineLogToast(ids) {
+  const seen = new Set();
+  const list = [];
+  for (const id of Array.isArray(ids) ? ids : []) {
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    list.push(id);
+  }
+  clearRoutineLogToast();
+  if (!list.length) return false;
+  const token = {};
+  const now = toastNow();
+  logToast = { ids: list, until: now + ROUTINE_LOG_TOAST_MS, token };
+  const timer = setTimeout(() => {
+    if (!logToast || logToast.token !== token) return;
+    logToast = null;
+    logToastTimer = 0;
+    const node = typeof document !== "undefined" && document.querySelector ? document.querySelector("[data-log-toast]") : null;
+    if (node && typeof node.remove === "function") node.remove();
+  }, ROUTINE_LOG_TOAST_MS);
+  if (timer && typeof timer.unref === "function") timer.unref();
+  logToastTimer = timer;
+  return true;
+}
+
+export function undoRoutineLogToast(state) {
+  const toast = routineLogToast();
+  clearRoutineLogToast();
+  if (!toast) return false;
+  return undoRoutineLogs(state, toast.ids);
+}
+
+export function latestRoutineLogId(state, itemId) {
+  const store = state && state.dailyRoutines;
+  if (!store || typeof itemId !== "string" || !itemId) return "";
+  const day = routineClock().day;
+  const logs = (store.logs || []).filter((log) => isLive(log) && log.itemId === itemId && log.day === day && log.rest !== true && (log.status === "done" || log.status === "partial"));
+  logs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  return logs[0] ? logs[0].id : "";
+}
+
 function validCalendarDay(value) {
   if (typeof value !== "string" || !DAY.test(value)) return false;
   const time = Date.parse(`${value}T00:00:00Z`);
@@ -654,7 +1050,9 @@ function logHasSavedDose(log) {
    A day change writes the destination id and tombstones this one, so the
    other phone's fresh check-off of the old day stays. A time is applied
    only when that day is before today. A note is stored only when the draft
-   includes one. The compound row is
+   includes one. A site is stored only when the draft includes one. A blank
+   site removes it. A missing site key leaves the old site. An unknown site
+   is refused. A check cannot store a site. The compound row is
    left alone, so later edits to the item do not rewrite this log. */
 export function editRoutineLog(state, logId, draft) {
   if (typeof logId !== "string" || !logId) return false;
@@ -706,9 +1104,28 @@ export function editRoutineLog(state, logId, draft) {
     }
     payload = withDetailsFields(payload, draft, clockEdit.at);
     if (!payload) return null;
+    if (draft && Object.prototype.hasOwnProperty.call(draft, "site")) {
+      if (!doseItem) {
+        if (draft.site != null && draft.site !== "") return null;
+        delete payload.site;
+      } else {
+        if (draft.site != null && typeof draft.site !== "string") return null;
+        const raw = typeof draft.site === "string" ? draft.site.trim() : "";
+        const site = routineSiteId(raw);
+        if (raw && !site) return null;
+        if (site) payload.site = site;
+        else delete payload.site;
+      }
+    }
     let next = upsertEntity(store, "logs", carryFuture(payload, store, nextId), at);
     if (!wrote(next, "logs", nextId, at)) return null;
-    if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
+    if (nextId !== log.id) {
+      next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
+      next = {
+        ...next,
+        logs: (next.logs || []).map((row) => (row && row.id === log.id ? { ...row, movedDay: day, movedAt: typeof log.at === "number" ? log.at : 0 } : row)),
+      };
+    }
     return next;
   });
 }
@@ -749,15 +1166,17 @@ export function routineLogDraft(state, logId) {
     maxDay: routineClock().day,
     time: routineClockTime(log.at),
     note: typeof log.note === "string" ? log.note : "",
+    site: routineSiteId(log.site),
     error: "",
   };
 }
 
+/* One rest for the day. It is not a per-item log and it is not a skip. */
 export function logRoutineRest(state) {
   return withStore(state, (store, clock) => {
     if (!DAY.test(clock.day)) return null;
     const view = projectDailyRoutines(store);
-    if ((view.logs || []).some((log) => log.rest === true && log.day === clock.day)) return null;
+    if (routineRestLog(view.logs, clock.day)) return null;
     const id = routineLogId(null, clock.day);
     const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", carryFuture({
@@ -773,6 +1192,18 @@ export function logRoutineRest(state) {
       deletedAt: null,
     }, store, id), at);
     return wrote(next, "logs", id, at);
+  });
+}
+
+/* Changes which local clock hour starts the routine day. Logs keep the
+   day they were stored with. */
+export function setRoutineDayRollover(state, hour) {
+  if (typeof hour !== "number" || !Number.isInteger(hour) || hour < 0 || hour > MAX_DAY_ROLLOVER_HOUR) return false;
+  return withStore(state, (store, clock) => {
+    const at = stampAfter(clock.now, store.settings && store.settings.updatedAt);
+    store.settings = { ...store.settings, dayRolloverHour: hour, updatedAt: at };
+    store.updatedAt = at;
+    return store;
   });
 }
 
@@ -814,6 +1245,8 @@ export function addRoutinePartToPage(state, key) {
   const stored = id && state && state.dailyRoutines && (state.dailyRoutines.blocks || []).find((block) => block && block.id === id);
   if (stored && !isLive(stored)) {
     if (!restoreRoutineBlock(state, id)) return false;
+  } else if (stored && stored.hidden === true) {
+    if (!showRoutineBlock(state, id)) return false;
   }
   return withStore(state, (store, clock) => addRoutinePart(store, key, prefStamp(store, clock)));
 }
@@ -870,7 +1303,9 @@ function cleanName(name) {
 export function parseRoutineAmount(raw) {
   if (typeof raw === "number") return Number.isFinite(raw) && raw >= 0 ? raw : null;
   if (typeof raw !== "string") return null;
-  const text = raw.trim().replace(",", ".");
+  const trimmed = raw.trim();
+  if (/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(trimmed)) return null;
+  const text = trimmed.replace(",", ".");
   const glyphs = { "¼": 0.25, "½": 0.5, "¾": 0.75, "1¼": 1.25, "1½": 1.5, "1¾": 1.75 };
   if (Object.prototype.hasOwnProperty.call(glyphs, text)) return glyphs[text];
   const slash = text.match(/^(\d+)\s*\/\s*(\d+)$/);
@@ -885,8 +1320,10 @@ export function parseRoutineAmount(raw) {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+/* Live routines on the page. A hidden routine keeps its rows but is not
+   offered anywhere until it is restored. */
 function liveBlocks(store) {
-  return (store.blocks || []).filter((block) => isLive(block));
+  return (store.blocks || []).filter((block) => isLive(block) && block.hidden !== true);
 }
 
 function nextBlockColor(store) {
@@ -933,6 +1370,15 @@ function collapsedIds(prefs) {
 /* A reorder records orderAt and does not move updatedAt. A tombstone from
    the other phone still beats the reorder. Rows whose order did not change
    are left alone. */
+/* Open blocks on an all-done day. A different day does not reuse the list,
+   so expanding today does not leave the block collapsed tomorrow. */
+function allDoneOpenIds(prefs, day) {
+  const raw = prefs && prefs.allDoneOpen;
+  if (!raw || typeof raw !== "object" || raw.day !== day || !Array.isArray(raw.ids)) return [];
+  return raw.ids.filter((id) => typeof id === "string" && id);
+}
+
+/* Plan edits change order, names, and placements. They never assign logs. */
 function applyOrders(store, collection, ids, at) {
   return ids.reduce((next, id, index) => {
     const row = (next[collection] || []).find((entity) => entity && entity.id === id);
@@ -1051,10 +1497,18 @@ export function duplicateRoutineBlock(state, blockId) {
     const order = liveBlocks(store).reduce((max, row) => Math.max(max, row.order || 0), -1) + 1;
     const suffix = " copy";
     const name = `${block.name.slice(0, 80 - suffix.length).trimEnd()}${suffix}`;
+    /* The copy keeps the routine's window and days, so its items stay due
+       on the same days and not every day. */
+    const schedule = {};
+    for (const key of ["startMin", "endMin"]) {
+      if (typeof block[key] === "number" && Number.isFinite(block[key])) schedule[key] = block[key];
+    }
+    if (Array.isArray(block.days)) schedule.days = block.days.slice();
     let next = upsertEntity(store, "blocks", {
       id,
       name,
       color: TILE_COLORS.has(block.color) ? block.color : "citrus",
+      ...schedule,
       order,
       deletedAt: null,
     }, at);
@@ -1086,6 +1540,129 @@ export function reorderRoutineBlocks(state, orderedIds, movedId) {
   });
 }
 
+const EVERY_DAY = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
+
+function cleanDays(days) {
+  const list = Array.isArray(days) ? [...new Set(days.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b) : [];
+  return list.length ? list : EVERY_DAY.slice();
+}
+
+/* The window of a routine draft. An end at or before the start runs past
+   midnight. Null when either time is missing. */
+export function routineDraftWindow(startRaw, endRaw) {
+  const start = typeof startRaw === "number" ? routineMinuteOfDay(startRaw) : routineMinuteOfDay(timeToMin(startRaw));
+  const endDay = typeof endRaw === "number" ? routineMinuteOfDay(endRaw % 1440) : routineMinuteOfDay(timeToMin(endRaw));
+  if (start == null || endDay == null) return null;
+  const end = endDay > start ? endDay : endDay + 1440;
+  return { startMin: start, endMin: end };
+}
+
+function timeToMin(raw) {
+  const parsed = parseRoutineTime(raw);
+  return parsed ? parsed.hour * 60 + parsed.minute : null;
+}
+
+/* New routine and Edit routine both save here: name, window, days, color
+   and which items sit in it. Items left out lose their place in this
+   routine only; their logs stay. */
+export function saveRoutineBlock(state, draft) {
+  const name = cleanName(draft && draft.name);
+  const window = draft ? routineDraftWindow(draft.startMin, draft.endMin) : null;
+  if (!name || !window) return false;
+  const days = cleanDays(draft.days);
+  return withStore(state, (store, clock) => {
+    const blockId = draft && typeof draft.blockId === "string" && draft.blockId ? draft.blockId : "";
+    const existing = blockId ? liveBlocks(store).find((block) => block.id === blockId) : null;
+    if (blockId && !existing) return null;
+    const color = TILE_COLORS.has(draft.color) ? draft.color : (existing && TILE_COLORS.has(existing.color) ? existing.color : nextBlockColor(store));
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, existing ? existing.updatedAt || 0 : 0));
+    const id = existing ? existing.id : routineId("block");
+    const fields = { name, color, startMin: window.startMin, endMin: window.endMin, days };
+    let next = existing
+      ? revisePlanEntity(store, "blocks", id, fields, at)
+      : upsertEntity(store, "blocks", { id, ...fields, order: nextLiveBlockOrder(store), deletedAt: null }, at);
+    if (!wrote(next, "blocks", id, at)) return null;
+    if (Array.isArray(draft.itemIds)) {
+      const liveItems = new Set((next.items || []).filter((item) => isLive(item)).map((item) => item.id));
+      const wanted = [...new Set(draft.itemIds.filter((itemId) => typeof itemId === "string" && liveItems.has(itemId)))];
+      for (const itemId of wanted) next = placeInBlock(next, id, itemId, at);
+      const keep = new Set(wanted);
+      for (const place of (next.placements || []).filter((row) => isLive(row) && row.blockId === id && !keep.has(row.itemId))) {
+        /* An untyped item shows only in its shown routines. Taken out of its
+           last one, it moves to the Other tab rather than out of sight; a
+           hidden routine does not count as somewhere to show. */
+        const item = (next.items || []).find((row) => isLive(row) && row.id === place.itemId);
+        const elsewhere = (next.placements || []).some((row) => isLive(row) && row.itemId === place.itemId && row.blockId !== id && (next.blocks || []).some((block) => isLive(block) && block.hidden !== true && block.id === row.blockId));
+        if (item && !elsewhere && !routineItemType(item, next.prefs)) {
+          next = revisePlanEntity(next, "items", item.id, { type: "other" }, at);
+        }
+        next = upsertEntity(next, "placements", { ...place, deletedAt: at, removedWith: place.id }, at);
+      }
+    }
+    return rememberBlock(next, id, at);
+  });
+}
+
+/* Hide keeps every placement and log, so the routine can come back whole. */
+export function hideRoutineBlock(state, blockId) {
+  if (typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    const block = liveBlocks(store).find((row) => row.id === blockId);
+    if (!block) return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, block.updatedAt || 0));
+    const next = revisePlanEntity(store, "blocks", blockId, { hidden: true }, at);
+    const row = (next.blocks || []).find((item) => item.id === blockId);
+    if (!row || row.hidden !== true) return null;
+    return rememberBlock(next, null, at);
+  });
+}
+
+export function showRoutineBlock(state, blockId) {
+  if (typeof blockId !== "string" || !blockId) return false;
+  return withStore(state, (store, clock) => {
+    const block = (store.blocks || []).find((row) => row && row.id === blockId && isLive(row) && row.hidden === true);
+    if (!block) return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, block.updatedAt || 0));
+    const next = revisePlanEntity(store, "blocks", blockId, { hidden: false, order: nextLiveBlockOrder(store) }, at);
+    const row = (next.blocks || []).find((item) => item.id === blockId);
+    if (!row || row.hidden === true) return null;
+    return rememberBlock(next, blockId, at);
+  });
+}
+
+/* Up or down one place among the routines on the page. */
+export function moveRoutineBlock(state, blockId, delta) {
+  const store = state && normalizeDailyRoutines(state.dailyRoutines);
+  if (!store || (delta !== -1 && delta !== 1)) return false;
+  const ids = liveBlocks(store).slice().sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((block) => block.id);
+  const from = ids.indexOf(blockId);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= ids.length) return false;
+  const ordered = ids.slice();
+  ordered.splice(to, 0, ordered.splice(from, 1)[0]);
+  return reorderRoutineBlocks(state, ordered, blockId);
+}
+
+/* A type the user makes, like "Skin care". Returns its id, or "" when the
+   name is empty, already there, or the list is full. */
+export function addRoutineCustomType(state, name) {
+  const trimmed = typeof name === "string" ? name.trim().replace(/\s+/g, " ").slice(0, 40) : "";
+  if (!trimmed) return "";
+  const store = state && normalizeDailyRoutines(state.dailyRoutines);
+  const current = store && Array.isArray(store.prefs && store.prefs.customTypes) ? store.prefs.customTypes.filter((row) => row && typeof row.id === "string") : [];
+  const same = current.find((row) => typeof row.name === "string" && row.name.toLowerCase() === trimmed.toLowerCase());
+  if (same) return same.id;
+  if (current.length >= CUSTOM_TYPE_MAX) return "";
+  const id = `type_${routineId("t").replace(/[^A-Za-z0-9_-]/g, "").slice(-40)}`;
+  const ok = withStore(state, (next, clock) => {
+    const at = prefStamp(next, clock);
+    next.prefs = { ...next.prefs, customTypes: [...current, { id, name: trimmed }], updatedAt: at };
+    next.updatedAt = Math.max(next.updatedAt || 0, at);
+    return next;
+  });
+  return ok ? id : "";
+}
+
 export function reorderRoutinePlacements(state, blockId, orderedIds) {
   if (typeof blockId !== "string" || !blockId) return false;
   return withStore(state, (store, clock) => {
@@ -1101,6 +1678,37 @@ export function reorderRoutinePlacements(state, blockId, orderedIds) {
     const at = stampAfter(clock.now, store.updatedAt);
     const next = applyOrders(store, "placements", orderedIds, at);
     return rememberBlock(next, blockId, at);
+  });
+}
+
+/* The calculator note is on the item. It does not add or rewrite a log. */
+export function saveRoutineItemNote(state, itemId, note, calc) {
+  if (typeof itemId !== "string" || !itemId || typeof note !== "string") return false;
+  return withStore(state, (store, clock) => {
+    const item = (store.items || []).find((row) => row && row.id === itemId && isLive(row));
+    if (!item || item.kind !== "dose") return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, item.updatedAt || 0));
+    const logs = JSON.stringify(store.logs);
+    const patch = { note };
+    if (calc && typeof calc.vialAmount === "number" && typeof calc.waterMl === "number") {
+      patch.calcVial = calc.vialAmount;
+      patch.calcWater = calc.waterMl;
+      patch.calcVialUnit = calc.vialUnit;
+      patch.calcDoseUnit = calc.doseUnit;
+      patch.calcDose = calc.doseAmount;
+    } else {
+      patch.calcVial = null;
+      patch.calcWater = null;
+      patch.calcVialUnit = null;
+      patch.calcDoseUnit = null;
+      patch.calcDose = null;
+    }
+    const next = revisePlanEntity(store, "items", itemId, patch, at);
+    const row = (next.items || []).find((entry) => entry.id === itemId);
+    const expected = note.trim().slice(0, 500);
+    if (!row || (row.note || "") !== expected) return null;
+    if (JSON.stringify(next.logs) !== logs) return null;
+    return next;
   });
 }
 
@@ -1213,6 +1821,7 @@ function writeCompound(store, item, name, dose, clock, at) {
     amount: dose.amount,
     unit: dose.unit,
     startDate: existing && existing.startDate ? existing.startDate : clock.day,
+    chartLine: !!(existing && existing.chartLine === true),
     archivedAt: null,
     deletedAt: null,
   }, at);
@@ -1241,7 +1850,8 @@ function placeInBlock(store, blockId, itemId, at) {
 }
 
 /* Custom items only. Evidence from the draft is ignored. A dose stores the
-   amount and unit on its compound. Logs are not rewritten. */
+   amount and unit on its compound. Optional on-hand count and mixed-on date
+   live on the item. A blank value clears that field. Logs are not rewritten. */
 export function saveRoutineItem(state, draft) {
   const name = cleanName(draft && draft.name);
   const kind = draft && (draft.kind === "dose" || draft.kind === "check") ? draft.kind : "";
@@ -1250,7 +1860,25 @@ export function saveRoutineItem(state, draft) {
   return withStore(state, (store, clock) => {
     if (!DAY.test(clock.day)) return null;
     const blockIds = selectedBlockIds(store, draft);
-    if (!blockIds.length) return null;
+    const type = routineItemType({ type: draft && draft.type }, store.prefs);
+    const existingId = draft && typeof draft.itemId === "string" && draft.itemId ? draft.itemId : "";
+    /* A hidden routine is not offered in the sheet, so the draft cannot
+       pick it. Its rows stay as they are for when it is restored. */
+    const hiddenIds = new Set((store.blocks || []).filter((block) => isLive(block) && block.hidden === true).map((block) => block.id));
+    const keptHidden = existingId
+      ? (store.placements || []).filter((row) => isLive(row) && row.itemId === existingId && hiddenIds.has(row.blockId))
+      : [];
+    /* A typed item lives on its tab and needs no routine. An untyped one
+       has nowhere else to show, so it keeps at least one. A hidden routine
+       only counts for an item that was already untyped there: clearing the
+       type of an item no visible routine holds would leave it nowhere. */
+    if (!blockIds.length && !type) {
+      const before = existingId ? (store.items || []).find((row) => row && row.id === existingId && isLive(row)) : null;
+      const wasTyped = !!(before && routineItemType(before, store.prefs));
+      if (wasTyped || !keptHidden.length) return null;
+    }
+    const timeMin = draft && typeof draft.time === "string" && draft.time.trim() ? timeToMin(draft.time) : null;
+    if (draft && typeof draft.time === "string" && draft.time.trim() && timeMin == null) return null;
     const itemId = draft && typeof draft.itemId === "string" && draft.itemId ? draft.itemId : routineId("item");
     const existing = (store.items || []).find((row) => row && row.id === itemId);
     if (draft && draft.itemId && (!existing || !isLive(existing))) return null;
@@ -1265,21 +1893,33 @@ export function saveRoutineItem(state, draft) {
     }
     const kept = { ...(existing || {}) };
     delete kept.evidence;
+    const supply = supplyFromDraft(draft, kind, clock.day, existing);
+    if (!supply) return null;
+    /* When the count was typed, so a dose logged later that day still
+       counts against it. */
+    if (Object.prototype.hasOwnProperty.call(supply, "onHandDay")) supply.onHandAt = supply.onHandDay ? clock.now : null;
     next = upsertEntity(next, "items", {
       ...kept,
+      ...supply,
       id: itemId,
       name,
       kind,
+      type: type || null,
+      timeMin,
       compoundId: kind === "dose" ? compoundId : null,
+      /* A new check has no compound start day. Keep the day it was added
+         so a later miss is still a miss. Edits do not move that day. */
+      ...(existing ? {} : { startDate: clock.day }),
       deletedAt: null,
     }, at);
     if (!wrote(next, "items", itemId, at)) return null;
     const chosen = new Set(blockIds);
+    for (const place of keptHidden) chosen.add(place.blockId);
     for (const blockId of blockIds) next = placeInBlock(next, blockId, itemId, at);
     for (const place of (store.placements || []).filter((row) => isLive(row) && row.itemId === itemId && !chosen.has(row.blockId))) {
       next = upsertEntity(next, "placements", { ...place, deletedAt: at, removedWith: place.id }, at);
     }
-    const primary = chosen.has(draft.blockId) ? draft.blockId : blockIds[0];
+    const primary = blockIds.includes(draft.blockId) ? draft.blockId : (blockIds[0] || null);
     return rememberBlock(next, primary, at);
   });
 }
@@ -1300,7 +1940,7 @@ export function routineItemDraft(state, source) {
     : [];
   const blockId = source && typeof source.blockId === "string" ? source.blockId : "";
   const blockIds = placed.length ? placed : (blockId ? [blockId] : []);
-  const kind = item && item.kind === "dose" ? "dose" : "check";
+  const kind = item && item.kind === "dose" ? "dose" : (source && source.kind === "dose" ? "dose" : "check");
   return {
     itemId: item ? item.id : null,
     blockId: blockIds.includes(blockId) ? blockId : (blockIds[0] || blockId || null),
@@ -1308,6 +1948,10 @@ export function routineItemDraft(state, source) {
     kind,
     amount: kind === "dose" && compound && typeof compound.amount === "number" ? String(compound.amount) : "",
     unit: compound && DOSE_UNIT_SET.has(compound.unit) ? compound.unit : "mcg",
+    type: item ? routineItemType(item, view.prefs) : (source && typeof source.type === "string" ? routineItemType({ type: source.type }, view.prefs) : ""),
+    time: item && routineMinuteOfDay(item.timeMin) != null ? `${String(Math.floor(item.timeMin / 60)).padStart(2, "0")}:${String(item.timeMin % 60).padStart(2, "0")}` : "",
+    onHand: item && Number.isInteger(item.onHand) ? String(item.onHand) : "",
+    mixedOn: item && typeof item.mixedOn === "string" ? item.mixedOn : "",
     blockIds,
   };
 }
@@ -1323,11 +1967,36 @@ export function rememberRoutineBlock(state, blockId) {
 
 export function toggleRoutineCollapsed(state, blockId) {
   if (typeof blockId !== "string" || !blockId) return false;
+  /* A routine that is not the one for now opens and closes for this visit
+     only, so tapping Night open in the morning does not keep it open. */
+  const peek = projectDailyRoutines(state && state.dailyRoutines);
+  if (peek && !layoutEditing() && app.ui && peek.blocks.some((block) => block.id === blockId)) {
+    const clock = routineClock();
+    if (!routineDayComplete(peek, clock.day)) {
+      const moment = routineNowNext(peek.blocks, clock.date, clock.day);
+      if (!moment.nowBlock || moment.nowBlock.id !== blockId) {
+        const closed = peekCollapsed(peek.blocks.find((block) => block.id === blockId), routineSoonBlockId(moment));
+        const open = peekList("routineOpenBlocks").filter((id) => id !== blockId);
+        const shut = peekList("routineShutBlocks").filter((id) => id !== blockId);
+        app.ui.routineOpenBlocks = closed ? open.concat(blockId) : open;
+        app.ui.routineShutBlocks = closed ? shut : shut.concat(blockId);
+        return true;
+      }
+    }
+  }
   return withStore(state, (store, clock) => {
     if (!liveBlocks(store).some((block) => block.id === blockId)) return null;
+    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
+    const view = projectDailyRoutines(store);
+    if (view && routineDayComplete(view, clock.day) && !layoutEditing()) {
+      const current = allDoneOpenIds(store.prefs, clock.day);
+      const ids = current.includes(blockId) ? current.filter((id) => id !== blockId) : current.concat(blockId);
+      store.prefs = { ...store.prefs, allDoneOpen: { day: clock.day, ids }, updatedAt: at };
+      store.updatedAt = Math.max(store.updatedAt || 0, at);
+      return rememberBlock(store, blockId, at);
+    }
     const current = collapsedIds(store.prefs);
     const collapsedBlocks = current.includes(blockId) ? current.filter((id) => id !== blockId) : current.concat(blockId);
-    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
     store.prefs = { ...store.prefs, collapsedBlocks, updatedAt: at };
     store.updatedAt = Math.max(store.updatedAt || 0, at);
     return rememberBlock(store, blockId, at);
@@ -1351,6 +2020,14 @@ export function ensureRoutineShell(state, now = Date.now()) {
       if (typeof app.save === "function") app.save();
     }
   }
+  /* Older stores kept supplements, enhancers and medications in blocks.
+     Their items move to type tabs once, and the old blocks are hidden.
+     Items another phone adds to a hidden old block later get a type too. */
+  const current = normalizeDailyRoutines(state.dailyRoutines);
+  if (current) {
+    const migrated = migrateRoutineTypes(current, stampAfter(now, current.updatedAt));
+    if (migrated && putDailyRoutines(state, migrated) && typeof app.save === "function") app.save();
+  }
   return projectDailyRoutines(state.dailyRoutines);
 }
 
@@ -1366,9 +2043,13 @@ function gearButton() {
   return `<button type="button" class="icon-btn dr-gear" data-action="routines-settings" aria-label="Routines settings">${GEAR}</button>`;
 }
 
+function pullHintHTML() {
+  return `<p class="dr-pull" data-pull="idle" role="status" hidden>Pull to refresh</p>`;
+}
+
 function signInHTML() {
   return `<div class="dr-page" data-routines-shell="signed-out">
-    ${pageHeader("Routines", "Sign in required")}
+    ${pageHeader("Routines", "")}
     <section class="dr-signin">
       <h2>Sign in to use Routines</h2>
       <p>Sign in to see and change your routines.</p>
@@ -1392,55 +2073,222 @@ function focusSwitch(on) {
 
 function restHTML(log) {
   if (!log) {
-    return `<div class="dr-rest"><button type="button" class="dr-rest-btn" data-action="routines-rest">Log rest</button></div>`;
+    return `<div class="dr-rest" data-rest-day="false"><button type="button" class="dr-rest-btn" data-action="routines-rest">Log rest</button></div>`;
   }
-  return `<div class="dr-rest"><span>Rest logged</span><button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(log.id)}">Undo <span class="dr-vh">rest</span></button></div>`;
+  return `<div class="dr-rest" data-rest-day="true"><span>Rest logged</span><button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(log.id)}">Undo <span class="dr-vh">rest</span></button></div>`;
 }
 
 function nowFooter(projected, date) {
   const day = todayKey(date);
-  const count = loggedTodayCount(projected.logs, day);
+  const progress = routineDoseProgress(projected, day);
   const streak = routineStreak(projected.logs, day);
   const focusOn = !!(projected.prefs && projected.prefs.focusMode === true);
-  const rest = (projected.logs || []).find((log) => log.rest === true && log.day === day) || null;
+  const rest = routineRestLog(projected.logs, day);
   return `<div class="dr-pills">
-      <p class="dr-count" data-logged="${count}"><b>${count}</b> logged today</p>
+      <p class="dr-count" data-logged="${progress.logged}" data-due="${progress.due}"><span class="dr-vh">Doses </span><b>${progress.logged}</b> of ${progress.due} today</p>
       ${streakHTML(streak)}
     </div>
     ${focusSwitch(focusOn)}
     ${rest || routineShows("rest", projected) ? restHTML(rest) : ""}`;
 }
 
+function nextItemHTML(projected, date, day) {
+  const next = routineNextItem(projected, date, day);
+  if (!next) {
+    const waiting = placedItems(projected, day).length > 0 ? "Nothing left to log" : "Nothing to log yet";
+    return `<p class="dr-next">${waiting}</p>`;
+  }
+  const wait = next.overdue ? "overdue" : formatRoutineWait(next.waitMin);
+  const tail = wait ? `<span class="dr-wait">${esc(wait)}</span>` : "";
+  return `<p class="dr-next">Next: ${esc(next.item.name)}${tail}</p>`;
+}
+
+/* The sun path. Time runs left to right along a dome over a horizon ticked
+   every hour, from 05:00 (or the earliest routine) to 23:00 (or the latest).
+   Each routine today is a colored stroke over its window, each item a pin
+   at its time with a dot filled once it is logged, and the sun sits at now.
+   The path behind the sun is solid and the path ahead is dotted. */
+const SP = Object.freeze({ hy: 122, x0: 18, x1: 274, rx: 128, ry: 96, cx: 146 });
+
+function spn(value) {
+  return String(Math.round(value * 10) / 10);
+}
+
+function todayBlocks(projected, day) {
+  return (projected && Array.isArray(projected.blocks) ? projected.blocks : [])
+    .filter((block) => isLive(block) && block.hidden !== true && routineBlockRunsOn(block, day));
+}
+
+export function routineBlockCount(projected, blockId, day) {
+  const rows = routineBlockRows(projected, blockId, day);
+  const done = rows.filter((row) => !row.open && rowState(row.log) !== "skipped").length;
+  return { done, total: rows.length, rows };
+}
+
+/* Minutes on the sun path for a time of day: a time before the path starts
+   counts as after midnight when the path runs that late. */
+export function routineSunAxis(windows) {
+  let start = 5 * 60;
+  let end = 23 * 60;
+  for (const window of windows) {
+    start = Math.min(start, window.startMin);
+    end = Math.max(end, window.endMin);
+  }
+  start = Math.floor(start / 60) * 60;
+  end = Math.ceil(end / 60) * 60;
+  if (end - start > 1440) end = start + 1440;
+  const place = (minutes) => {
+    let value = minutes;
+    if (value < start && value + 1440 <= end) value += 1440;
+    return Math.min(end, Math.max(start, value));
+  };
+  return { start, end, place };
+}
+
+function sunGeometry(axis, box) {
+  const X = (minutes) => box.x0 + ((axis.place(minutes) - axis.start) / (axis.end - axis.start)) * (box.x1 - box.x0);
+  const Y = (x) => {
+    const u = (x - box.cx) / box.rx;
+    return box.hy - box.ry * Math.sqrt(Math.max(0, 1 - u * u));
+  };
+  const arc = (from, to) => {
+    const a = X(from);
+    const b = X(Math.min(to, axis.end));
+    if (b - a < 0.5) return "";
+    return `M${spn(a)} ${spn(Y(a))} A${box.rx} ${box.ry} 0 0 1 ${spn(b)} ${spn(Y(b))}`;
+  };
+  return { X, Y, arc };
+}
+
+export function routineSunPathHTML(projected, date, day) {
+  const blocks = todayBlocks(projected, day).map((block) => ({ block, window: routineBlockWindow(block) })).filter((row) => row.window);
+  /* Timed items no drawn routine holds, such as a peptide that lives only
+     on its tab, get their own pin, and the path stretches to reach them. */
+  const drawn = new Set();
+  const ownTimes = [];
+  for (const { block } of blocks) {
+    for (const row of routineBlockRows(projected, block.id, day)) {
+      drawn.add(row.item.id);
+      const own = routineMinuteOfDay(row.item.timeMin);
+      if (own != null) ownTimes.push(own);
+    }
+  }
+  const loose = placedItems(projected, day)
+    .filter((item) => !drawn.has(item.id) && routineMinuteOfDay(item.timeMin) != null);
+  /* Every pin at its own time sits inside the path, so an item timed
+     outside its routine's window is never clamped to an end. */
+  const axis = routineSunAxis(blocks.map((row) => row.window)
+    .concat(ownTimes.concat(loose.map((item) => item.timeMin)).map((minutes) => ({ startMin: minutes, endMin: minutes }))));
+  const { X, Y, arc } = sunGeometry(axis, SP);
+  const nowMin = date.getHours() * 60 + date.getMinutes();
+  const now = axis.place(nowMin);
+  const parts = [];
+  parts.push(`<defs><linearGradient id="dr-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="dr-sp-sky-top"/><stop offset="1" class="dr-sp-sky-end"/></linearGradient></defs>`);
+  parts.push(`<path d="${arc(axis.start, axis.end)} Z" class="dr-sp-sky"/>`);
+  parts.push(`<path d="${arc(axis.start, axis.end)}" class="dr-sp-ahead"/>`);
+  const past = arc(axis.start, now);
+  if (past) parts.push(`<path d="${past}" class="dr-sp-past"/>`);
+  for (const { block, window } of blocks) {
+    const stroke = arc(window.startMin, window.endMin);
+    if (stroke) parts.push(`<path d="${stroke}" class="dr-sp-win" data-color="${tileColor(block.color)}"/>`);
+  }
+  const seen = new Set();
+  for (const { block, window } of blocks) {
+    for (const row of routineBlockRows(projected, block.id, day)) {
+      if (seen.has(row.item.id)) continue;
+      seen.add(row.item.id);
+      const own = routineMinuteOfDay(row.item.timeMin);
+      const x = X(own != null ? own : window.startMin);
+      const done = !row.open && rowState(row.log) !== "skipped";
+      parts.push(`<g class="dr-sp-pin" data-color="${tileColor(block.color)}" data-done="${done ? "true" : "false"}"><line x1="${spn(x)}" y1="${SP.hy}" x2="${spn(x)}" y2="${spn(Y(x) + 6)}"/><circle cx="${spn(x)}" cy="${spn(Y(x))}" r="3.4"/></g>`);
+    }
+  }
+  for (const item of loose) {
+    const x = X(item.timeMin);
+    const log = coveringLog(projected.logs, item.id, day);
+    const done = !!(log && log.status !== "skipped");
+    parts.push(`<g class="dr-sp-pin" data-loose="true" data-item-id="${esc(item.id)}" data-done="${done ? "true" : "false"}"><line x1="${spn(x)}" y1="${SP.hy}" x2="${spn(x)}" y2="${spn(Y(x) + 6)}"/><circle cx="${spn(x)}" cy="${spn(Y(x))}" r="3.4"/></g>`);
+  }
+  parts.push(`<line x1="${SP.x0 - 8}" y1="${SP.hy}" x2="${SP.x1 + 8}" y2="${SP.hy}" class="dr-sp-horizon"/>`);
+  for (let minutes = axis.start; minutes <= axis.end; minutes += 60) {
+    const x = X(minutes);
+    const long = ((minutes - axis.start) / 60) % 3 === 0;
+    parts.push(`<line x1="${spn(x)}" y1="${SP.hy + 3}" x2="${spn(x)}" y2="${SP.hy + (long ? 10 : 6)}" class="dr-sp-tick${minutes <= now ? " dr-sp-old" : ""}"/>`);
+    if (long) parts.push(`<text x="${spn(x)}" y="${SP.hy + 22}" class="dr-sp-label" text-anchor="middle">${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}</text>`);
+  }
+  const sx = X(nowMin);
+  const sy = Y(sx);
+  parts.push(`<line x1="${spn(sx)}" y1="${SP.hy - 2}" x2="${spn(sx)}" y2="${SP.hy + 12}" class="dr-sp-hand"/>`);
+  for (let index = 0; index < 12; index += 1) {
+    const angle = (index * Math.PI) / 6;
+    const outer = index % 2 === 0 ? 17 : 15;
+    parts.push(`<line x1="${spn(sx + 12 * Math.cos(angle))}" y1="${spn(sy + 12 * Math.sin(angle))}" x2="${spn(sx + outer * Math.cos(angle))}" y2="${spn(sy + outer * Math.sin(angle))}" class="dr-sp-ray"/>`);
+  }
+  parts.push(`<circle cx="${spn(sx)}" cy="${spn(sy)}" r="8.5" class="dr-sp-sun"/>`);
+  parts.push(`<text x="${SP.x1 + 2}" y="${SP.hy - 8}" class="dr-sp-moon" text-anchor="middle">☾</text>`);
+  const total = placedItems(projected, day).length;
+  const left = placedItems(projected, day).filter((item) => !coveringLog(projected.logs, item.id, day)).length;
+  const caption = !total ? "NOTHING PLANNED" : left ? `${left} LEFT TODAY` : "ALL DONE TODAY";
+  const clock = routineClock24(nowMin);
+  parts.push(`<text x="${SP.cx}" y="86" class="dr-sp-time" text-anchor="middle">${clock}</text>`);
+  parts.push(`<text x="${SP.cx}" y="106" class="dr-sp-caps" text-anchor="middle">${caption}</text>`);
+  const label = `Sun path from ${routineClock24(axis.start)} to ${routineClock24(axis.end)}. Now ${clock}, ${caption.toLowerCase()}.`;
+  return `<svg class="dr-sun" viewBox="0 0 292 162" role="img" aria-label="${esc(label)}">${parts.join("")}</svg>`;
+}
+
+function sunLegendHTML(projected, date, day) {
+  const keys = todayBlocks(projected, day).map((block) => {
+    const count = routineBlockCount(projected, block.id, day);
+    return `<span class="dr-sp-key" data-color="${tileColor(block.color)}"><i aria-hidden="true"></i>${esc(routineShortName(block))} ${count.done}/${count.total}</span>`;
+  }).join("");
+  return `<div class="dr-sp-legend">${keys}${nextItemHTML(projected, date, day)}</div>`;
+}
+
 export function routineNowHTML(projected, date) {
-  const moment = routineNowNext(projected.blocks, date);
-  const clock = formatRoutineClock(date);
-  const slot = SLOT_LABEL[moment.slot] || "Today";
   const day = todayKey(date);
   const footer = nowFooter(projected, date);
+  const path = routineSunPathHTML(projected, date, day);
+  if (routineDayComplete(projected, day)) {
+    return `<section class="dr-all-done dr-instrument" data-all-done="true" aria-labelledby="dr-now-title">
+      <h2 class="dr-now-title" id="dr-now-title">${DONE_MARK}All done today ✓</h2>
+      ${path}
+      ${sunLegendHTML(projected, date, day)}
+      ${footer}
+    </section>`;
+  }
+  const moment = routineNowNext(projected.blocks, date, day);
+  const clock = formatRoutineClock(date);
+  const slot = SLOT_LABEL[moment.slot] || "Today";
   if (!moment.nowBlock) {
-    return `<section class="dr-now" data-color="lavender" aria-labelledby="dr-now-title">
-      <p class="dr-k">Now · ${esc(clock)}</p>
+    /* No routine is current, but a standalone item can still be due today,
+       such as a peptide at its own time on its tab. Show it and its time
+       rather than asking for a routine. */
+    const next = routineNextItem(projected, date, day);
+    if (next) {
+      const wait = next.overdue ? "Overdue" : formatRoutineWait(next.waitMin);
+      const when = !wait ? "Due today" : next.overdue ? wait : `Due ${wait}`;
+      return `<section class="dr-now dr-instrument" data-color="lavender" data-standalone="true" aria-labelledby="dr-now-title">
+      <p class="dr-k dr-vh">Next · ${esc(clock)}</p>
+      <h2 class="dr-now-title" id="dr-now-title">${esc(next.item.name)}</h2>
+      ${path}
+      <p class="dr-next">${esc(when)}</p>
+      ${footer}
+    </section>`;
+    }
+    return `<section class="dr-now dr-instrument" data-color="lavender" aria-labelledby="dr-now-title">
+      <p class="dr-k dr-vh">Now · ${esc(clock)}</p>
       <h2 class="dr-now-title" id="dr-now-title">Nothing scheduled</h2>
+      ${path}
       <p class="dr-next">${esc(slot)}. Add a routine to see what comes next.</p>
       ${footer}
     </section>`;
   }
-  const wait = formatRoutineWait(moment.waitMin);
-  const next = moment.nextBlock
-    ? `Next · ${esc(moment.nextBlock.name)}${wait ? `<span class="dr-wait">${esc(wait)}</span>` : ""}`
-    : "Nothing else today";
-  const rows = routineBlockRows(projected, moment.nowBlock.id, day);
-  const open = rows.filter((row) => row.open).length;
-  const logged = rows.filter((row) => !row.open && rowState(row.log) !== "skipped").length;
-  const skipped = rows.filter((row) => !row.open && rowState(row.log) === "skipped").length;
-  const statusText = rows.length && !open ? tileMeta(open, logged, skipped) : "";
-  const status = statusText ? `<p class="dr-status">${esc(statusText)}</p>` : "";
   const color = tileColor(moment.nowBlock.color);
-  return `<section class="dr-now" data-color="${color}" aria-labelledby="dr-now-title">
-    <p class="dr-k">Now · ${esc(slot)} · ${esc(clock)}</p>
+  return `<section class="dr-now dr-instrument" data-color="${color}" aria-labelledby="dr-now-title">
+    <p class="dr-k dr-vh">Now · ${esc(slot)} · ${esc(clock)}</p>
     <h2 class="dr-now-title" id="dr-now-title">${esc(moment.nowBlock.name)}</h2>
-    <p class="dr-next">${next}</p>
-    ${status}
+    ${path}
+    ${sunLegendHTML(projected, date, day)}
     ${footer}
   </section>`;
 }
@@ -1458,7 +2306,31 @@ const TILE_KICKERS = new Map([
 ]);
 
 function tileKicker(block) {
-  return TILE_KICKERS.get(block.name) || "Routine";
+  return TILE_KICKERS.get(block.name) || routineShortName(block) || "Routine";
+}
+
+/* "05:00–11:00 · 1/4" on an open routine, "from 21:30 · 0/2" on a closed
+   one. A routine with no window shows the count alone. */
+function tileWindowLine(block, done, total, collapsed) {
+  const window = routineBlockWindow(block);
+  const when = window ? (collapsed ? `from ${routineClock24(window.startMin)}` : routineWindowLabel(block)) : "";
+  return [when, `${done}/${total}`].filter(Boolean).join(" · ");
+}
+
+function tileBarHTML(done, total) {
+  const width = total ? Math.round((done / total) * 100) : 0;
+  return `<svg class="dr-tile-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect class="dr-tile-bar-trk" width="100" height="4" rx="2"/>${width ? `<rect class="dr-tile-bar-on" width="${width}" height="4" rx="2"/>` : ""}</svg>`;
+}
+
+/* The time column on a row: NOW for the next thing to do, otherwise the
+   item's own time or its routine's start, in 24 hours. */
+function rowTimeHTML(row, block, nextId) {
+  if (!row || !row.item) return "";
+  if (nextId && row.item.id === nextId) return `<span class="dr-tm" data-now="true">NOW</span>`;
+  const own = routineMinuteOfDay(row.item.timeMin);
+  const start = block ? routineBlockStartMin(block) : null;
+  const minutes = own != null ? own : start;
+  return minutes != null ? `<span class="dr-tm">${routineClock24(minutes)}</span>` : `<span class="dr-tm" aria-hidden="true"></span>`;
 }
 
 function tileMeta(open, logged, skipped) {
@@ -1483,39 +2355,104 @@ function rowAttrs(row) {
   return `data-item-id="${esc(row.item.id)}" data-placement-id="${esc(id)}" data-id="${esc(id)}"`;
 }
 
+/* Row action icons. Each sits inside the row's action rail, so Skip, History,
+   Edit, and Undo read as part of the row and not as a second row of buttons. */
+const SKIP_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6.5v11l8.5-5.5z" fill="currentColor"/><path d="M18 6v12"/></svg>`;
+const HISTORY_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5V8h3.5"/><path d="M12 8.5V13l3 2"/></svg>`;
+const EDIT_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19h3.5L18.5 9 15 5.5 5 15.5z"/><path d="M13 7.5 16.5 11"/></svg>`;
+const ITEM_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="9" cy="17" r="2"/></svg>`;
+const UNDO_ICON = `<svg class="dr-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/></svg>`;
+
 function historyButton(row) {
   if (!row.item || row.item.kind !== "dose" || !row.compound) return "";
-  return `<button type="button" class="dr-history" data-action="routines-history" data-compound-id="${esc(row.compound.id)}" data-item-id="${esc(row.item.id)}">History <span class="dr-vh">${esc(row.item.name)}</span></button>`;
+  return `<button type="button" class="dr-history dr-rail-btn" data-action="routines-history" data-compound-id="${esc(row.compound.id)}" data-item-id="${esc(row.item.id)}">${HISTORY_ICON}<span class="dr-vh">History for ${esc(row.item.name)}</span></button>`;
 }
 
 function editLogButton(row) {
   if (!row.log || row.log.rest === true) return "";
-  return `<button type="button" class="dr-edit-log" data-action="routines-log-edit" data-log-id="${esc(row.log.id)}">Edit <span class="dr-vh">${esc(row.item.name)}</span></button>`;
+  return `<button type="button" class="dr-edit-log dr-rail-btn" data-action="routines-log-edit" data-log-id="${esc(row.log.id)}">${EDIT_ICON}<span class="dr-vh">Edit ${esc(row.item.name)}</span></button>`;
+}
+
+function skipButton(row) {
+  return `<button type="button" class="dr-skip dr-rail-btn dr-rail-labeled" data-action="routines-skip" data-item-id="${esc(row.item.id)}">${SKIP_ICON}<span class="dr-rail-label">Skip</span><span class="dr-vh"> ${esc(row.item.name)}</span></button>`;
+}
+
+function undoButton(row) {
+  return `<button type="button" class="dr-undo dr-rail-btn dr-rail-labeled" data-action="routines-undo" data-log-id="${esc(row.log.id)}">${UNDO_ICON}<span class="dr-rail-label">Undo</span><span class="dr-vh"> ${esc(row.item.name)}</span></button>`;
+}
+
+function railHTML(buttons) {
+  const inner = buttons.filter(Boolean).join("");
+  /* The row itself logs on tap. The rail's own action has no handler, so a tap
+     in the gap between Skip and History does nothing instead of logging. */
+  return inner ? `<span class="dr-rail" data-action="routines-rail">${inner}</span>` : "";
+}
+
+/* Rows painted in the last full paint, keyed by state and item. A row whose
+   key is new this paint gets data-enter, and only that row fades in. The
+   first paint after load marks nothing. Calls in the same task count as one
+   paint, so a test that renders twice in a row sees no data-enter. */
+let seenRowKeys = null;
+let paintRowKeys = null;
+
+function rowEnterAttr(key) {
+  if (!paintRowKeys) {
+    paintRowKeys = new Set();
+    const commit = () => { seenRowKeys = paintRowKeys; paintRowKeys = null; };
+    if (typeof queueMicrotask === "function") queueMicrotask(commit);
+    else Promise.resolve().then(commit);
+  }
+  paintRowKeys.add(key);
+  return seenRowKeys && !seenRowKeys.has(key) ? ` data-enter="true"` : "";
+}
+
+export function resetRoutineRowEntrances() {
+  seenRowKeys = null;
+  paintRowKeys = null;
+}
+
+function rowKind(row) {
+  return row.item && row.item.kind === "dose" ? "dose" : "check";
+}
+
+/* On a type tab an item may sit in no routine, so its row opens the item
+   editor itself. */
+function editItemButton(row) {
+  if (!row.typed || !row.item) return "";
+  return `<button type="button" class="dr-edit-item" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="">${ITEM_ICON}<span class="dr-vh">Edit item ${esc(row.item.name)}</span></button>`;
 }
 
 function openRowHTML(row, projected, date, day) {
   const doseHTML = amountMarkup(doseText(row));
-  const next = countdownMarkup(projected, row, date, day);
-  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open">
+  const time = rowTimeHTML(row, row.block, row.nextId);
+  const timing = row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
+  const detail = rowDetailMarkup(projected, row, date, day);
+  const overdue = timing.overdue ? ` data-overdue="true"` : "";
+  /* Skip, history, and rename keep their own actions. The log button is the
+     one the click handler uses, so a long press still reaches the details page.
+     Supply comes from the meta line, so it shows once. */
+  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open" data-kind="${rowKind(row)}"${overdue}${rowEnterAttr(`open:${row.item.id}`)} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
+      ${time}
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}${next}</span>
+      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item, row.compound)}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
-    ${historyButton(row)}
-    <button type="button" class="dr-skip" data-action="routines-skip" data-item-id="${esc(row.item.id)}">Skip <span class="dr-vh">${esc(row.item.name)}</span></button>
+    ${railHTML([historyButton(row), editItemButton(row), skipButton(row)])}
   </li>`;
 }
 
-function editRowHTML(row) {
+function editRowHTML(row, projected, day) {
   const dose = doseText(row);
   const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
+  const supply = supplyMarkup(projected, row, day);
   const id = placementId(row);
   const state = row.open ? "open" : rowState(row.log);
   return `<li class="dr-row" ${rowAttrs(row)} data-state="${state}">
     <button type="button" class="dr-handle" data-reorder="item" data-id="${esc(id)}" data-block-id="${esc(row.placement.blockId)}" aria-label="Reorder ${esc(row.item.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
     <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
-      <span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}
+      <span class="dr-line"><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${itemNoteMarkup(row.item, row.compound)}
+      ${supply}
     </button>
     <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines"><span aria-hidden="true">−</span></button>
   </li>`;
@@ -1527,18 +2464,19 @@ function doneRowHTML(row, projected, date, day) {
   const markClass = state === "skipped" ? "dr-mark dr-mark-skip" : "dr-mark dr-mark-on";
   const mark = state === "skipped" ? "–" : "✓";
   const doseHTML = amountMarkup(loggedAmountText(row.log));
-  const next = countdownMarkup(projected, row, date, day);
-  return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
+  const detail = rowDetailMarkup(projected, row, date, day);
+  return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}" data-kind="${rowKind(row)}"${rowEnterAttr(`${state}:${row.item.id}`)}>
     <span class="${markClass}" aria-hidden="true">${mark}</span>
-    <span class="dr-copy"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}${next}<span class="dr-state">${label}</span></span>
-    <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
+    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item, row.compound)}<span class="dr-state" data-state="${state}">${label}</span></span>
+    ${railHTML([historyButton(row), editItemButton(row), editLogButton(row), undoButton(row)])}
   </li>`;
 }
 
 export function routineBlockTileHTML(block, projected, view) {
   const day = view && view.day ? view.day : routineClock().day;
   const date = view && view.date instanceof Date && !Number.isNaN(view.date.getTime()) ? view.date : routineClock().date;
-  const rows = routineBlockRows(projected, block.id, day);
+  const nextId = view && typeof view.nextId === "string" ? view.nextId : "";
+  const rows = routineBlockRows(projected, block.id, day).map((row) => ({ ...row, block, nextId }));
   const open = rows.filter((row) => row.open);
   const done = rows.filter((row) => !row.open);
   const logged = done.filter((row) => rowState(row.log) !== "skipped").length;
@@ -1551,7 +2489,11 @@ export function routineBlockTileHTML(block, projected, view) {
   const color = tileColor(block.color);
   const shown = editing ? rows : open;
   const list = !collapsed && shown.length
-    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row, projected, date, day)).join("")}</ul>`
+    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row, projected, day) : openRowHTML(row, projected, date, day)).join("")}</ul>`
+    : "";
+  const resting = !editing && routineRestLog(projected && projected.logs, day);
+  const logAll = !editing && !collapsed && !resting && open.length
+    ? `<button type="button" class="dr-log-all" data-action="routines-log-all" data-block-id="${esc(block.id)}">Log all <span class="dr-vh">in ${esc(block.name)}</span></button>`
     : "";
   const reveal = !editing && !collapsed && done.length
     ? `<button type="button" class="dr-reveal" data-action="routines-reveal" data-block-id="${esc(block.id)}" aria-expanded="${revealed ? "true" : "false"}">${revealed ? "Hide" : "Show"} ${done.length === 1 ? "1 completed" : `${done.length} completed`}</button>`
@@ -1575,37 +2517,115 @@ export function routineBlockTileHTML(block, projected, view) {
     <button type="button" class="dr-block-toggle" data-action="routines-collapse" data-block-id="${esc(block.id)}" data-rename="block" aria-expanded="${collapsed ? "false" : "true"}">
       <span class="dr-k">${esc(tileKicker(block))}</span>
       <span class="dr-title-line"><h3>${esc(block.name)}</h3><span class="dr-chevron" aria-hidden="true"></span></span>
+      <span class="dr-win">${esc(tileWindowLine(block, logged, rows.length, collapsed))}</span>
       <span class="dr-vh">Long press to rename.</span>
     </button>
     <p class="dr-tile-meta">${esc(tileMeta(open.length, logged, skipped))}</p>
+    ${collapsed ? tileBarHTML(logged, rows.length) : ""}
     ${list}
+    ${logAll}
     ${reveal}
     ${doneList}
     ${add}
   </article>`;
 }
 
+/* Rows for a type tab: the same open and done rows as a routine, for items
+   that may sit in no routine at all. Done rows stay in view on a tab. */
+export function routineTypedRowsHTML(projected, items, date, day) {
+  const next = routineNextItem(projected, date, day);
+  const nextId = next && !next.overdue && typeof next.waitMin === "number" && next.waitMin <= 30 ? next.item.id : "";
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const log = coveringLog(projected && projected.logs, item.id, day);
+    const blocks = (projected.placements || []).filter((place) => place.itemId === item.id).map((place) => (projected.blocks || []).find((block) => block.id === place.blockId)).filter(Boolean);
+    const row = { item, compound: compoundFor(projected, item), log, open: !log, placement: null, block: blocks[0] || null, nextId, typed: true };
+    return row.open ? openRowHTML(row, projected, date, day) : doneRowHTML(row, projected, date, day);
+  }).join("");
+}
+
+/* Text for when an item comes next: "Now", a 24 hour time later today, or
+   the weekday. Empty when nothing times it. */
+export function routineNextText(projected, item, date, day) {
+  if (!projected || !item) return "";
+  const handled = coveringLog(projected.logs, item.id, day);
+  const timing = itemTiming(projected, item, date, day, handled ? projected.logs : null);
+  if (typeof timing.waitMin !== "number") return "";
+  if (timing.overdue && !handled) return "Now";
+  if (timing.waitMin < 1) return "Now";
+  const at = new Date(date.getTime() + timing.waitMin * 60000);
+  const sameDay = at.getFullYear() === date.getFullYear() && at.getMonth() === date.getMonth() && at.getDate() === date.getDate();
+  /* A time after midnight but before the rollover hour is still today's
+     routine day, so it shows as a time, not tomorrow's weekday. */
+  if (sameDay || timing.today === true) return routineClock24(at.getHours() * 60 + at.getMinutes());
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][at.getDay()];
+}
+
+const SOON_OPEN_MIN = 120;
+
+function routineSoonBlockId(moment) {
+  return moment && moment.nextBlock && typeof moment.waitMin === "number" && moment.waitMin <= SOON_OPEN_MIN ? moment.nextBlock.id : "";
+}
+
+function peekList(key) {
+  return app.ui && Array.isArray(app.ui[key]) ? app.ui[key].filter((id) => typeof id === "string") : [];
+}
+
+/* Leaving Routines ends the visit: routines tapped open or shut go back to
+   their own state, and a routine a Home tile opened stops showing in Focus
+   mode. */
+export function endRoutineVisit() {
+  if (!app.ui) return;
+  delete app.ui.routineOpenBlocks;
+  delete app.ui.routineShutBlocks;
+  delete app.ui.routineJumpBlockId;
+}
+
+/* Closed unless tapped open, or open because it starts soon unless tapped
+   closed. The choice lives on this visit only. */
+function peekCollapsed(block, soonId) {
+  const blockId = block && block.id;
+  if (peekList("routineShutBlocks").includes(blockId)) return true;
+  if (peekList("routineOpenBlocks").includes(blockId)) return false;
+  /* A routine with no time is never "later", so it stays open. */
+  if (!routineBlockWindow(block)) return false;
+  return blockId !== soonId;
+}
+
 export function routineBlockTilesHTML(projected, date) {
   const clock = date instanceof Date && !Number.isNaN(date.getTime()) ? date : routineClock().date;
   const day = todayKey(clock);
-  const moment = routineNowNext(projected.blocks, clock);
+  const moment = routineNowNext(projected.blocks, clock, day);
   const focus = !!(projected.prefs && projected.prefs.focusMode === true);
   const revealed = new Set(Array.isArray(projected.prefs && projected.prefs.revealBlocks) ? projected.prefs.revealBlocks.filter((id) => typeof id === "string") : []);
-  const collapsed = new Set(collapsedIds(projected.prefs));
+  const collapsedSet = new Set(collapsedIds(projected.prefs));
+  const complete = !layoutEditing() && routineDayComplete(projected, day);
+  const opened = new Set(complete ? allDoneOpenIds(projected.prefs, day) : []);
   const lastId = projected.prefs && typeof projected.prefs.lastBlockId === "string" ? projected.prefs.lastBlockId : "";
   const currentId = moment.nowBlock ? moment.nowBlock.id : "";
   const hiding = focus && !layoutEditing();
   const focusId = hiding ? routineFocusBlockId(projected, clock) : "";
-  const shown = hiding ? (projected.blocks || []).filter((block) => block.id === focusId) : (projected.blocks || []);
+  const editing = layoutEditing();
+  const runs = (projected.blocks || []).filter((block) => editing || routineBlockRunsOn(block, day));
+  const jumpId = app.ui && typeof app.ui.routineJumpBlockId === "string" ? app.ui.routineJumpBlockId : "";
+  const shown = hiding ? runs.filter((block) => block.id === focusId || block.id === jumpId) : runs;
+  const next = routineNextItem(projected, clock, day);
+  const nextId = next && !next.overdue && typeof next.waitMin === "number" && next.waitMin <= 30 ? next.item.id : "";
+  /* The routine for now is open, and so is the next one when it starts
+     within two hours. Others start closed, as a slim line with their count,
+     until tapped open; that choice lasts until the page closes. */
+  const soonId = routineSoonBlockId(moment);
   const tiles = shown.map((block) => routineBlockTileHTML(block, projected, {
     day,
     date: clock,
+    nextId,
     current: block.id === currentId,
     revealed: revealed.has(block.id),
-    collapsed: collapsed.has(block.id),
+    collapsed: complete ? !opened.has(block.id)
+      : editing || block.id === currentId ? collapsedSet.has(block.id)
+      : peekCollapsed(block, soonId),
     last: block.id === lastId,
   })).join("");
-  const rest = hiding && !focusId
+  const rest = hiding && !focusId && !shown.length
     ? `<p class="dr-focus-done">Everything is done for now. Turn off Focus mode to see every routine.</p>`
     : "";
   return `<div class="dr-tiles" data-focus="${focus ? "on" : "off"}" data-routine-list="blocks">${tiles}</div>${rest}`;
@@ -1618,22 +2638,43 @@ export function routineBlockTilesHTML(projected, date) {
 export function routineFocusBlockId(projected, date) {
   const clock = date instanceof Date && !Number.isNaN(date.getTime()) ? date : routineClock().date;
   const day = todayKey(clock);
-  const moment = routineNowNext(projected && projected.blocks, clock);
+  const moment = routineNowNext(projected && projected.blocks, clock, day);
   if (!moment.nowBlock) return "";
-  const live = (projected.blocks || []).filter((block) => isLive(block));
-  const sorted = live.slice().sort((a, b) => (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const start = sorted.findIndex((block) => block.id === moment.nowBlock.id);
+  /* Only routines that run today, as the tiles show them. */
+  const live = todayBlocks(projected, day);
+  /* In the order they come in the routine day, which starts at the
+     rollover hour, not the order on the page. A routine added after Night
+     but run at midday still leads on to Night. */
+  const rollover = routineDayRolloverHour(projected && projected.settings && projected.settings.dayRolloverHour) * 60;
+  const sinceRollover = (minutes) => ((minutes - rollover) % 1440 + 1440) % 1440;
+  const windows = new Map(live.map((block) => [block.id, routineBlockWindow(block)]));
+  const at = (block) => {
+    const window = windows.get(block.id);
+    return window ? sinceRollover(window.startMin) : Infinity;
+  };
+  const sorted = live.slice().sort((a, b) => at(a) - at(b) || (a.order || 0) - (b.order || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  /* After the day rolls over but before its first routine starts, the
+     routine for now is still last night's, so look from the start of the
+     new day. Before the rollover, last night's routine is still today's. */
+  const nowAt = sinceRollover(clock.getHours() * 60 + clock.getMinutes());
+  const found = sorted.findIndex((block) => block.id === moment.nowBlock.id);
+  const start = found >= 0 && nowAt < at(sorted[found]) ? 0 : found;
   for (const block of sorted.slice(Math.max(0, start))) {
     if (routineBlockRows(projected, block.id, day).some((row) => row.open)) return block.id;
   }
   return "";
 }
 
-function emptyDiscoverHTML() {
-  return `<section class="dr-empty">
-    <h2>Add the first item</h2>
-    <p>Discover will list entries from real studies. Nothing is added until you choose it.</p>
-    <button type="button" class="btn primary block" data-action="routines-discover">Discover</button>
+/* With nothing added yet, one plain next step: add the first item to the
+   routine for now. */
+function emptyStartHTML(view, date) {
+  const moment = routineNowNext(view.blocks, date, todayKey(date));
+  const block = moment.nowBlock || (view.blocks || [])[0];
+  if (!block) return "";
+  return `<section class="dr-empty" data-routines-empty="true">
+    <h2>Add your first item</h2>
+    <p>Add something you do or take. It shows on the sun path at its time.</p>
+    <button type="button" class="btn primary block" data-action="routines-add-item" data-block-id="${esc(block.id)}">Add to ${esc(routineShortName(block))}</button>
   </section>`;
 }
 
@@ -1642,6 +2683,7 @@ function waitingHTML(date) {
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
     : todayKey(date);
   return `<div class="dr-page" data-routines-shell="syncing">
+    ${pullHintHTML()}
     ${pageHeader("Routines", sub, gearButton())}
     <section class="dr-signin" aria-labelledby="dr-sync-title">
       <h2 id="dr-sync-title">Syncing your account</h2>
@@ -1650,10 +2692,13 @@ function waitingHTML(date) {
   </div>`;
 }
 
+/* Edit routines lives at the bottom of the page. The item layout mode it
+   opens keeps a Done button up here until it is closed. */
 function headerTools() {
   const editing = layoutEditing();
-  const label = editing ? "Done editing routines" : "Edit routines";
-  const edit = `<button type="button" class="dr-edit-toggle" data-action="routines-edit" aria-pressed="${editing ? "true" : "false"}" aria-label="${label}">${editing ? "Done" : "Edit"}</button>`;
+  const edit = editing
+    ? `<button type="button" class="dr-edit-toggle" data-action="routines-edit" aria-pressed="true" aria-label="Done editing routines">Done</button>`
+    : "";
   return edit + gearButton();
 }
 
@@ -1671,6 +2716,11 @@ function deletedHTML() {
     ${blocks.length ? `<ul class="dr-deleted-list">${blockRows}</ul>` : ""}
     ${items.length ? `<ul class="dr-deleted-list">${itemRows}</ul>` : ""}
   </section>`;
+}
+
+function logToastHTML() {
+  if (!routineLogToast()) return "";
+  return `<div class="dr-log-toast" data-log-toast="true" role="status"><span class="dr-log-toast-line">Logged · <button type="button" data-action="routines-toast-undo">Undo</button></span></div>`;
 }
 
 function setupLaterHTML(view) {
@@ -1696,24 +2746,63 @@ function tipsHTML(view) {
   </section>`;
 }
 
+/* One getting-started card at a time: finishing setup first, then the
+   tips, then the first item. */
+function onboardingHTML(view, date) {
+  const later = setupLaterHTML(view);
+  if (later) return later;
+  const tips = tipsHTML(view);
+  if (tips) return tips;
+  return (view.items || []).length > 0 ? "" : emptyStartHTML(view, date);
+}
+
+/* The view on screen: "routines", or one type tab. A tab that no longer
+   shows falls back to Routines. */
+export function routineViewOf(view) {
+  const wanted = app.ui && typeof app.ui.routineView === "string" ? app.ui.routineView : "routines";
+  return wanted !== "routines" && routineTypeTabs(view).includes(wanted) ? wanted : "routines";
+}
+
+function typeTabsHTML(view, current) {
+  const tabs = routineTypeTabs(view);
+  if (!tabs.length) return "";
+  const buttons = ["routines", ...tabs].map((id) => {
+    const label = id === "routines" ? "Routines" : routineTypeName(id, view.prefs, true);
+    return `<button type="button" class="dr-type-tab" data-action="routines-view" data-view="${esc(id)}" aria-pressed="${current === id ? "true" : "false"}">${esc(label)}</button>`;
+  }).join("");
+  return `<nav class="dr-type-tabs" aria-label="Routines and item types">${buttons}</nav>`;
+}
+
+function routinesViewHTML(view, date) {
+  return `${routineNowHTML(view, date)}
+    ${routineBlockTilesHTML(view, date)}
+    <div class="dr-quiet">
+      <button type="button" class="dr-add dr-add-block" data-action="routines-block-new">+ New routine</button>
+      <button type="button" class="dr-edit-routines" data-action="routines-blocks">Edit routines</button>
+    </div>
+    ${routineShows("calculator", view) && !routineTypeTabs(view).includes("peptide") ? `<button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>` : ""}
+    <button type="button" class="dr-history-open" data-action="routines-history-open">History <span class="dr-vh">calendar and graph</span></button>
+    ${deletedHTML()}`;
+}
+
 function paintShell(view, date) {
   const sub = typeof app.fmtDate === "function"
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
     : todayKey(date);
-  const hasItems = (view.items || []).length > 0;
   const editing = layoutEditing();
   const announce = app.ui && app.ui.routineAnnounce ? app.ui.routineAnnounce : "";
-  return `<div class="dr-page" data-routines-shell="signed-in" data-routines-edit="${editing ? "on" : "off"}">
+  const current = editing ? "routines" : routineViewOf(view);
+  const body = current === "routines"
+    ? routinesViewHTML(view, date)
+    : (typeof app.routineTypeViewHTML === "function" ? app.routineTypeViewHTML(view, current, date) : "");
+  return `<div class="dr-page" data-routines-shell="signed-in" data-routines-edit="${editing ? "on" : "off"}" data-routines-view="${esc(current)}">
+    ${pullHintHTML()}
     ${pageHeader("Routines", sub, headerTools())}
+    ${editing ? "" : typeTabsHTML(view, current)}
     <p class="dr-live" role="status" aria-live="polite">${esc(announce)}</p>
-    ${setupLaterHTML(view)}
-    ${tipsHTML(view)}
-    ${routineNowHTML(view, date)}
-    ${routineBlockTilesHTML(view, date)}
-    <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
-    ${routineShows("calculator", view) ? `<button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>` : ""}
-    ${deletedHTML()}
-    ${hasItems ? "" : emptyDiscoverHTML()}
+    ${current === "routines" ? onboardingHTML(view, date) : ""}
+    ${body}
+    ${logToastHTML()}
   </div>`;
 }
 
@@ -1797,6 +2886,45 @@ export function syncRoutineNowRefresh() {
   }, msUntilNextMinute(date));
 }
 
+const ROUTINE_FAQ = [
+  ["What is Routines?", "A list of items you check off each day. It does not replace Workouts, Food, sleep, or water."],
+  ["Who can use it?", "Sign in with your Insight account. Routines are saved with that account."],
+  ["How do I log an item?", "Tap the row. Skip marks it handled and does not count it as taken. Undo is on a finished row."],
+  ["What does the number at the top count?", "How many items you logged today. It does not add amounts together, and a skip is left out."],
+  ["When does a streak reset?", "Only when a whole day is missed. A skip does not reset it."],
+  ["Can I change a logged amount or day?", "Use Edit on a finished row. You can enter a quarter or a partial amount, or move the log to an earlier day."],
+  ["What does the calculator show?", "The arithmetic of the vial amount, water, and amount you type. The screen repeats what you entered. It is not a recommendation, and it does not save a log."],
+  ["Does Routines send reminders?", "No. Nothing is scheduled, and Routines does not ask to alert you. A countdown on a row stays on this page."],
+  ["How do I refresh?", "Pull down from the top of Routines. Opening the app also loads the latest copy from your account."],
+  ["Where is Discover?", "Study-backed entries are not in the app yet. That button does not add an item and does not suggest an amount."],
+];
+
+export function routinesFaqHTML() {
+  const rows = ROUTINE_FAQ.map(([question, answer]) => `<div><dt>${esc(question)}</dt><dd>${esc(answer)}</dd></div>`).join("");
+  return `<section class="dr-faq" aria-labelledby="dr-faq-title"><h4 class="dr-faq-title" id="dr-faq-title">FAQ</h4><dl>${rows}</dl></section>`;
+}
+
+function rolloverHourLabel(hour) {
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const face = hour % 12 || 12;
+  return `${face}:00 ${suffix}`;
+}
+
+/* PR 8 owns the settings sheet. Keep this control in that sheet. The hour
+   is dailyRoutines.settings.dayRolloverHour, read through the store. */
+export function routineDayRolloverControlHTML(hour) {
+  const selected = routineDayRolloverHour(hour);
+  const options = [];
+  for (let value = 0; value <= MAX_DAY_ROLLOVER_HOUR; value += 1) {
+    options.push(`<option value="${value}"${value === selected ? " selected" : ""}>${rolloverHourLabel(value)}</option>`);
+  }
+  return `<div class="dr-set-row">
+      <label id="dr-rollover-label" for="dr-rollover-hour">New day starts</label>
+      <select id="dr-rollover-hour" class="text-in" aria-labelledby="dr-rollover-label">${options.join("")}</select>
+    </div>
+    <p class="sub">A log before this hour counts for the previous day. The default is 4:00 AM.</p>`;
+}
+
 /* Everything Routines can show that this page does not have yet, each with
    Add. Adding never removes anything. */
 function addListHTML() {
@@ -1820,9 +2948,11 @@ function retakeHTML() {
 }
 
 export function routinesSettingsSheetHTML() {
-  const prefs = app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
+  const store = app.state && app.state.dailyRoutines;
+  const prefs = store && store.prefs;
   const on = !!(prefs && prefs.focusMode === true);
-  const calc = routineShows("calculator", app.state && app.state.dailyRoutines)
+  const hour = store && store.settings ? store.settings.dayRolloverHour : undefined;
+  const calc = routineShows("calculator", store)
     ? `<button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
     <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>`
     : "";
@@ -1831,26 +2961,41 @@ export function routinesSettingsSheetHTML() {
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
-    <p class="sub">Focus mode shows only the routine for this time of day. When it is done, the next one shows. Reminders and the FAQ come later. Notifications stay off.</p>
+    <p class="sub">Focus mode shows only the routine for this time of day. When it is done, the next one shows. Countdowns stay on the row. Routines does not send reminders.</p>
+    ${routineDayRolloverControlHTML(hour)}
     ${calc}
+    ${routinesFaqHTML()}
     ${addListHTML()}
     <button type="button" class="btn block" data-action="sheet-close">Done</button>
     ${retakeHTML()}`;
 }
 
 export function routinesDiscoverSheetHTML() {
-  return `<h3>Discover</h3>
-    <p class="sub">Study-backed entries are not in the app yet. This does not add an item, and it does not suggest a dose.</p>
+  return `<h3>Coming soon</h3>
+    <p class="sub">Discover is not open yet. There is no library here. This does not add an item, and it does not suggest a dose.</p>
     <button type="button" class="btn primary block" data-action="sheet-close">Close</button>`;
 }
 
 app.ensureRoutineShell = ensureRoutineShell;
+app.endRoutineVisit = endRoutineVisit;
 app.routineNowNext = routineNowNext;
 app.routineClock = routineClock;
 app.loggedTodayCount = loggedTodayCount;
+app.routineDoseProgress = routineDoseProgress;
+app.routineDayComplete = routineDayComplete;
+app.routineNextItem = routineNextItem;
+app.lastDoseLabel = lastDoseLabel;
 app.routineStreak = routineStreak;
+app.routineRestLog = routineRestLog;
 app.shiftRoutineDay = shiftRoutineDay;
 app.logRoutineItem = logRoutineItem;
+app.logAllRoutineBlock = logAllRoutineBlock;
+app.undoRoutineLogs = undoRoutineLogs;
+app.showRoutineLogToast = showRoutineLogToast;
+app.routineLogToast = routineLogToast;
+app.clearRoutineLogToast = clearRoutineLogToast;
+app.undoRoutineLogToast = undoRoutineLogToast;
+app.latestRoutineLogId = latestRoutineLogId;
 app.editRoutineLog = editRoutineLog;
 app.compoundDoseHistory = compoundDoseHistory;
 app.routineLogDraft = routineLogDraft;
@@ -1860,6 +3005,8 @@ app.skipRoutineItem = skipRoutineItem;
 app.undoRoutineLog = undoRoutineLog;
 app.restoreRoutineLog = restoreRoutineLog;
 app.logRoutineRest = logRoutineRest;
+app.setRoutineDayRollover = setRoutineDayRollover;
+app.routineDayRolloverControlHTML = routineDayRolloverControlHTML;
 app.toggleRoutineFocus = toggleRoutineFocus;
 app.saveRoutineSetup = saveRoutineSetup;
 app.hideRoutineTips = hideRoutineTips;
@@ -1874,6 +3021,7 @@ app.restoreRoutineBlock = restoreRoutineBlock;
 app.duplicateRoutineBlock = duplicateRoutineBlock;
 app.reorderRoutineBlocks = reorderRoutineBlocks;
 app.reorderRoutinePlacements = reorderRoutinePlacements;
+app.saveRoutineItemNote = saveRoutineItemNote;
 app.renameRoutineItem = renameRoutineItem;
 app.deleteRoutineItem = deleteRoutineItem;
 app.restoreRoutineItem = restoreRoutineItem;
@@ -1893,4 +3041,148 @@ app.routineNowHTML = routineNowHTML;
 app.routineBlockTileHTML = routineBlockTileHTML;
 app.routineBlockTilesHTML = routineBlockTilesHTML;
 app.routinesSettingsSheetHTML = routinesSettingsSheetHTML;
+app.routinesFaqHTML = routinesFaqHTML;
 app.routinesDiscoverSheetHTML = routinesDiscoverSheetHTML;
+app.saveRoutineBlock = saveRoutineBlock;
+app.hideRoutineBlock = hideRoutineBlock;
+app.showRoutineBlock = showRoutineBlock;
+app.moveRoutineBlock = moveRoutineBlock;
+app.addRoutineCustomType = addRoutineCustomType;
+app.routineTypedRowsHTML = routineTypedRowsHTML;
+app.routineNextText = routineNextText;
+app.routineSunPathHTML = routineSunPathHTML;
+app.routineViewOf = routineViewOf;
+
+/* Pull down on this tab only. The account copy reloads through cloudPull.
+   A sideways move stays with the pager. Nothing here asks to alert the user. */
+export const ROUTINE_PULL_PX = 64;
+const PULL_ARM_PX = 12;
+let routinePull = null;
+let routineRefreshing = false;
+
+function routinePane() {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return null;
+  return document.querySelector('[data-pane="daily-routines"]');
+}
+
+function routinePullElement() {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return null;
+  return document.querySelector(".dr-pull");
+}
+
+function pullBlocked() {
+  if (app.ROUTINES_ENABLED !== true) return true;
+  if (!app.ui || app.ui.tab !== "daily-routines") return true;
+  if (app.ui.sheet || app.ui.dailyRoutineEdit === true) return true;
+  if (app.ui.workoutOpen || app.ui.cardioOpen) return true;
+  if (!app.session || !app.session.user || !app.sb) return true;
+  return false;
+}
+
+function scrollAtTop() {
+  const pane = routinePane();
+  if (!pane) return false;
+  return (Number(pane.scrollTop) || 0) <= 0;
+}
+
+function blockedPullTarget(target) {
+  if (!target || typeof target.closest !== "function") return true;
+  if (target.closest("#sheet, #dialog, #tabs, button, a, input, textarea, select, .switch")) return true;
+  return !target.closest('[data-pane="daily-routines"]');
+}
+
+function pullPoint(ev) {
+  if (!ev || (ev.touches && ev.touches.length !== 1)) return null;
+  const touch = ev.touches ? ev.touches[0] : ev;
+  if (!touch || typeof touch.clientY !== "number") return null;
+  return { x: Number(touch.clientX) || 0, y: touch.clientY, target: ev.target || null };
+}
+
+function paintPull(phase, label) {
+  const el = routinePullElement();
+  if (!el) return;
+  const idle = phase === "idle";
+  el.hidden = idle;
+  if (typeof el.setAttribute === "function") el.setAttribute("data-pull", phase);
+  if (idle && typeof el.setAttribute === "function") el.setAttribute("hidden", "");
+  else if (!idle && typeof el.removeAttribute === "function") el.removeAttribute("hidden");
+  el.textContent = label;
+}
+
+export function onRoutinePullStart(ev) {
+  routinePull = null;
+  if (routineRefreshing || pullBlocked()) return;
+  const point = pullPoint(ev);
+  if (!point || blockedPullTarget(point.target) || !scrollAtTop()) return;
+  routinePull = { x: point.x, y: point.y, dy: 0, phase: "wait" };
+}
+
+export function onRoutinePullMove(ev) {
+  if (!routinePull || routineRefreshing) return;
+  const point = pullPoint(ev);
+  if (!point) return;
+  const dy = point.y - routinePull.y;
+  const dx = point.x - routinePull.x;
+  if (routinePull.phase === "wait") {
+    if (Math.abs(dy) < PULL_ARM_PX && Math.abs(dx) < PULL_ARM_PX) return;
+    if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || pullBlocked() || !scrollAtTop()) {
+      routinePull = null;
+      paintPull("idle", "Pull to refresh");
+      return;
+    }
+    routinePull.phase = "pulling";
+  }
+  routinePull.dy = Math.max(0, dy);
+  const ready = routinePull.dy >= ROUTINE_PULL_PX;
+  paintPull(ready ? "ready" : "pulling", ready ? "Release to refresh" : "Pull to refresh");
+  if (ev && ev.cancelable && typeof ev.preventDefault === "function") ev.preventDefault();
+}
+
+async function finishRoutinePull() {
+  if (routineRefreshing || typeof app.cloudPull !== "function" || pullBlocked()) {
+    paintPull("idle", "Pull to refresh");
+    return false;
+  }
+  routineRefreshing = true;
+  paintPull("refreshing", "Refreshing");
+  try {
+    await app.cloudPull();
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    routineRefreshing = false;
+    paintPull("idle", "Pull to refresh");
+  }
+}
+
+export function onRoutinePullEnd() {
+  if (!routinePull) return Promise.resolve(false);
+  const fire = routinePull.phase === "pulling" && routinePull.dy >= ROUTINE_PULL_PX;
+  routinePull = null;
+  if (!fire) {
+    paintPull("idle", "Pull to refresh");
+    return Promise.resolve(false);
+  }
+  return finishRoutinePull();
+}
+
+export function onRoutinePullCancel() {
+  routinePull = null;
+  if (!routineRefreshing) paintPull("idle", "Pull to refresh");
+}
+
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+  document.addEventListener("touchstart", onRoutinePullStart, { passive: true });
+  document.addEventListener("touchmove", onRoutinePullMove, { passive: false });
+  document.addEventListener("touchend", onRoutinePullEnd, { passive: true });
+  document.addEventListener("touchcancel", onRoutinePullCancel, { passive: true });
+  document.addEventListener("change", (ev) => {
+    const el = ev.target;
+    if (!el || el.id !== "dr-rollover-hour" || app.ROUTINES_ENABLED !== true) return;
+    const hour = Number(el.value);
+    if (!setRoutineDayRollover(app.state, hour)) return;
+    if (typeof app.save === "function") app.save();
+    if (typeof app.render === "function") app.render();
+  });
+}

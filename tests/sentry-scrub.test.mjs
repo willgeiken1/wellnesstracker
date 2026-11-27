@@ -52,6 +52,11 @@ for (const [field, sentinel] of Object.entries({
   bacWaterMl: "aa11bb22cc33dd4c",
   reconstitution: "aa11bb22cc33dd4d",
   dailyRoutines: "aa11bb22cc33dd4e",
+  site: "aa11bb22cc33dd4f",
+  lastSite: "aa11bb22cc33dd50",
+  injectionSite: "aa11bb22cc33dd51",
+  siteId: "aa11bb22cc33dd52",
+  injection_site: "aa11bb22cc33dd53",
 })) {
   test(`Sentry removes dose field ${field} even when its value resembles SDK metadata`, () => {
     const record = { [field]: sentinel };
@@ -346,7 +351,7 @@ test("sentry.js loads the errors-only bundle on production hosts and stays off o
   const src = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
   assert.match(src, /bundle\.min\.js/);
   assert.doesNotMatch(src, /bundle\.tracing/);
-  assert.match(src, /insight-shell-v81/);
+  assert.match(src, /insight-shell-v91/);
 
   async function bootAt(location) {
     const scripts = [];

@@ -3,8 +3,8 @@
    No emails, tokens, request bodies, URL query strings, or breadcrumb payloads
    that could carry food logs, notes, or other user content.
    Health values (HRV, readiness, sleep, weight, kcal, protein, meal or note
-   text) are stripped from free-text fields. Unknown extra and context keys
-   are dropped. */
+   text, dose, and injection site) are stripped from free-text fields.
+   Unknown extra and context keys are dropped. */
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
@@ -63,7 +63,7 @@ export function scrubData(value, depth = 0) {
   return out;
 }
 
-const HEALTH_WORD = "\\b(?:hrv|readiness|sleep(?:[\\s_-]*score)?|weigh(?:[\\s-]*in)?|weights?(?:[\\s_-]*kg)?|kcals?|calories?|proteins?|meals?|notes?|doses?|mcg|compounds?|syringes?|reconstitut\\w*|vials?|concentrations?|doseamounts?|doseunits?|syringeunits?|vialmg|bacwaterml|dailyroutines?)\\b|\\b(?:moods?|energy|stress)";
+const HEALTH_WORD = "\\b(?:hrv|readiness|sleep(?:[\\s_-]*score)?|weigh(?:[\\s-]*in)?|weights?(?:[\\s_-]*kg)?|kcals?|calories?|proteins?|meals?|notes?|doses?|mcg|compounds?|syringes?|reconstitut\\w*|vials?|concentrations?|doseamounts?|doseunits?|syringeunits?|vialmg|bacwaterml|dailyroutines?|start[\\s_-]*dates?|chart[\\s_-]*lines?|sites?|siteids?|lastsites?|injectionsites?|injectionsiteids?|onhands?|mixedon|daysleft|lowsupply)\\b|\\b(?:moods?|energy|stress|on[\\s_-]+hands?|mixed[\\s_-]+on|days[\\s_-]+left)";
 
 function hasHealthWord(value) {
   return new RegExp(HEALTH_WORD, "i").test(value);

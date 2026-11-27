@@ -55,6 +55,7 @@ const {
   routineLogDraft,
   saveRoutineItem,
   skipRoutineItem,
+  toggleRoutineCollapsed,
   toggleRoutineReveal,
 } = await import("../logger/js/pages/daily-routines.js");
 const {
@@ -68,7 +69,7 @@ const {
   routineLogSheetHTML,
 } = await import("../logger/js/pages/daily-routines-dose.js");
 const { formatCalcNumber, reconstitutionResult, reconstitutionResultHTML } = await import("../logger/js/pages/reconstitution.js");
-const { nextDoseCountdown, localCalendarDay } = await import("../logger/js/shared/routine-dose.js");
+const { nextDoseCountdown, localCalendarDay, routineDayKey } = await import("../logger/js/shared/routine-dose.js");
 const { isLive, mergeDailyRoutines, putDailyRoutines, upsertEntity } = await import("../logger/js/shared/daily-routines-store.js");
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -145,9 +146,11 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(addDose(morning), true);
     const item = doseItem();
     pin("2026-11-19", "2026-11-20T04:30:00.000Z");
+    const clock = new Date("2026-11-20T04:30:00.000Z");
+    const routineToday = routineDayKey(clock, 4);
     assert.equal(logRoutineItem(app.state, item.id), true);
     const created = liveLog(item.id);
-    assert.equal(created.day, "2026-11-19");
+    assert.equal(created.day, routineToday);
     assert.equal(created.amount, 250);
     const compoundBefore = structuredClone(app.state.dailyRoutines.compounds.find((row) => row.id === item.compoundId));
     const saves = [];
@@ -177,7 +180,7 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.notEqual(today.day, new Date("2026-11-20T04:30:00.000Z").toISOString().slice(0, 10));
     assert.equal(today.amount, 0.25);
 
-    assert.equal(editRoutineLog(app.state, today.id, { amount: 250, day: "2026-11-20" }), false);
+    assert.equal(editRoutineLog(app.state, today.id, { amount: 250, day: "2026-11-21" }), false);
     assert.equal(app.state.dailyRoutines.logs.find((row) => row.id === today.id).day, "2026-11-19");
     assert.equal(editRoutineLog(app.state, today.id, { amount: "", day: "2026-11-18" }), false);
     assert.equal(editRoutineLog(app.state, today.id, { amount: "-1", day: "2026-11-18" }), false);
@@ -546,6 +549,7 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.equal(log.amount, 250);
     assert.equal(log.unit, "mcg");
     assert.equal(loggedAmountText(log), "250 mcg");
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     assert.equal(toggleRoutineReveal(app.state, morning), true);
     html = dailyRoutinesHTML();
     assert.match(html, /Example Compound A<\/span><span class="dr-dose"> · 250 mcg<\/span>/);
@@ -628,7 +632,8 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
       date: atFour,
       day: "2026-11-18",
     });
-    assert.equal(logged.waitMin, 1500);
+    // Nov 18 is already covered, and Nov 19's 5:00 AM dose is one hour away.
+    assert.equal(logged.waitMin, 60);
     const skipped = nextDoseCountdown({
       item,
       blocks: morning,
@@ -657,10 +662,12 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     assert.match(html, /data-next-dose="60"/);
     assert.match(html, /Next dose in 1 hr/);
     assert.equal(logRoutineItem(app.state, row.id), true);
+    assert.equal(toggleRoutineCollapsed(app.state, morningId), true);
     assert.equal(toggleRoutineReveal(app.state, morningId), true);
     html = dailyRoutinesHTML();
-    assert.match(html, /data-next-dose="1500"/);
-    assert.match(html, /Next dose in 25 hr/);
+    assert.match(html, /last: 4:00 AM/);
+    assert.doesNotMatch(html, /data-next-dose="1500"/);
+    assert.doesNotMatch(html, /Next dose in 25 hr/);
     assert.doesNotMatch(html, /data-next-dose="60"/);
 
     const loggedId = liveLog(row.id).id;
@@ -672,6 +679,8 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     signIn("2026-11-19");
     addDose(blockId("Night routine"), "Example Compound B");
     app.routineNow = () => new Date(2026, 10, 19, 8, 30, 0);
+    /* Night is later today, so it starts closed; open it to see its row. */
+    assert.equal(toggleRoutineCollapsed(app.state, blockId("Night routine")), true);
     html = dailyRoutinesHTML();
     assert.match(html, /data-next-dose="510"/);
     assert.match(html, /Next dose in 8 hr 30 min/);
@@ -906,8 +915,8 @@ describe("routine doses and reconstitution", { concurrency: false }, () => {
     const flag = readFileSync(new URL("../logger/js/shared/routines-flag.js", import.meta.url), "utf8");
     const actions = readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v81"/);
-    assert.match(sentry, /insight-shell-v81/);
+    assert.match(sw, /const CACHE = "insight-shell-v91"/);
+    assert.match(sentry, /insight-shell-v91/);
     assert.match(sw, /js\/pages\/daily-routines-dose\.js/);
     assert.match(sw, /js\/pages\/reconstitution\.js/);
     assert.match(sw, /js\/shared\/routine-dose\.js/);

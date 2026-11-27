@@ -155,8 +155,15 @@ async function cloudPush() {
         notesChanged = JSON.stringify(app.state.machineNotes) !== before;
       }
       if (data.layout) keepHomeV2(data.layout);
+      // A push can rename the other phone's log. Take that id back, or the next edit writes the old one.
+      let routinesChanged = false;
+      if (data.dailyRoutines && typeof data.dailyRoutines === "object" && !Array.isArray(data.dailyRoutines)) {
+        const beforeRoutines = JSON.stringify(app.state.dailyRoutines || null);
+        app.state.dailyRoutines = mergeDailyRoutines(app.state.dailyRoutines, data.dailyRoutines);
+        routinesChanged = JSON.stringify(app.state.dailyRoutines || null) !== beforeRoutines;
+      }
       rememberCloudPush();
-      if (notesChanged) {
+      if (notesChanged || routinesChanged) {
         app.save();
         if (typeof app.render === "function") app.render();
       }

@@ -12,6 +12,7 @@ const MIGRATION = "supabase/migrations/20261119234500_merge_daily_routines.sql";
 const STEP = "supabase/migrations/20261121110000_daily_routines_source_step.sql";
 const ORDER_AT = "supabase/migrations/20261121140000_daily_routines_order_at.sql";
 const KEEP_SETUP = "supabase/migrations/20261122041000_daily_routines_keep_setup.sql";
+const KEEP_TYPES = "supabase/migrations/20261122160000_daily_routines_keep_types.sql";
 const PREVIOUS = [
   "supabase/migrations/20261004180000_merge_user_data.sql",
   "supabase/migrations/20261004210000_merge_home_v2.sql",
@@ -85,6 +86,8 @@ async function loadClientMerge() {
   mkdirSync(join(dir, "js", "shared"), { recursive: true });
   writeFileSync(join(dir, "js", "runtime.js"), "export const app = {};\n");
   writeFileSync(join(dir, "js", "shared", "daily-routines-store.js"), source);
+  writeFileSync(join(dir, "js", "shared", "routine-dose.js"), readFileSync(filePath("logger/js/shared/routine-dose.js")));
+  writeFileSync(join(dir, "js", "shared", "routine-supply.js"), readFileSync(filePath("logger/js/shared/routine-supply.js")));
   const loaded = await import(pathToFileURL(join(dir, "js", "shared", "daily-routines-store.js")).href);
   ctx.clientDir = dir;
   ctx.clientSha = CLIENT_STORE_SHA;
@@ -255,7 +258,7 @@ test.before(async () => {
     );
   `);
   assert.equal(schema, "");
-  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP]) {
+  for (const rel of [...PREVIOUS, MIGRATION, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql", KEEP_TYPES, KEEP_TYPES]) {
     const applied = run(psql, [...ctx.base, "-f", filePath(rel)], { env: { ...process.env, PGUSER: ctx.user } });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -711,6 +714,40 @@ test("setup answers and added parts survive an older prefs save on the server an
   assert.deepEqual(pushed.full.dailyRoutines.prefs.setup, cases[0][1].setup, "merge_user_data keeps the stored setup");
 });
 
+test("type tabs and custom types survive an older prefs save on the server and the client", () => {
+  const now = 8_000_000;
+  const store = (prefs) => ({ updatedAt: 100, prefs });
+  const cases = [
+    ["a stale phone's newer prefs keep the other phone's custom type",
+      { lastBlockId: null, updatedAt: 500, customTypes: [{ id: "type_a", name: "Example care" }], typeTabs: ["supplement"] },
+      { lastBlockId: null, focusMode: true, updatedAt: 900 }],
+    ["custom types join by id, the winner's copy first, objects with a string id only",
+      { lastBlockId: null, updatedAt: 900, customTypes: [{ id: "type_a", name: "Renamed" }, { id: "type_b", name: "Example B" }] },
+      { lastBlockId: null, updatedAt: 300, customTypes: [{ id: "type_a", name: "Old" }, "type_c", { id: 7 }, { id: "" }, { id: "type_d", name: "Example D" }, { id: "type_d", name: "Twice" }] }],
+    ["type tabs join in order, strings only, no repeats",
+      { lastBlockId: null, updatedAt: 900, typeTabs: ["peptide"] },
+      { lastBlockId: null, updatedAt: 300, typeTabs: ["medication", 3, "peptide", "medication"] }],
+    ["a winner whose custom types are not a list takes the other side's",
+      { lastBlockId: null, updatedAt: 900, customTypes: "type_a" },
+      { lastBlockId: null, updatedAt: 300, customTypes: [{ id: "type_a", name: "Example A" }] }],
+  ];
+  for (const [label, a, b] of cases) {
+    for (const [stored, incoming, order] of [[a, b, "a then b"], [b, a, "b then a"]]) {
+      const client = mergeRoutines(store(stored), store(incoming), now);
+      const sql = sqlMerge(store(stored), store(incoming), now);
+      assert.deepEqual(sql.prefs, client.prefs, `${label} (${order})`);
+    }
+  }
+  const first = mergeRoutines(store(cases[0][1]), store(cases[0][2]), now).prefs;
+  assert.equal(first.focusMode, true, "the newer prefs still win");
+  assert.deepEqual(first.customTypes, [{ id: "type_a", name: "Example care" }]);
+  assert.deepEqual(first.typeTabs, ["supplement"]);
+  assert.deepEqual(mergeRoutines(store(cases[1][1]), store(cases[1][2]), now).prefs.customTypes,
+    [{ id: "type_a", name: "Renamed" }, { id: "type_b", name: "Example B" }, { id: "type_d", name: "Example D" }]);
+  assert.deepEqual(mergeRoutines(store(cases[2][1]), store(cases[2][2]), now).prefs.typeTabs, ["peptide", "medication"]);
+  assert.deepEqual(mergeRoutines(store(cases[3][1]), store(cases[3][2]), now).prefs.customTypes, [{ id: "type_a", name: "Example A" }]);
+});
+
 test("a non-object dailyRoutines keeps the stored object", { timeout: 60_000 }, () => {
   const stored = {
     marker: "keep-shape",
@@ -785,6 +822,56 @@ test("merging thousands of logs finishes under the statement timeout", { timeout
   assert.equal(Number(timed), count);
 });
 
+test("3000 logs and one moved tombstone finish before the quadratic append would", { timeout: 60_000 }, () => {
+  const count = 3000;
+  const row = (i, stamp) => ({
+    id: `log-${i}`,
+    day: "2026-01-02",
+    status: "done",
+    amount: 1,
+    unit: "mcg",
+    at: 1000 + i,
+    updatedAt: stamp,
+    deletedAt: null,
+  });
+  const incoming = { updatedAt: 1, logs: Array.from({ length: count }, (_, i) => row(i, 1000)) };
+  incoming.logs[0].at = 200;
+  const stored = {
+    updatedAt: 1,
+    logs: [
+      {
+        id: "log-0",
+        day: "2026-11-19",
+        status: "done",
+        amount: 1,
+        unit: "mcg",
+        at: 100,
+        updatedAt: 5000,
+        deletedAt: 5000,
+        movedDay: "2026-11-18",
+        movedAt: 100,
+      },
+      ...Array.from({ length: count - 1 }, (_, i) => row(i + 1, 2000)),
+    ],
+  };
+  // A row-by-row append of this size took about 5.7s. The statement timeout
+  // is the check: the set-based pass finishes, and the append does not.
+  const got = query(`
+    set statement_timeout = '2s';
+    select public.daily_routines_merge(
+      $stored$${JSON.stringify(stored)}$stored$::jsonb,
+      $incoming$${JSON.stringify(incoming)}$incoming$::jsonb,
+      0
+    )::text;
+  `).trim();
+  const merged = JSON.parse(got);
+  const expected = query(`select public.daily_routines_fresh_move_id('log-0', 200);`).trim().replace(/^"|"$/g, "");
+  const ids = merged.logs.filter((log) => !(log.deletedAt > 0)).map((log) => log.id);
+  assert.equal(ids.length, count);
+  assert.equal(ids.includes("log-0"), false);
+  assert.ok(ids.includes(expected), expected);
+});
+
 test("4000 logs and 200 purges finish under the statement timeout", { timeout: 120_000 }, () => {
   const day = "2026-01-02";
   const count = 4000;
@@ -847,7 +934,7 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     $roles$;
     create table public.user_data (user_id uuid primary key, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
   `);
-  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP]) {
+  for (const rel of [...PREVIOUS, MIGRATION, STEP, ORDER_AT, "supabase/migrations/20261121183000_daily_routines_undo_keeps_dose.sql", KEEP_SETUP, KEEP_SETUP, "supabase/migrations/20261122120000_daily_routines_day_rollover.sql", "supabase/migrations/20261122130000_daily_routines_chart_line.sql", "supabase/migrations/20261122150000_daily_routines_move_keeps_fresh_log.sql", KEEP_TYPES]) {
     const applied = run(ctx.psql, [...base, "-f", filePath(rel)], { env });
     assert.equal(applied.status, 0, `${rel}\n${applied.stderr}`);
   }
@@ -904,4 +991,166 @@ test("an equal-stamp tie breaks by code-unit order on an ICU en-US database", { 
     assert.equal(expected.blocks[0].name, wide);
     assert.equal(merge(stored, incoming).blocks[0].name, wide, "UTF-16 tie on ICU");
   }
+});
+
+test("a moved dose and the other phone's log of the old day both stay on the server", async () => {
+  const { app } = await import("../logger/js/runtime.js");
+  const { addRoutineItem, dailyRoutinesHTML, editRoutineLog, logRoutineItem } = await import("../logger/js/pages/daily-routines.js");
+  const { isLive } = await import("../logger/js/shared/daily-routines-store.js");
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.state = { dailyRoutines: null };
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date("2026-11-19T14:30:00.000Z");
+  dailyRoutinesHTML();
+  const morning = app.state.dailyRoutines.blocks.find((block) => block.name === "Morning routine");
+  assert.equal(addRoutineItem(app.state, morning.id, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+  const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+  const bare = structuredClone(app.state.dailyRoutines);
+  assert.equal(logRoutineItem(app.state, item.id), true);
+  const logged = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.itemId === item.id);
+  app.routineNow = () => new Date("2026-11-19T15:00:00.000Z");
+  assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+  const phoneA = structuredClone(app.state.dailyRoutines);
+  app.state.dailyRoutines = structuredClone(bare);
+  app.routineNow = () => new Date("2026-11-19T16:00:00.000Z");
+  assert.equal(logRoutineItem(app.state, item.id), true);
+  const phoneB = structuredClone(app.state.dailyRoutines);
+  const days = (store) => (store.logs || [])
+    .filter((row) => isLive(row) && row.itemId === item.id)
+    .map((row) => row.day)
+    .sort();
+  for (const [stored, incoming] of [[phoneA, phoneB], [phoneB, phoneA]]) {
+    const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T16:00:00.000Z"));
+    assert.deepEqual(days(merged), ["2026-11-18", "2026-11-19"]);
+  }
+});
+
+test("a plain repeat of the moved dose stays a tombstone", async () => {
+  const { app } = await import("../logger/js/runtime.js");
+  const { addRoutineItem, dailyRoutinesHTML, editRoutineLog, logRoutineItem } = await import("../logger/js/pages/daily-routines.js");
+  const { freshMoveLogId, isLive } = await import("../logger/js/shared/daily-routines-store.js");
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.state = { dailyRoutines: null };
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  app.routineNow = () => new Date("2026-11-19T14:30:00.000Z");
+  dailyRoutinesHTML();
+  const morning = app.state.dailyRoutines.blocks.find((block) => block.name === "Morning routine");
+  assert.equal(addRoutineItem(app.state, morning.id, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+  const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+  assert.equal(logRoutineItem(app.state, item.id), true);
+  const logged = structuredClone(app.state.dailyRoutines.logs.find((row) => isLive(row) && row.itemId === item.id));
+  app.routineNow = () => new Date("2026-11-19T15:00:00.000Z");
+  assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+  const moved = structuredClone(app.state.dailyRoutines);
+  const repeat = structuredClone(moved);
+  repeat.logs = repeat.logs.map((row) => (row.id === logged.id ? logged : row));
+  const days = (store) => (store.logs || []).filter((row) => isLive(row) && row.itemId === item.id).map((row) => row.day).sort();
+  for (const [stored, incoming] of [[moved, repeat], [repeat, moved]]) {
+    const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T15:00:00.000Z"));
+    assert.deepEqual(days(merged), ["2026-11-18"]);
+  }
+  const longBase = `log_${"a".repeat(70)}_2026-11-19`;
+  const at = 1760000000000;
+  assert.equal(query(`select public.daily_routines_fresh_move_id('${longBase}', ${at});`).trim(), freshMoveLogId(longBase, at));
+  assert.ok(freshMoveLogId(longBase, at).length <= 80);
+});
+
+test("a fresh log at or before the move stamp stays beside the moved dose", async () => {
+  const { app } = await import("../logger/js/runtime.js");
+  const { addRoutineItem, dailyRoutinesHTML, editRoutineLog, logRoutineItem } = await import("../logger/js/pages/daily-routines.js");
+  const { isLive } = await import("../logger/js/shared/daily-routines-store.js");
+  app.ROUTINES_ENABLED = true;
+  app.session = { user: { id: "synthetic-user" } };
+  app.sb = null;
+  app.cloudPullOk = true;
+  app.save = () => {};
+  app.today = () => "2026-11-19";
+  for (const when of ["2026-11-19T14:45:00.000Z", "2026-11-19T15:00:00.000Z"]) {
+    app.state = { dailyRoutines: null };
+    app.routineNow = () => new Date("2026-11-19T14:30:00.000Z");
+    dailyRoutinesHTML();
+    const morning = app.state.dailyRoutines.blocks.find((block) => block.name === "Morning routine");
+    assert.equal(addRoutineItem(app.state, morning.id, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
+    const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
+    const bare = structuredClone(app.state.dailyRoutines);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const logged = app.state.dailyRoutines.logs.find((row) => isLive(row) && row.itemId === item.id);
+    app.routineNow = () => new Date("2026-11-19T15:00:00.000Z");
+    assert.equal(editRoutineLog(app.state, logged.id, { amount: 250, day: "2026-11-18" }), true);
+    const phoneA = structuredClone(app.state.dailyRoutines);
+    app.state.dailyRoutines = structuredClone(bare);
+    app.routineNow = () => new Date(when);
+    assert.equal(logRoutineItem(app.state, item.id), true);
+    const phoneB = structuredClone(app.state.dailyRoutines);
+    const days = (store) => (store.logs || []).filter((row) => isLive(row) && row.itemId === item.id).map((row) => row.day).sort();
+    for (const [stored, incoming] of [[phoneA, phoneB], [phoneB, phoneA]]) {
+      const merged = mergedRoutines(stored, incoming, Date.parse("2026-11-19T15:00:00.000Z"));
+      assert.deepEqual(days(merged), ["2026-11-18", "2026-11-19"], when);
+    }
+  }
+});
+
+test("the server clamps 5.0, keeps the newer hour, and keeps a true chart line", () => {
+  assert.equal(query(`select public.daily_routines_rollover_hour('5.0'::jsonb);`).trim(), "5");
+  assert.equal(query(`select public.daily_routines_rollover_hour('7'::jsonb);`).trim(), "6");
+  assert.equal(query(`select public.daily_routines_rollover_hour('99'::jsonb);`).trim(), "6");
+  assert.equal(query(`select public.daily_routines_rollover_hour('-1'::jsonb);`).trim(), "4");
+  const newer = sqlMerge(
+    { settings: { dayRolloverHour: 4, updatedAt: 10 }, compounds: [{ id: "c", name: "Example", amount: 250, unit: "mcg", chartLine: true, updatedAt: 10 }] },
+    { settings: { dayRolloverHour: 6, updatedAt: 20 }, compounds: [{ id: "c", name: "Example", amount: 500, unit: "mcg", updatedAt: 5 }] },
+    100,
+  );
+  assert.equal(newer.settings.dayRolloverHour, 6);
+  assert.equal(newer.compounds.find((row) => row.id === "c").chartLine, true);
+  const tie = sqlMerge(
+    { settings: { dayRolloverHour: 5, updatedAt: 20 } },
+    { settings: { dayRolloverHour: 2, updatedAt: 20 } },
+    100,
+  );
+  assert.equal(tie.settings.dayRolloverHour, 5);
+  const absent = sqlMerge(
+    { compounds: [{ id: "c2", name: "Example", amount: 1, unit: "mg", updatedAt: 1 }] },
+    { compounds: [] },
+    100,
+  );
+  assert.equal(absent.compounds.find((row) => row.id === "c2").chartLine, false);
+});
+
+test("an old purge keeps the previous day and a new purge drops only the early dose", async () => {
+  const { routineEarlyWindow } = await import("../logger/js/shared/daily-routines-store.js");
+  const early = routineEarlyWindow("2026-11-21", 4);
+  const routines = {
+    updatedAt: 1,
+    logs: [
+      { id: "evening", day: "2026-11-20", status: "done", amount: 1, unit: "mg", at: new Date(2026, 10, 20, 15, 0).getTime(), updatedAt: 10, deletedAt: null },
+      { id: "dawn", day: "2026-11-20", status: "done", amount: 1, unit: "mg", at: new Date(2026, 10, 21, 1, 30).getTime(), updatedAt: 11, deletedAt: null },
+      { id: "day", day: "2026-11-21", status: "done", amount: 1, unit: "mg", at: new Date(2026, 10, 21, 12, 0).getTime(), updatedAt: 12, deletedAt: null },
+    ],
+  };
+  const cutoff = new Date(2026, 10, 22, 12, 0).getTime();
+  const run = (purges) => JSON.parse(query(`
+    select public.daily_routines_apply_purges(
+      $r$${JSON.stringify(routines)}$r$::jsonb,
+      $p$${JSON.stringify(purges)}$p$::jsonb,
+      ${cutoff + 1000}
+    )::text;
+  `).trim());
+  const old = run([{ from: "2026-11-21", to: "2026-11-21", at: cutoff, deletedAt: cutoff }]);
+  const oldBy = Object.fromEntries(old.logs.map((row) => [row.id, row]));
+  assert.equal(oldBy.evening.deletedAt, null);
+  assert.equal(oldBy.dawn.deletedAt, null);
+  assert.ok(oldBy.day.deletedAt > 0);
+  const fresh = run([{ from: "2026-11-21", to: "2026-11-21", at: cutoff, deletedAt: cutoff, ...early }]);
+  const freshBy = Object.fromEntries(fresh.logs.map((row) => [row.id, row]));
+  assert.equal(freshBy.evening.deletedAt, null);
+  assert.ok(freshBy.dawn.deletedAt > 0);
+  assert.ok(freshBy.day.deletedAt > 0);
 });

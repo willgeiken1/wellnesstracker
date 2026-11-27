@@ -38,6 +38,7 @@ const { app } = await import("../logger/js/runtime.js");
 const { addRoutineItem, dailyRoutinesHTML, renameRoutineBlock, routinesSettingsSheetHTML, deleteRoutineBlock } = await import("../logger/js/pages/daily-routines.js");
 const { routineItemSheetHTML } = await import("../logger/js/pages/daily-routines-edit.js");
 const setupUi = await import("../logger/js/pages/daily-routines-setup.js");
+await import("../logger/js/pages/daily-routines-plan.js");
 const {
   addRoutinePart,
   applySetup,
@@ -47,6 +48,7 @@ const {
   routineSetupShows,
   setupBlocks,
   setupChoices,
+  setupTypeTabs,
   setupShape,
 } = await import("../logger/js/shared/routine-setup.js");
 const { isLive, liveOf, mergeDailyRoutines, seedDefaultBlocks } = await import("../logger/js/shared/daily-routines-store.js");
@@ -154,12 +156,14 @@ describe("what the answers show", () => {
     assert.equal(routineSetupShows(prefs, "doses"), true);
     const names = setupBlocks(answers).map((block) => block.name);
     assert.ok(names.every((name) => !/enhancer/i.test(name)), names.join());
-    assert.deepEqual(names, ["Supplements"]);
+    assert.deepEqual(names, ["Morning routine", "Night routine"], "only real routines are blocks");
+    assert.deepEqual(setupTypeTabs(answers), ["supplement"], "what a person takes becomes a type tab");
   });
 
   test("enhancers yes adds the section with its tools, and no injecting hides only the injection tools", () => {
     const yes = { goals: ["supplements"], track: ["supplements"], enhancers: "yes", inject: "yes" };
-    assert.ok(setupBlocks(yes).some((block) => block.name === "Enhancers & peptides"));
+    assert.deepEqual(setupTypeTabs(yes), ["supplement", "peptide", "enhancer"]);
+    assert.deepEqual(setupTypeTabs({ ...yes, inject: "no" }), ["supplement", "enhancer"], "no injecting leaves out Peptides");
     for (const key of ["calculator", "injection", "supply", "doses"]) assert.equal(routineSetupShows({ setup: { status: "done", answers: yes } }, key), true, key);
     const noInject = { ...yes, inject: "no" };
     const prefs = { setup: { status: "done", answers: noInject } };
@@ -196,9 +200,23 @@ describe("what the answers show", () => {
     assert.deepEqual(names, ["Wake-up routine", "Wind-down routine"]);
   });
 
-  test("a few supplements and medications share one block", () => {
-    const names = setupBlocks({ goals: ["supplements", "meds"], track: ["supplements", "meds"], count: "1-3" }).map((block) => block.name);
-    assert.deepEqual(names, ["Supplements & medications"]);
+  test("supplements and medications become tabs, not blocks", () => {
+    const answers = { goals: ["supplements", "meds"], track: ["supplements", "meds"], count: "1-3" };
+    assert.deepEqual(setupBlocks(answers).map((block) => block.name), ["Morning routine", "Night routine"]);
+    assert.deepEqual(setupTypeTabs(answers), ["supplement", "medication"]);
+  });
+
+  test("the clock answers set each routine's window, and shifts keep the defaults", () => {
+    const [morning, night] = setupBlocks({ goals: ["habits"], wake: "6-8", sleep: "10-12" });
+    assert.deepEqual(morning.window, { startMin: 6 * 60, endMin: 12 * 60 });
+    assert.deepEqual(night.window, { startMin: 21 * 60, endMin: 23 * 60 });
+    assert.ok(setupBlocks({ goals: ["habits"], wake: "6-8", days: "night" }).every((block) => block.window === null));
+    assert.ok(setupBlocks({}, "skipped").every((block) => block.window === null));
+  });
+
+  test("just looking turns on no type tabs", () => {
+    assert.deepEqual(setupTypeTabs({ goals: ["looking"] }), []);
+    assert.deepEqual(setupTypeTabs({ goals: ["supplements"] }, "skipped"), []);
   });
 });
 
@@ -210,8 +228,13 @@ describe("applying a setup", () => {
     assert.equal(app.ui.sheet, "routines-setup");
     answer(SUPPLEMENTS_ONLY);
     assert.equal(app.ui.sheet, null);
-    assert.deepEqual(liveNames(), ["Supplements"]);
+    assert.deepEqual(liveNames(), ["Morning routine", "Night routine"]);
     const store = app.state.dailyRoutines;
+    assert.deepEqual(store.prefs.typeTabs, ["supplement"]);
+    const morning = store.blocks.find((block) => block.id === "block_default_morning");
+    const night = store.blocks.find((block) => block.id === "block_default_night");
+    assert.equal(morning.startMin, 6 * 60, "wake 6 to 8 starts Morning at 6");
+    assert.equal(night.endMin, 23 * 60, "sleep 10 to 12 ends Night at 11");
     assert.equal(readSetup(store.prefs).status, "done");
     assert.equal(store.prefs.focusMode, false);
     assert.deepEqual(liveOf(store.items), [], "no checks like waking up or going to bed are added");
@@ -223,13 +246,14 @@ describe("applying a setup", () => {
   test("a block the user already made their own is never renamed or removed", () => {
     signIn();
     const store = app.state.dailyRoutines;
-    assert.ok(renameRoutineBlock(app.state, "block_default_stack", "Example stack"));
+    assert.ok(renameRoutineBlock(app.state, "block_default_morning", "Example start"));
     assert.ok(addRoutineItem(app.state, "block_default_night", { name: "Example check", kind: "check" }));
     const next = applySetup(app.state.dailyRoutines, { status: "done", answers: { goals: ["habits"], track: ["habits"], enhancers: "no", days: "night" }, at: Date.now() + 10 });
     const names = new Map(liveOf(next.blocks).map((block) => [block.id, block.name]));
-    assert.equal(names.get("block_default_stack"), "Example stack");
+    assert.equal(names.get("block_default_morning"), "Example start", "a renamed block keeps its name");
     assert.equal(names.get("block_default_night"), "Night routine", "a block with items keeps its name");
-    assert.equal(names.get("block_default_morning"), "Wake-up routine", "an untouched block follows the answers");
+    const fresh = applySetup(seedDefaultBlocks(null, 10), { status: "done", answers: { goals: ["habits"], days: "night" }, at: 100 });
+    assert.equal(fresh.blocks.find((block) => block.id === "block_default_morning").name, "Wake-up routine", "an untouched block follows the answers");
     assert.ok(store.blocks.length <= next.blocks.length, "no row is dropped");
   });
 
@@ -245,11 +269,13 @@ describe("applying a setup", () => {
   });
 
   test("new setup blocks take the seed stamp so a rename on either phone wins", () => {
-    const base = seedDefaultBlocks(null, 10);
-    const next = applySetup(base, { status: "done", answers: { goals: ["enhancers"], inject: "yes" }, at: 500 });
-    const block = next.blocks.find((row) => row.id === "block_setup_enhancers");
+    const seeded = seedDefaultBlocks(null, 10);
+    const base = { ...seeded, blocks: seeded.blocks.filter((row) => row.id !== "block_default_night") };
+    const next = applySetup(base, { status: "done", answers: { goals: ["habits"], sleep: "early" }, at: 500 });
+    const block = next.blocks.find((row) => row.id === "block_default_night");
     assert.equal(block.updatedAt, 1);
-    assert.equal(block.order, 3);
+    assert.equal(block.order, 1);
+    assert.equal(block.endMin, 22 * 60, "a new routine takes its window from the answers");
   });
 
   test("two phones finishing the same answers write the same rows", () => {
@@ -283,8 +309,7 @@ describe("applying a setup", () => {
     const answers = { goals: ["habits", "supplements", "meds"], track: ["supplements", "meds"], count: "9+" };
     const next = applySetup(base, { status: "done", answers, at: 100, keepOpen: () => "block_default_morning" });
     assert.ok(!next.prefs.collapsedBlocks.includes("block_default_morning"));
-    assert.ok(next.prefs.collapsedBlocks.includes("block_default_stack"));
-    assert.ok(next.prefs.collapsedBlocks.includes("block_setup_meds"));
+    assert.ok(next.prefs.collapsedBlocks.includes("block_default_night"));
   });
 
   test("skip setup settles it and changes nothing on the page", () => {
@@ -292,7 +317,8 @@ describe("applying a setup", () => {
     assert.ok(setupUi.maybeOfferRoutineSetup());
     assert.ok(setupUi.skipRoutineSetup());
     assert.equal(readSetup(app.state.dailyRoutines.prefs).status, "skipped");
-    assert.deepEqual(liveNames(), ["Morning routine", "Supplement & enhancer stack", "Night routine"], "skip leaves every block as it was");
+    assert.deepEqual(liveNames(), ["Morning routine", "Night routine"], "skip leaves every block as it was");
+    assert.equal(app.state.dailyRoutines.prefs.typeTabs, undefined, "a skip turns on no tabs");
     assert.equal(routineSetupShows(app.state.dailyRoutines.prefs, "calculator"), true, "a skipped setup still shows every tool");
   });
 });
@@ -352,8 +378,8 @@ describe("the setup sheet", () => {
     answer(SUPPLEMENTS_ONLY);
     const settings = routinesSettingsSheetHTML();
     assert.match(settings, /Add to your page/);
-    for (const key of ["morning", "night", "enhancers", "meds", "calculator", "tips"]) assert.match(settings, new RegExp(`data-part="${key}"`), key);
-    assert.doesNotMatch(settings, /data-part="supplements"/, "a block already on the page is not offered");
+    for (const key of ["enhancers", "meds", "calculator", "tips"]) assert.match(settings, new RegExp(`data-part="${key}"`), key);
+    for (const key of ["morning", "night", "supplements"]) assert.doesNotMatch(settings, new RegExp(`data-part="${key}"`), `${key} is already on the page`);
     assert.doesNotMatch(settings, /routines-setup-change/);
     assert.ok(settings.trim().endsWith('<button type="button" class="dr-retake" data-action="routines-setup-retake">Retake setup quiz</button>'));
     assert.doesNotMatch(dailyRoutinesHTML(), /routines-setup-retake/, "retake is only in Routines settings");
@@ -363,12 +389,13 @@ describe("the setup sheet", () => {
     signIn();
     setupUi.maybeOfferRoutineSetup();
     answer(SUPPLEMENTS_ONLY);
-    assert.ok(addRoutineItem(app.state, "block_default_stack", { name: "Example vitamin", kind: "check" }));
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example vitamin", kind: "check" }));
     assert.ok(app.addRoutinePartToPage(app.state, "enhancers"));
-    assert.deepEqual(liveNames(), ["Supplements", "Enhancers & peptides"]);
-    assert.match(dailyRoutinesHTML(), /data-action="routines-calc"/);
-    assert.ok(app.addRoutinePartToPage(app.state, "morning"));
-    assert.ok(liveNames().includes("Morning routine"));
+    assert.deepEqual(liveNames(), ["Morning routine", "Night routine"], "a type part adds no block");
+    assert.deepEqual(app.state.dailyRoutines.prefs.typeTabs, ["supplement", "peptide", "enhancer"]);
+    assert.match(dailyRoutinesHTML(), /data-view="peptide"/, "the Peptides tab shows");
+    app.ui.routineView = "peptide";
+    assert.match(dailyRoutinesHTML(), /data-action="routines-calc"/, "the calculator sits on the Peptides tab");
     assert.equal(liveOf(app.state.dailyRoutines.items).length, 1, "the item already there stays");
   });
 
@@ -392,7 +419,7 @@ describe("the setup sheet", () => {
       assert.ok(Array.isArray(value) ? setupUi.nextRoutineSetup() : setupUi.pickRoutineSetup(id, value));
     }
     assert.equal(app.ui.sheet, "routines-settings");
-    assert.ok(liveNames().includes("Medications"));
+    assert.ok(app.state.dailyRoutines.prefs.typeTabs.includes("medication"), "the Medications tab added from settings stays");
   });
 
   test("Settings has a Routines row that opens Routines settings", () => {
@@ -405,7 +432,7 @@ describe("the setup sheet", () => {
 describe("the page follows the answers", () => {
   test("a tool the account already uses stays whatever the answers say", () => {
     signIn();
-    assert.ok(addRoutineItem(app.state, "block_default_stack", { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }));
+    assert.ok(addRoutineItem(app.state, "block_default_morning", { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }));
     app.state.dailyRoutines = applySetup(app.state.dailyRoutines, { status: "done", answers: { goals: ["supplements"], track: ["supplements"], enhancers: "no" }, at: Date.now() + 10 });
     assert.match(dailyRoutinesHTML(), /data-action="routines-calc"/);
     assert.match(routinesSettingsSheetHTML(), /Reconstitution calculator/);

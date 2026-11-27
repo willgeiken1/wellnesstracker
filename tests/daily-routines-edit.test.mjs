@@ -109,7 +109,8 @@ describe("routine editing", { concurrency: false }, () => {
   test("reorder and rename survive a reload and do not touch logs", () => {
     signIn();
     const morning = blockId("Morning routine");
-    const stack = blockId("Supplement & enhancer stack");
+    assert.equal(addRoutineBlock(app.state, "Example stack"), true);
+    const stack = blockId("Example stack");
     const night = blockId("Night routine");
     assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" }), true);
     const item = app.state.dailyRoutines.items[0];
@@ -149,7 +150,8 @@ describe("routine editing", { concurrency: false }, () => {
   test("a reorder does not bring back the other phone's deleted item", () => {
     signIn();
     const morning = blockId("Morning routine");
-    const stack = blockId("Supplement & enhancer stack");
+    assert.equal(addRoutineBlock(app.state, "Example stack"), true);
+    const stack = blockId("Example stack");
     assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "check" }), true);
     assert.equal(addRoutineItem(app.state, morning, { name: "Example Compound B", kind: "check" }), true);
     const item = app.state.dailyRoutines.items.find((row) => row.name === "Example Compound A");
@@ -279,6 +281,8 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(app.state.dailyRoutines.compounds.find((row) => row.id === items[0].compoundId).amount, 1);
     assert.equal(app.state.dailyRoutines.compounds.find((row) => row.id === items[0].compoundId).unit, "mg");
     assert.deepEqual(logsSnapshot(), logged);
+    assert.equal(toggleRoutineCollapsed(app.state, night), true);
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     const html = dailyRoutinesHTML();
     assert.equal(html.match(/Show 1 completed/g).length, 2);
     assert.equal(app.state.dailyRoutines.prefs.lastBlockId, morning);
@@ -357,7 +361,7 @@ describe("routine editing", { concurrency: false }, () => {
     addRoutineItem(app.state, morning, { name: "Example Compound A", kind: "dose", amount: 250, unit: "mcg" });
     let html = dailyRoutinesHTML();
     assert.match(html, /data-action="routines-log"/);
-    assert.match(html, /aria-label="Edit routines"/);
+    assert.match(html, /data-action="routines-blocks">Edit routines</);
     app.ui.dailyRoutineEdit = true;
     html = dailyRoutinesHTML();
     assert.equal(html.includes('data-routines-edit="on"'), true);
@@ -376,7 +380,8 @@ describe("routine editing", { concurrency: false }, () => {
     signIn();
     const morning = blockId("Morning routine");
     const night = blockId("Night routine");
-    const stack = blockId("Supplement & enhancer stack");
+    assert.equal(addRoutineBlock(app.state, "Example stack"), true);
+    const stack = blockId("Example stack");
     deleteRoutineBlock(app.state, morning);
     deleteRoutineBlock(app.state, night);
     deleteRoutineBlock(app.state, stack);
@@ -703,8 +708,8 @@ describe("routine editing", { concurrency: false }, () => {
     const edit = readFileSync(new URL("../logger/js/pages/daily-routines-edit.js", import.meta.url), "utf8");
     const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v81"/);
-    assert.match(sentry, /insight-shell-v81/);
+    assert.match(sw, /const CACHE = "insight-shell-v91"/);
+    assert.match(sentry, /insight-shell-v91/);
     assert.match(sw, /js\/pages\/daily-routines-edit\.js/);
     assert.match(main, /import "\.\/pages\/daily-routines-edit\.js";/);
     assert.equal(main.match(/routines-flag/g).length, 1);
