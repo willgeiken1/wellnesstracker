@@ -1,5 +1,5 @@
-import { eraseOwnerFiles, OwnerFilesNotErased, photoAddresses, settleReplacedPhotos } from '../src/core/owner-files';
-import { restoreNativeLocal } from '../src/features/importer/local';
+import { eraseOwnerFiles, OwnerFilesNotErased, photoAddresses, settleReplacedPhotos, PROFILE_PHOTO_KEY, PROFILE_PHOTO_LEFTOVERS_KEY, PROGRESS_PHOTOS_KEY, PROGRESS_PHOTOS_PENDING_KEY } from '../src/core/owner-files';
+import { PHOTO_ADDRESS_KEYS, restoreNativeLocal } from '../src/features/importer/local';
 import type { Repository } from '../src/data/repository';
 
 // A small file system: addresses of files that exist, and files whose delete is refused.
@@ -65,4 +65,8 @@ test('a merge keeps the phone\'s photos and their files', () => {
   restoreNativeLocal(r, older, new Set(), 'merge', photos);
   expect([...mockFiles].sort()).toEqual([profile('a1'), progress('p1'), progress('p2')].sort());
   expect(r.localGet('profilePhoto')).toBe(profile('a1'));
+});
+
+test('the restore leaves out of an account hand-off every photo address departure looks for', () => {
+  expect([...PHOTO_ADDRESS_KEYS].sort()).toEqual([PROFILE_PHOTO_KEY, PROFILE_PHOTO_LEFTOVERS_KEY, PROGRESS_PHOTOS_KEY, PROGRESS_PHOTOS_PENDING_KEY].sort());
 });

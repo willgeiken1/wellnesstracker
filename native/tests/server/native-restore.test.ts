@@ -86,3 +86,48 @@ test('a backup restored while signed out follows the first account with its cust
     expect(commitPendingAccountImport(guest, account)).toBeNull();
   } finally { sqlite.close(); }
 });
+
+test('a merge adds the records of a water, routine or body history that only the file has, and keeps the phone\'s own', async () => {
+  const { sqlite, repo } = await setup();
+  try {
+    const drink = (id: string, oz: number) => ({ id, c: 'glass', name: 'Glass', oz, icon: 'glass', at: 1 });
+    repo.localSave('foodWater', { v: 1, unit: 'ml', goal: 3, containers: [], log: { '2026-01-10': [drink('w2', 8)] } });
+    repo.localSave('progressBodyFat', [{ day: '2026-01-10', pct: 20 }]);
+    repo.localSave('routines', { v: 1, routines: [{ id: 'r1', name: 'Morning' }], hidden: [], items: [{ id: 'i1', name: 'Fixture vitamin' }], log: { '2026-01-10': { i1: 'd' } } });
+    const backup = { format: 'insight-phone-only' as const, version: 1 as const, rows: {}, local: {
+      foodWater: { v: 1, unit: 'oz', goal: 2, containers: [], log: { '2026-01-09': [drink('w1', 16)], '2026-01-10': [drink('w2', 99), drink('w3', 12)] } },
+      progressBodyFat: [{ day: '2026-01-09', pct: 21 }, { day: '2026-01-10', pct: 25 }],
+      routines: { v: 1, routines: [{ id: 'r1', name: 'Renamed' }, { id: 'r2', name: 'Evening' }], hidden: [], items: [{ id: 'i2', name: 'Fixture tea' }],
+        log: { '2026-01-09': { i1: 'd' }, '2026-01-10': { i1: 's', i2: 'd' } } },
+    } };
+    restoreNativeLocal(repo, backup, new Set(), 'merge', noPhotos);
+    expect(repo.localGet('foodWater')).toEqual({ v: 1, unit: 'ml', goal: 3, containers: [],
+      log: { '2026-01-10': [drink('w2', 8), drink('w3', 12)], '2026-01-09': [drink('w1', 16)] } });
+    expect(repo.localGet('progressBodyFat')).toEqual([{ day: '2026-01-10', pct: 20 }, { day: '2026-01-09', pct: 21 }]);
+    expect(repo.localGet('routines')).toEqual({ v: 1, routines: [{ id: 'r1', name: 'Morning' }, { id: 'r2', name: 'Evening' }], hidden: [],
+      items: [{ id: 'i1', name: 'Fixture vitamin' }, { id: 'i2', name: 'Fixture tea' }],
+      log: { '2026-01-10': { i1: 'd', i2: 'd' }, '2026-01-09': { i1: 'd' } } });
+  } finally { sqlite.close(); }
+});
+
+test('a backup restored while signed out brings its phone-side details to the first account, but not its photo addresses', async () => {
+  const { sqlite, repo: guest } = await setup();
+  try {
+    const db = drizzle(sqliteClient(sqlite));
+    const account = new Repository(db, '20000000-0000-4000-8000-000000000002', DEVICE_A, () => '30000000-0000-4000-8000-000000000777');
+    const backup = { format: 'insight-phone-only' as const, version: 1 as const, rows: {}, local: {
+      progressNeck: [{ day: '2026-01-09', cm: 38 }], timer: { seconds: 90 },
+      progressPhotos: [{ id: 'p1', uri: 'file:///docs/progress-photos/p1.jpg' }], profilePhoto: 'file:///docs/profile-photo/a1.jpg',
+    } };
+    const plan = nativeBackupPlan(backup);
+    commitImport(guest, previewImport(guest, plan, 'merge', true), true);
+    restoreNativeLocal(guest, backup, new Set(), 'merge', noPhotos);
+    account.localSave('timer', { seconds: 30 });
+    commitPendingAccountImport(guest, account);
+    expect(account.localGet('progressNeck')).toEqual([{ day: '2026-01-09', cm: 38 }]);
+    expect(account.localGet('timer')).toEqual({ seconds: 30 });
+    expect(account.localGet('progressPhotos')).toBeUndefined();
+    expect(account.localGet('profilePhoto')).toBeUndefined();
+    expect(guest.localGet('pwaPendingAccountLocal')).toBeNull();
+  } finally { sqlite.close(); }
+});

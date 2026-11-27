@@ -102,10 +102,17 @@ export function commitPendingAccountImport(guest: Repository, account: Repositor
   const plan = guest.localGet<ImportPlan>("pwaPendingAccountPlan");
   if (!plan) return null;
   const native = guest.localGet<boolean>("pwaPendingAccountNative") === true;
+  const local = guest.localGet<Record<string, unknown>>("pwaPendingAccountLocal");
   return account.atomic(() => {
+    const newEntries = new Set(plan.rows.filter((r) => r.table === "entries" && !account.get("entries", r.id)).map((r) => r.id));
     const added = commitImport(account, previewImport(account, plan, "merge", native), true);
+    // The phone-side details of a backup restored while signed out (water, routines, a workout's set rows) come too,
+    // merged like any restore; photo addresses were never kept for the account, so no photo file changes hands.
+    if (native && local && typeof local === "object" && !Array.isArray(local))
+      restoreNativeLocal(account, { format: "insight-phone-only", version: 1, rows: {}, local }, newEntries, "merge", { names: () => null, settle: () => {} });
     guest.localSave("pwaPendingAccountPlan", null);
     guest.localSave("pwaPendingAccountNative", null);
+    guest.localSave("pwaPendingAccountLocal", null);
     return added;
   });
 }
@@ -254,11 +261,6 @@ export function nativeBackupPlan(backup: NativeBackup): ImportPlan {
   return { version: 1, rows, issues: [], unmapped: [], legacy: {} };
 }
 /**
- * After a restore, the phone-side details saved with it (a workout's unsaved set rows, RPE, sides, settings). A merge adds
- * any the phone does not have yet, and the set rows of a workout the restore brought back; Replace writes every one of them.
- * The importer's own bookkeeping is left alone.
- */
-/**
  * The phone's kept photo files, which the restore must not lose track of: `names` reads which files the stored addresses
  * point at, and `settle` deletes the ones no address names after the restore, keeping the address of any it can't delete.
  */
@@ -266,6 +268,60 @@ export interface RestorePhotos<T> {
   names(repo: Repository): T;
   settle(repo: Repository, before: T): void;
 }
+/** Photo addresses (as src/core/owner-files.ts keeps them). Their files belong to one person on this phone, so a
+ * signed-out restore never hands them on to an account. */
+export const PHOTO_ADDRESS_KEYS = ["profilePhoto", "profilePhotoLeftovers", "progressPhotos", "progressPhotosPending"];
+/** Details a restore never takes from the file: the importer's own bookkeeping, AI photos and barcode caches. */
+const skipped = (key: string) => key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:");
+
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => !!v && typeof v === "object" && !Array.isArray(v);
+/** Adds the file's entries the phone's list doesn't have, matched by `id`; the phone's own stay as they are. */
+function byId(mine: unknown, theirs: unknown): unknown[] {
+  const a = Array.isArray(mine) ? mine : [], b = Array.isArray(theirs) ? theirs : [];
+  const have = new Set(a.map((x) => (isObj(x) ? x.id : undefined)).filter((x) => x !== undefined));
+  return [...a, ...b.filter((x) => isObj(x) && x.id !== undefined && !have.has(x.id))];
+}
+/** Adds the file's days the phone's list doesn't have; a day the phone already has keeps the phone's value. */
+function byDay(mine: unknown, theirs: unknown): unknown[] {
+  const a = Array.isArray(mine) ? mine : [], b = Array.isArray(theirs) ? theirs : [];
+  const have = new Set(a.map((x) => (isObj(x) ? x.day : undefined)));
+  return [...a, ...b.filter((x) => isObj(x) && typeof x.day === "string" && !have.has(x.day))];
+}
+/** Day → entries: each day takes the file's entries the phone's day doesn't have. */
+function nested(mine: unknown, theirs: unknown, inner: (m: unknown, t: unknown) => unknown): Obj {
+  const a = isObj(mine) ? mine : {}, b = isObj(theirs) ? theirs : {}, out: Obj = { ...a };
+  for (const [day, v] of Object.entries(b)) out[day] = Object.hasOwn(a, day) ? inner(a[day], v) : v;
+  return out;
+}
+/** Keys: the file's ones the phone's object doesn't have; the phone's own values stay. */
+const keys = (mine: unknown, theirs: unknown): Obj => ({ ...(isObj(theirs) ? theirs : {}), ...(isObj(mine) ? mine : {}) });
+/**
+ * A merge of a history kept in local storage (water, routine check-offs, neck and manual body fat): the phone's history
+ * gains every record that is only in the file, and its own records and settings stay. Null for a key that isn't a
+ * history, or a history whose shape can't be read, which a merge leaves as the phone has it.
+ */
+function mergeHistory(key: string, mine: unknown, theirs: unknown): unknown {
+  if (key === "progressNeck" || key === "progressBodyFat") return Array.isArray(mine) && Array.isArray(theirs) ? byDay(mine, theirs) : null;
+  if (!isObj(mine) || !isObj(theirs)) return null;
+  if (key === "foodWater") return { ...mine, log: nested(mine.log, theirs.log, byId) };
+  if (key === "routines")
+    return {
+      ...mine,
+      routines: byId(mine.routines, theirs.routines),
+      hidden: byId(mine.hidden, theirs.hidden),
+      items: byId(mine.items, theirs.items),
+      log: nested(mine.log, theirs.log, keys),
+      ...(mine.used !== undefined || theirs.used !== undefined ? { used: nested(mine.used, theirs.used, keys) } : {}),
+    };
+  return null;
+}
+/**
+ * After a restore, the phone-side details saved with it (a workout's unsaved set rows, RPE, sides, water, routines,
+ * settings). A merge adds any the phone does not have yet, the records of a history that only the file has, and the set
+ * rows of a workout the restore brought back; Replace writes every one of them. A restore made while signed out keeps
+ * these details, photo addresses aside, for the first account on this phone, as it keeps the rows.
+ */
 export function restoreNativeLocal<T>(
   repo: Repository,
   backup: NativeBackup,
@@ -276,13 +332,23 @@ export function restoreNativeLocal<T>(
   repo.atomic(() => {
     const before = photos.names(repo);
     for (const [key, value] of Object.entries(backup.local)) {
-      if (key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:")) continue;
+      if (skipped(key)) continue;
       const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));
       // Replace puts the file's details back over the phone's; a merge only fills in what the phone does not have.
-      if (mode === "merge" && repo.localGet(key) !== undefined && !fresh) continue;
+      const mine = mode === "merge" && !fresh ? repo.localGet(key) : undefined;
+      if (mine !== undefined) {
+        const merged = mergeHistory(key, mine, value);
+        if (merged != null) repo.localSave(key, merged);
+        continue;
+      }
       repo.localSave(key, value);
     }
     // A Replace can write over photo addresses; their files go too, and one that won't delete keeps its address.
     photos.settle(repo, before);
+    if (repo.owner === "guest")
+      repo.localSave(
+        "pwaPendingAccountLocal",
+        Object.fromEntries(Object.entries(backup.local).filter(([key]) => !skipped(key) && !PHOTO_ADDRESS_KEYS.includes(key))),
+      );
   });
 }
