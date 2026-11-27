@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 import { ActionSheetIOS, Alert } from 'react-native';
 import { router } from 'expo-router';
+import { useKeepAwake } from 'expo-keep-awake';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { TrainingLogger } from '../src/features/workout/logger/screen';
@@ -134,6 +135,25 @@ describe('logger screen', () => {
     expect(screen.getByLabelText('Squat, set 1, weight in pounds').props.placeholder).toBe('230');
     expect(screen.getAllByRole('radio', { name: '8, last time' }).length).toBeGreaterThan(0);
     expect(screen.queryByText(/AI/)).toBeNull();
+  });
+  test('the screen stays awake only while Keep screen awake is on, and follows the switch', async () => {
+    sample();
+    jest.mocked(useKeepAwake).mockClear();
+    await render(<TrainingLogger />, { wrapper });
+    await act(async () => {});
+    expect(useKeepAwake).toHaveBeenCalledWith('workout');
+    jest.mocked(useKeepAwake).mockClear();
+    await act(async () => { mockRepository.localSave(SETTINGS_PREFS_KEY, withPref(DEFAULT_PREFS, 'work.awake', false)); });
+    await fireEvent.press(screen.getByRole('button', { name: 'Squat, up now' }));
+    expect(useKeepAwake).not.toHaveBeenCalled();
+  });
+  test('with Keep screen awake off, the logger never keeps the screen on', async () => {
+    sample();
+    mockRepository.localSave(SETTINGS_PREFS_KEY, withPref(DEFAULT_PREFS, 'work.awake', false));
+    jest.mocked(useKeepAwake).mockClear();
+    await render(<TrainingLogger />, { wrapper });
+    await act(async () => {});
+    expect(useKeepAwake).not.toHaveBeenCalled();
   });
   test('checking a set off saves it and starts the rest bar', async () => {
     const { store, squat } = sample();

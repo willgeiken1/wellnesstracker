@@ -103,3 +103,39 @@ test('a later change deletes the leftovers it can and forgets them', async () =>
   expect(mockFiles.has(first)).toBe(false);
   expect(r.localGet('profilePhotoLeftovers')).toBeNull();
 });
+
+test('a photo whose address cannot be saved after the move is deleted, and a stuck one stays listed for departure', async () => {
+  const store = new Map<string, unknown>();
+  let full = false;
+  const r = { localGet: (k: string) => store.get(k), localSave: jest.fn((k: string, v: unknown) => { if (full && k === 'profilePhoto') throw new Error('storage full'); store.set(k, v); }) } as unknown as Repository;
+  mockFiles.add('file:///caches/a.jpg');
+  const first = await saveProfilePhoto(r, 'file:///caches/a.jpg');
+  full = true;
+  mockFiles.add('file:///caches/b.jpg');
+  await expect(saveProfilePhoto(r, 'file:///caches/b.jpg')).rejects.toThrow('storage full');
+  // The old photo is still the photo, the new file is gone, and nothing is listed to delete.
+  expect(readProfilePhoto(r)).toBe(first);
+  expect([...mockFiles]).toEqual([first]);
+  expect(store.get('profilePhotoLeftovers')).toBeNull();
+
+  // The same failure with a file that will not delete: its address stays listed, and departure finds it.
+  const third = 'file:///docs/profile-photo/photo-3.jpg';
+  mockStuck.add(third);
+  mockFiles.add('file:///caches/c.jpg');
+  await expect(saveProfilePhoto(r, 'file:///caches/c.jpg')).rejects.toThrow('storage full');
+  expect(readProfilePhoto(r)).toBe(first);
+  expect(store.get('profilePhotoLeftovers')).toEqual([third]);
+  expect(() => eraseOwnerFiles(r)).toThrow(OwnerFilesNotErased);
+  mockStuck.clear();
+  eraseOwnerFiles(r);
+  expect(mockFiles.has(third) || mockFiles.has(first)).toBe(false);
+});
+
+test('a move that fails keeps the old photo and lists nothing new', async () => {
+  const r = repo();
+  mockFiles.add('file:///caches/a.jpg');
+  const first = await saveProfilePhoto(r, 'file:///caches/a.jpg');
+  await expect(saveProfilePhoto(r, 'file:///caches/missing.jpg')).rejects.toThrow('missing');
+  expect(readProfilePhoto(r)).toBe(first);
+  expect(r.localGet('profilePhotoLeftovers')).toBeNull();
+});

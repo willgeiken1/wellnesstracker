@@ -54,11 +54,27 @@ export async function saveProfilePhoto(repo: Repository, pickedUri: string): Pro
   const dir = new Directory(Paths.document, FOLDER);
   dir.create({ intermediates: true, idempotent: true });
   const dest = new File(dir, `${randomUUID().replace(/[^a-zA-Z0-9-]/g, '')}.jpg`);
-  await new File(pickedUri).move(dest);
-  const before = storedUri(repo);
-  const waiting = keepForDeleting(repo, before && before !== dest.uri ? before : null);
-  repo.localSave(KEY, dest.uri);
-  deleteWaiting(repo, waiting);
+  // The new file's address is noted with the leftovers before the file exists, so if anything below fails (the move, or
+  // saving an address), signing out or deleting the account still finds and deletes it.
+  keepForDeleting(repo, dest.uri);
+  try {
+    await new File(pickedUri).move(dest);
+    const before = storedUri(repo);
+    keepForDeleting(repo, before && before !== dest.uri ? before : null);
+    repo.localSave(KEY, dest.uri);
+  } catch (error) {
+    // Not kept: delete the new file now, and forget its address only once it is gone.
+    // The photo still in place (noted above as about to be replaced) comes off the list too.
+    const kept = storedUri(repo), deleted = deleteProfilePhoto(dest.uri);
+    if (deleted || kept) {
+      const rest = leftovers(repo).filter(u => u !== kept && !(deleted && u === dest.uri));
+      try { repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, rest.length ? rest : null); } catch { /* the list still names it; it is gone */ }
+    }
+    throw error;
+  }
+  // It is the photo now: off the list, and the old ones on it are deleted (any still there stay listed).
+  const old = leftovers(repo).filter(u => u !== dest.uri), stuck = old.filter(u => !deleteProfilePhoto(u));
+  try { repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, stuck.length ? stuck : null); } catch { /* listed until the next change or departure */ }
   return dest.uri;
 }
 

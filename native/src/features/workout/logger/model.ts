@@ -2,7 +2,7 @@ import { exerciseFor, exerciseLibrary } from '@/core/workout/library';
 import { displayWeight, plates, validateSet, type Unit } from '@/core/workout/rules';
 import type { Row } from '@/data/rows';
 import type { Draft, WorkoutStore } from '@/data/workout/store';
-import { loadSettingsPrefs } from '@/features/settings/prefs';
+import { loadSettingsPrefs } from '@/features/settings/prefs-model';
 import { clock, epley, muscleGroup } from '../training-data';
 import { tr, trCount } from '../tr';
 

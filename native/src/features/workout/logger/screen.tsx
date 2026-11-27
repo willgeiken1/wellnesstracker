@@ -12,6 +12,7 @@ import { useLayoutMotion } from '@/components/layout-motion';
 import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
 import { useTheme } from '@/design/theme-provider';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 import { ShellToast, showToast } from '@/features/shell/toast';
 import { actionSheet } from '../action-sheet';
 import { FinishSheet } from '../finish';
@@ -61,8 +62,14 @@ export function TrainingLogger() {
   </View>;
 }
 
-function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
+/** Keeps the screen on while it is drawn; the logger draws it only while Settings > Workouts > Keep screen awake is on. */
+function StayAwake() {
   useKeepAwake('workout');
+  return null;
+}
+
+function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
+  const [{ work: { awake } }] = useSettingsPrefs();
   const insets = useSafeAreaInsets(), col = useLoggerColors(), { reduceMotion } = useTheme(), glide = useLayoutMotion();
   const past = store.pastMode(session.id), editing = session.data.finished_at != null;
   const view = loggerView(store, session);
@@ -197,6 +204,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   </View>;
 
   return <View style={{ flex: 1, backgroundColor: col.c.bg }}>
+    {awake && <StayAwake />}
     <UnderBar bar={header} gutter={0} estimate={headerGuess} onTop={h => { headerH.current = h; }}>{top =>
     <ScrollView ref={scroll} testID="logger-exercises" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets scrollIndicatorInsets={{ top }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingTop: top, paddingBottom: 132 + insets.bottom }}>
