@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { barFor } from './logger/model';
 import { leave } from "./parts";
 import { Alert, AppState, ScrollView, View } from "react-native";
 import { Tappable as Pressable } from "@/components/tappable";
@@ -751,7 +752,7 @@ function Logger({
             field={cursor.field}
             unit={store.unit(current.id)}
             setupStep={store.preferences().increment(String(current.data.exercise), store.unit(current.id))}
-            barWeight={store.preferences().machine(String(current.data.exercise)).bar_weight}
+            barWeight={barFor(store, String(current.data.exercise), store.unit(current.id))}
             plateSet={store.preferences().plateSet(store.unit(current.id))}
             equipment={store.preferences().exercise(String(current.data.exercise)).equipment}
             value={value}

@@ -133,8 +133,11 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
   const sessions = store.trainingHistory(), active = store.active();
   const minutes = new Map<string, number>(), names = new Map<string, string[]>();
   for (const s of sessions) { const k = String(s.data.day); minutes.set(k, (minutes.get(k) ?? 0) + minutesOf(s)); names.set(k, [...(names.get(k) ?? []), String(s.data.name ?? '')]); }
+  // Cardio logged on its own sheet counts toward training minutes, as on Training.
+  const cardio = repo.list('cardio_sessions').filter(c => typeof c.data.day === 'string' && String(c.data.day) <= today);
+  for (const c of cardio) { const min = Math.round(Number(c.data.duration_ms ?? 0) / 60000); if (finite(min) && min > 0) minutes.set(String(c.data.day), (minutes.get(String(c.data.day)) ?? 0) + min); }
   const activeMin = active && finite(Number(active.data.started_at)) ? Math.max(0, Math.round((now.getTime() - Number(active.data.started_at)) / 60000)) : null;
-  const firstDay = sessions.map(s => String(s.data.day)).sort()[0] ?? (active ? today : null);
+  const firstDay = [...sessions, ...cardio].map(s => String(s.data.day)).sort()[0] ?? (active ? today : null);
   d.days.training = days.map(day => firstDay && day >= firstDay ? (minutes.get(day) ?? 0) + (day === today && activeMin != null ? activeMin : 0) : null);
   const weekStart = addDays(today, -6), prevStart = addDays(today, -13);
   const volume = (from: string, to: string) => {

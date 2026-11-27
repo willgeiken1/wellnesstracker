@@ -5,7 +5,8 @@ import { router } from 'expo-router';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { TrainingLogger } from '../src/features/workout/logger/screen';
-import { checkSet, deleteSet, discardSession, exLabel, exMuscles, loggerView, plateText, removeExercise, rpeKey, stepWeight } from '../src/features/workout/logger/model';
+import { barFor, checkSet, deleteSet, discardSession, exLabel, exMuscles, loggerView, plateText, removeExercise, rpeKey, stepWeight } from '../src/features/workout/logger/model';
+import { DEFAULT_PREFS, SETTINGS_PREFS_KEY, withPref } from '../src/features/settings/prefs';
 import { memoryRepository } from './workout-repository';
 
 let mockRepository: ReturnType<typeof memoryRepository>;
@@ -38,6 +39,15 @@ describe('logger model', () => {
   test('plates and the focus steppers follow the mockup', () => {
     expect(plateText(225, 'lb')).toBe('2 × 45 each side, 45 lb bar');
     expect(plateText(45, 'lb')).toBe('Just the 45 lb bar');
+  });
+  test('plates use the bar chosen in Settings unless the exercise has its own', () => {
+    const { store } = sample();
+    expect(barFor(store, 'Squat', 'lb')).toBe(45);
+    mockRepository.localSave(SETTINGS_PREFS_KEY, withPref(DEFAULT_PREFS, 'work.bar', '35'));
+    expect(barFor(store, 'Squat', 'lb')).toBe(35);
+    expect(plateText(135, 'lb', barFor(store, 'Squat', 'lb'))).toContain('35 lb bar');
+    store.preferences().saveMachine('Squat', { text: '', bar_weight: 25 }, 'lb');
+    expect(barFor(store, 'Squat', 'lb')).toBe(25);
     expect(stepWeight(100, 'lb', 1)).toBe(105);
     expect(stepWeight(50, 'lb', -1)).toBe(47.5);
     expect(stepWeight(40, 'kg', 1)).toBe(41.25);
@@ -97,6 +107,22 @@ describe('logger model', () => {
 });
 
 describe('logger screen', () => {
+  test('a one-side-at-a-time exercise has its own right-side weight and reps, saved as typed', async () => {
+    const { store, squat } = sample();
+    store.setUnilateral(squat.id, true);
+    await render(<TrainingLogger />, { wrapper });
+    await act(async () => {});
+    expect(screen.getByLabelText('Squat, set 1, Left, weight in pounds')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Squat, set 1, Left, weight in pounds'), '50');
+    await fireEvent.changeText(screen.getByLabelText('Squat, set 1, Left, reps'), '10');
+    await fireEvent.changeText(screen.getByLabelText('Squat, set 1, Right, weight in pounds'), '45');
+    await fireEvent.changeText(screen.getByLabelText('Squat, set 1, Right, reps'), '8');
+    await fireEvent.press(screen.getByTestId('set-0-0-check'));
+    const set = store.sets(squat.id)[0].data;
+    expect(set.left_reps).toBe(10);
+    expect(set.right_reps).toBe(8);
+    expect(Number(set.right_weight_kg)).toBeLessThan(Number(set.left_weight_kg));
+  });
   test('shows the top bar, jump strip, progress and the open exercise with its set cards', async () => {
     sample();
     await render(<TrainingLogger />, { wrapper });

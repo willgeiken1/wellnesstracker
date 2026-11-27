@@ -23,7 +23,7 @@ import { useWorkout } from '../use-workout';
 import { useRestLiveActivity } from '../live-activity';
 import { RestBar, JumpStrip, StatusCard, TopBar } from './chrome';
 import { FocusMode } from './focus';
-import { checkSet, deleteSet, exLabel, discardSession, loggerView, noteOpenKey, plateText, removeExercise, rpeKey, type ExerciseView, type SetView } from './model';
+import { barFor, checkSet, deleteSet, exLabel, SET_FIELDS, type SetField, discardSession, loggerView, noteOpenKey, plateText, removeExercise, rpeKey, type ExerciseView, type SetView } from './model';
 import { ExerciseFooter, ExerciseHeader, LT, NoteField, SetCard, useLoggerColors, type SetHandlers } from './parts';
 
 /** Leave the logger for the Training tab; the workout keeps going. */
@@ -87,21 +87,22 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   }, 60);
   const run = (fn: () => void) => { try { fn(); } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); } };
 
-  const key = (e: ExerciseView, s: SetView, field: 'weight' | 'reps') => `${e.entry.id}:${s.index}:${field}`;
+  const key = (e: ExerciseView, s: SetView, field: SetField) => `${e.entry.id}:${s.index}:${field}`;
   const withEdits = (e: ExerciseView, s: SetView): SetView => {
-    const w = edits[key(e, s, 'weight')], r = edits[key(e, s, 'reps')];
-    return w == null && r == null ? s : { ...s, draft: { ...s.draft, weight: w ?? s.draft.weight, reps: r ?? s.draft.reps } };
+    const changed = SET_FIELDS.filter(f => edits[key(e, s, f)] != null);
+    return changed.length ? { ...s, draft: { ...s.draft, ...Object.fromEntries(changed.map(f => [f, edits[key(e, s, f)]])) } } : s;
   };
-  const field = (e: ExerciseView, s: SetView, f: 'weight' | 'reps', v: string) => {
+  const field = (e: ExerciseView, s: SetView, f: SetField, v: string) => {
     if (s.done) setEdits(m => ({ ...m, [key(e, s, f)]: v }));
     else run(() => store.editDraft(e.entry.id, s.index, { [f]: v }));
   };
   const endEdit = (e: ExerciseView, s: SetView) => {
     if (!s.done) return;
-    const w = edits[key(e, s, 'weight')], r = edits[key(e, s, 'reps')];
-    setEdits(m => { const n = { ...m }; delete n[key(e, s, 'weight')]; delete n[key(e, s, 'reps')]; return n; });
-    if (w == null && r == null) return;
-    run(() => store.editDraft(e.entry.id, s.index, { ...(w != null && w !== s.draft.weight ? { weight: w } : {}), ...(r != null && r !== s.draft.reps ? { reps: r } : {}) }));
+    const changed = SET_FIELDS.filter(f => edits[key(e, s, f)] != null);
+    setEdits(m => { const n = { ...m }; for (const f of SET_FIELDS) delete n[key(e, s, f)]; return n; });
+    const patch = Object.fromEntries(changed.filter(f => edits[key(e, s, f)] !== (s.draft[f] ?? '')).map(f => [f, edits[key(e, s, f)]]));
+    if (!Object.keys(patch).length) return;
+    run(() => store.editDraft(e.entry.id, s.index, patch));
   };
   const check = (e: ExerciseView, s: SetView) => {
     const wasOpen = openId === e.entry.id;
@@ -126,7 +127,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
     const w = Number(s.draft.weight || s.weightHint);
     if (!w) return null;
     const prefs = store.preferences();
-    return plateText(w, e.unit, prefs.machine(e.name).bar_weight, prefs.plateSet(e.unit));
+    return plateText(w, e.unit, barFor(store, e.name, e.unit), prefs.plateSet(e.unit));
   };
   const handlers = (e: ExerciseView): SetHandlers => ({
     onField: (s, f, v) => field(e, s, f, v), onEnd: s => endEdit(e, s), onCheck: s => check(e, s), onTag: (s, t) => tag(e, s, t), onRpe: (s, v) => rpe(e, s, v),

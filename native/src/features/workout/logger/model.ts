@@ -2,6 +2,7 @@ import { exerciseFor, exerciseLibrary } from '@/core/workout/library';
 import { displayWeight, plates, validateSet, type Unit } from '@/core/workout/rules';
 import type { Row } from '@/data/rows';
 import type { Draft, WorkoutStore } from '@/data/workout/store';
+import { loadSettingsPrefs } from '@/features/settings/prefs';
 import { clock, epley, muscleGroup } from '../training-data';
 import { tr, trCount } from '../tr';
 
@@ -24,6 +25,15 @@ export function exMuscles(name: string) {
   const groups = [...new Set([ex.main, ...ex.helpers].map(m => muscleGroup(m)).filter((g): g is NonNullable<typeof g> => !!g))].slice(0, 2);
   return groups.map((g, i) => i ? g.toLowerCase() : g).join(', ');
 }
+/** The bar chosen in Settings › Workout › Plates for this unit, used when the exercise has no bar of its own. */
+export function settingsBar(repo: Parameters<typeof loadSettingsPrefs>[0], unit: Unit): number | undefined {
+  const w = loadSettingsPrefs(repo).work, v = Number(unit === 'kg' ? w.barKg : w.bar);
+  return Number.isFinite(v) && v > 0 ? v : undefined;
+}
+/** The bar for an exercise: its own bar from its machine setup, or the one chosen in Settings. */
+export function barFor(store: Pick<WorkoutStore, 'preferences' | 'repo'>, name: string, unit: Unit): number | undefined {
+  return store.preferences().machine(name).bar_weight ?? settingsBar(store.repo, unit);
+}
 /** "45 + 10 each side, 45 lb bar" for the weight on a barbell. */
 export function plateText(weight: number, unit: Unit, bar?: number, available?: number[]) {
   const result = plates(weight, unit, bar, available);
@@ -40,6 +50,9 @@ export function plateText(weight: number, unit: Unit, bar?: number, available?: 
   return `${groups.join(' + ')} ${tr('trainingEachSide')}, ${barText}`;
 }
 
+/** The fields of a set the logger edits: weight and reps, and for a one-side-at-a-time exercise the right side's too. */
+export type SetField = 'weight' | 'reps' | 'rightWeight' | 'rightReps';
+export const SET_FIELDS: readonly SetField[] = ['weight', 'reps', 'rightWeight', 'rightReps'];
 export interface SetView {
   index: number; draft: Draft; done: boolean; warm: boolean; failure: boolean;
   /** The working set's number (1, 2, 3); warm-ups have none. */ num: number;
@@ -47,6 +60,7 @@ export interface SetView {
 }
 export interface ExerciseView {
   entry: Row; name: string; label: string; unit: Unit; sets: SetView[];
+  /** Logged one side at a time: each set has its own right-side weight and reps. */ unilateral: boolean;
   /** Working sets, and how many of them are checked off. */ total: number; done: number;
   all: boolean; best: { w: number; r: number; rpe: number | null } | null; prev: { w: number; r: number } | null;
   rest: number; note: string | null; barbell: boolean;
@@ -106,7 +120,7 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
     done += checked.length; total += work.length;
     volume += checked.reduce((v, s) => v + (+s.draft.weight || 0) * (+s.draft.reps || 0), 0);
     const opened = store.repo.localGet<boolean>(noteOpenKey(entry.id)) === true;
-    return { entry, name, label: exLabel(name), unit, sets, total: work.length, done: checked.length,
+    return { entry, name, label: exLabel(name), unit, sets, unilateral: store.isUnilateral(entry.id), total: work.length, done: checked.length,
       all: sets.length > 0 && sets.every(s => s.done),
       best: best ? { w: +best.draft.weight, r: +best.draft.reps, rpe: best.rpe } : null, prev,
       rest: store.rest(name).seconds, note: entry.data.notes != null ? String(entry.data.notes) : opened ? '' : null,

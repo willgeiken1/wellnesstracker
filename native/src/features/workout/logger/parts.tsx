@@ -5,7 +5,7 @@ import { Icon } from '@/components/icon';
 import { alpha, font, mix, slopFor, tabular, useKit } from '@/components/kit-style';
 import { Tappable } from '@/components/tappable';
 import { tr } from '../tr';
-import { RPE, exerciseLines, type ExerciseView, type SetView } from './model';
+import { RPE, exerciseLines, type ExerciseView, type SetField, type SetView } from './model';
 
 /** The logger's colours: the theme plus the mockup's ghost grey and the few mixes it draws with. */
 export function useLoggerColors() {
@@ -88,7 +88,7 @@ export function TagRow({ s, col, onTag, more, moreLabel, style }: { s: SetView; 
 }
 
 export interface SetHandlers {
-  onField: (s: SetView, field: 'weight' | 'reps', value: string) => void;
+  onField: (s: SetView, field: SetField, value: string) => void;
   onEnd: (s: SetView) => void;
   onCheck: (s: SetView) => void;
   onTag: (s: SetView, tag: 'warmup' | 'failure') => void;
@@ -105,6 +105,9 @@ export function SetCard({ e, s, ei, current, open, plates, col, h }: {
   const bg = s.done ? mix(train, c.surface, col.dark ? 0.13 : 0.11) : s.warm ? (col.dark ? alpha(c['surface-2'], 0.5) : mix(c['surface-2'], c.surface, 0.5)) : c['surface-2'];
   const numColor = s.warm ? c.warning : s.done ? train : c['text-muted'];
   const unitName = e.unit === 'kg' ? tr('trainingKilograms') : tr('trainingPounds');
+  // One side at a time: the first row is the left side and a second row holds the right side, which shows the left's
+  // numbers until it is typed in, and is saved as the same when left empty.
+  const leftLabel = e.unilateral ? `${label}, ${t('leftSide')}` : label, rightLabel = `${label}, ${t('rightSide')}`;
   const meta = s.done ? `${s.rpe != null ? tr('trainingRpeMeta', { n: s.rpe }) : tr('trainingNoRpe')}${s.pr ? tr('trainingNewPrMeta') : ''}${tr(open ? 'trainingHideRpe' : 'trainingEditRpe')}` : '';
   return <View testID={`set-${ei}-${s.index}`} accessibilityLabel={label} style={{ paddingTop: 8, paddingBottom: 8, paddingLeft: 8, paddingRight: 6, borderRadius: 16, backgroundColor: bg,
     boxShadow: current ? `inset 0px 0px 0px 1.5px ${alpha(train, 0.6)}` : undefined }}>
@@ -118,9 +121,9 @@ export function SetCard({ e, s, ei, current, open, plates, col, h }: {
           </View>}
         </View>
       </View>
-      <Field testID={`set-${ei}-${s.index}-weight`} value={s.draft.weight} placeholder={s.weightHint} unit={e.unit} label={tr('trainingWeightIn', { label, unit: unitName })}
+      <Field testID={`set-${ei}-${s.index}-weight`} value={s.draft.weight} placeholder={s.weightHint} unit={e.unit} label={tr('trainingWeightIn', { label: leftLabel, unit: unitName })}
         keyboard="decimal-pad" done={s.done} warm={s.warm} col={col} onChange={v => h.onField(s, 'weight', v)} onEnd={() => h.onEnd(s)} />
-      <Field testID={`set-${ei}-${s.index}-reps`} value={s.draft.reps} placeholder={s.repsHint} unit={tr('trainingRepsUnit')} label={tr('trainingRepsField', { label })}
+      <Field testID={`set-${ei}-${s.index}-reps`} value={s.draft.reps} placeholder={s.repsHint} unit={tr('trainingRepsUnit')} label={tr('trainingRepsField', { label: leftLabel })}
         keyboard="number-pad" done={s.done} warm={s.warm} col={col} onChange={v => h.onField(s, 'reps', v)} onEnd={() => h.onEnd(s)} />
       {s.done && <Tappable dim="text" accessibilityRole="button" accessibilityLabel={meta} accessibilityState={{ expanded: open }} onPress={() => h.onToggleOpen(s)}
         style={{ flex: 1, minWidth: 0, height: 44, paddingLeft: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
@@ -137,6 +140,15 @@ export function SetCard({ e, s, ei, current, open, plates, col, h }: {
         </View>
       </Tappable>
     </View>
+    {e.unilateral && <View testID={`set-${ei}-${s.index}-right`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+      <View style={{ width: 32, alignItems: 'center' }}><LT w={700} s={12} color={c['text-muted']}>{t('rightSide').charAt(0)}</LT></View>
+      <Field testID={`set-${ei}-${s.index}-right-weight`} value={s.draft.rightWeight ?? ''} placeholder={s.draft.weight || s.weightHint} unit={e.unit}
+        label={tr('trainingWeightIn', { label: rightLabel, unit: unitName })} keyboard="decimal-pad" done={s.done} warm={s.warm} col={col}
+        onChange={v => h.onField(s, 'rightWeight', v)} onEnd={() => h.onEnd(s)} />
+      <Field testID={`set-${ei}-${s.index}-right-reps`} value={s.draft.rightReps ?? ''} placeholder={s.draft.reps || s.repsHint} unit={tr('trainingRepsUnit')}
+        label={tr('trainingRepsField', { label: rightLabel })} keyboard="number-pad" done={s.done} warm={s.warm} col={col}
+        onChange={v => h.onField(s, 'rightReps', v)} onEnd={() => h.onEnd(s)} />
+    </View>}
     {open && <>
       <TagRow s={s} col={col} onTag={t => h.onTag(s, t)} more={() => h.onMore(s, label)} moreLabel={tr('trainingSetOptions', { label })} />
       <RpeRow value={s.rpe} last={s.lastRpe} col={col} onPick={v => h.onRpe(s, v)} />

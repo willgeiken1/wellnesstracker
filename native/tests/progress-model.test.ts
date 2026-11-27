@@ -84,6 +84,15 @@ describe('buildProgress', () => {
     expect(d.weight.kg).toBeNull();
     expect(d.food.eatenKcal).toBeNull();
   });
+  test('cardio logged on its own counts toward training minutes, from its first day', () => {
+    const repo = memoryRepository();
+    repo.save('cardio_sessions', { day: '2026-11-10', kind: 'run', duration_ms: 30 * 60000, distance_m: 5000, notes: '' });
+    repo.save('cardio_sessions', { day: TODAY, kind: 'ride', duration_ms: 45 * 60000, distance_m: null, notes: '' });
+    const d = buildProgress({ store: new WorkoutStore(repo), now: NOW, demo: false, health: null, recovery: null, ring: null });
+    expect(d.days.training.at(-1)).toBe(45);
+    expect(d.days.training.at(-2)).toBe(30);
+    expect(d.days.training.at(-3)).toBeNull();
+  });
   test('a missing day from Apple Health stays missing', () => {
     const steps = nulls(30); steps[29] = 5000; steps[27] = 0.5 * Number.NaN;
     const d = buildProgress({ store: store(), now: NOW, demo: false, health: health(steps), recovery: null, ring: null });
