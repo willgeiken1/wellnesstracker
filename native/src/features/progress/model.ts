@@ -16,6 +16,9 @@ export type Stage = 'awake' | 'rem' | 'core' | 'deep';
 export interface Night {
   /** Minutes in bed, and of each stage. */
   min: number; deep: number; rem: number; core: number; awake: number;
+  /** Minutes asleep that the source gave no stage for (a device that records no stages). They count toward time asleep,
+   * never toward a stage, so while there are any the stage breakdown is shown as unavailable. */
+  unstaged?: number;
   /** Minutes after midnight (bed may be negative: before midnight). Null when the source gives no times. */
   bed: number | null; wake: number | null;
   source: 'Oura' | 'Apple Health';

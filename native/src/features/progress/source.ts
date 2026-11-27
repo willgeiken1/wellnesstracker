@@ -13,6 +13,7 @@ import { dayScore } from '@/features/score/day';
 import { withDemoSleep } from '@/features/home/demo-sleep';
 import { foodDays, scoreDays } from '@/features/score/days';
 import { loadSettingsPrefs } from '@/features/settings/prefs';
+import { entryVolumeKg } from '@/features/workout/volume';
 import { t } from '@/i18n/en';
 import { fill, hm } from './format';
 import { readBodyFat, readMeasures, readPhotos } from './local';
@@ -129,9 +130,9 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
   d.hrvBand = band(d.days.hrv); d.rhrBand = band(d.days.rhr);
   const night = ring?.night ?? recovery?.night ?? null;
   if (night) {
-    const core = night.core + night.asleep;
-    d.night = { min: night.deep + core + night.rem + night.awake, deep: night.deep, core, rem: night.rem, awake: night.awake, bed: null, wake: null,
-      source: ring?.night ? 'Oura' : 'Apple Health', segments: null };
+    // Plain asleep from a device that records no stages stays apart: it is time asleep, not core sleep.
+    d.night = { min: night.deep + night.core + night.rem + night.asleep + night.awake, deep: night.deep, core: night.core, rem: night.rem, awake: night.awake,
+      unstaged: night.asleep, bed: null, wake: null, source: ring?.night ? 'Oura' : 'Apple Health', segments: null };
   }
   const appleHeart = !ouraHeart && !!recovery && [...(recovery.hrv ?? []), ...(recovery.restingHeartRate ?? [])].some(finite);
   d.sources = { oura: !!ring, apple: !!health || !!recovery, ouraSynced: null, heart: ouraHeart ? 'Oura' : appleHeart ? 'Apple Health' : null };
@@ -166,14 +167,8 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
     for (const s of sessions) {
       const day = String(s.data.day);
       if (day < from || day > to) continue;
-      for (const e of store.entries(s.id)) {
-        if (store.skipped(e.id)) continue;
-        for (const set of store.sets(e.id)) {
-          const x = set.data, v = x.left_weight_kg != null && x.right_weight_kg != null
-            ? Number(x.left_weight_kg) * Number(x.left_reps) + Number(x.right_weight_kg) * Number(x.right_reps) : Number(x.weight_kg) * Number(x.reps);
-          if (finite(v)) kg += v;
-        }
-      }
+      // Working sets only, as the workout summary counts them: warm-ups and skipped exercises add nothing.
+      for (const e of store.entries(s.id)) kg += entryVolumeKg(store, e);
     }
     return kg;
   };

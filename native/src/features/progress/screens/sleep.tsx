@@ -73,7 +73,7 @@ export function SleepScreen() {
     </View>
     {S ? <Card>
       {S.segments ? <>{segRead()}<Hypnogram night={S} sel={seg} onSel={setSeg} /></> : <Cap>{t('progressNoStages')}</Cap>}
-      {S.deep || S.rem || S.core ? <>
+      {!S.unstaged && (S.deep || S.rem || S.core) ? <>
         <View style={{ flexDirection: 'row', height: 10, marginTop: 16, borderRadius: 7, overflow: 'hidden', gap: 2, backgroundColor: k.c['surface-2'] }}>{ORDER.map(st => <View key={st} style={{ width: `${S[st] / S.min * 100}%`, backgroundColor: k.tok(STAGES[st][1]) }} />)}</View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 12, marginTop: 16 }}>{ORDER.map((st, i) => <View key={st} style={{ width: '50%', flexDirection: 'row', gap: 10, paddingLeft: i % 2 ? 8 : 0, paddingRight: i % 2 ? 0 : 8 }}>
           <View style={{ width: 10, height: 10, borderRadius: 3, marginTop: 5, backgroundColor: k.tok(STAGES[st][1]) }} />

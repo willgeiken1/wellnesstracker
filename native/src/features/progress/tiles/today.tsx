@@ -154,7 +154,7 @@ function RecoveryTile({ size, options, body }: TileRenderProps) {
   const se = series(d, 'sleep', 'week');
   return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>{top}
     <Hair style={{ marginTop: 12, marginBottom: 10 }} />
-    {S && S.min > 0 && (S.deep || S.rem || S.core) ? <>
+    {S && S.min > 0 && !S.unstaged && (S.deep || S.rem || S.core) ? <>
       <Row style={{ marginBottom: 8 }}><K>{t('progressStages')}</K><Spacer />{bedWake ? <Sub>{bedWake[0]} {t('progressTo')} {bedWake[1]}</Sub> : null}</Row>
       <Stack parts={ST.map(([key, , c]) => ({ color: k.tok(c), frac: S[key] / S.min }))} />
       <Legend style={{ marginTop: 8 }} items={[...ST.map(([key, l, c]) => ({ color: k.tok(c), label: t(l), value: String(S[key]) })), { label: t('progressMinUnit') }]} />
