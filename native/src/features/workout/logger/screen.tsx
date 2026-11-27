@@ -159,6 +159,8 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
     { label: e.note == null ? tr('trainingAddNote') : tr('trainingRemoveNote'), run: () => e.note == null ? store.repo.localSave(noteOpenKey(e.entry.id), true) : saveNote(e, null) },
     ...(past ? [] : [{ label: tr('trainingRestFor'), run: () => trainingNav.rest(e.entry.id) }]),
     { label: tr('trainingReplace'), run: () => trainingNav.picker({ mode: 'replace', entry: e.entry.id }) },
+    // Each side on its own row is set before any set is saved, as before, so a saved set never changes shape.
+    ...(store.sets(e.entry.id).length ? [] : [{ label: tr(e.unilateral ? 'bilateral' : 'unilateral'), run: () => run(() => store.setUnilateral(e.entry.id, !e.unilateral)) }]),
     { label: tr('trainingReorderTitle'), run: () => setReorder(true) },
     { label: tr('trainingRemoveExercise'), destructive: true, run: () => run(() => {
       glide();
