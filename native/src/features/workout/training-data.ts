@@ -1,4 +1,4 @@
-import { displayWeight, fromKg, localDay, weekOf, type Unit } from '../../core/workout/rules';
+import { displayWeight, fromKg, localDay, toKg, weekOf, type Unit } from '../../core/workout/rules';
 import type { Repository } from '../../data/repository';
 import type { Row } from '../../data/rows';
 import { WorkoutOptions } from '../../data/workout/options';
@@ -97,14 +97,15 @@ export class TrainingData {
       const exercises: LiveExercise[] = [], matrix: LiveView['matrix'] = [], groups: number[] = [];
       let volume = 0;
       for (const e of entries) {
-        const w = workingDrafts(this.workout.drafts(e.id));
+        const w = workingDrafts(this.workout.drafts(e.id)), from = this.workout.unit(e.id);
         if (!w.length) continue;
         const done = w.filter(d => d.setId).length;
         exercises.push({ entryId: e.id, name: String(e.data.exercise), done, total: w.length });
         groups.push(w.length);
         for (const d of w) {
           matrix.push(d.setId ? 1 : 0);
-          if (d.setId) volume += (Number(d.weight) || 0) * (Number(d.reps) || 0);
+          // A draft is in its exercise's unit; the volume is in the profile's.
+          if (d.setId) volume += (from === this.unit ? Number(d.weight) || 0 : fromKg(toKg(Number(d.weight) || 0, from), this.unit)) * (Number(d.reps) || 0);
         }
       }
       const at = matrix.indexOf(0);

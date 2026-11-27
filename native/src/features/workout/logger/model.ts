@@ -1,5 +1,5 @@
 import { exerciseFor, exerciseLibrary } from '@/core/workout/library';
-import { displayWeight, plates, validateSet, type Unit } from '@/core/workout/rules';
+import { displayWeight, fromKg, plates, toKg, validateSet, type Unit } from '@/core/workout/rules';
 import type { Row } from '@/data/rows';
 import type { Draft, WorkoutStore } from '@/data/workout/store';
 import { loadSettingsPrefs } from '@/features/settings/prefs-model';
@@ -90,6 +90,7 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
   const entries = store.entries(session.id).filter(e => !store.skipped(e.id));
   const next = store.pastMode(session.id) ? null : store.nextSet(session.id) ?? null;
   let done = 0, total = 0, volume = 0;
+  const totalUnit = store.unit();
   const exercises = entries.map((entry): ExerciseView => {
     const name = String(entry.data.exercise), unit = store.unit(entry.id), drafts = store.drafts(entry.id);
     const previous = store.previous(entry), suggestion = store.suggestion(entry), range = store.repRange(entry);
@@ -118,7 +119,9 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
       if (!prev || epley(w, r) > epley(prev.w, prev.r)) prev = { w, r };
     }
     done += checked.length; total += work.length;
-    volume += checked.reduce((v, s) => v + (+s.draft.weight || 0) * (+s.draft.reps || 0), 0);
+    // Drafts are in this exercise's unit; the total is in the workout's, so convert before adding.
+    const toTotal = (w: number) => unit === totalUnit ? w : fromKg(toKg(w, unit), totalUnit);
+    volume += checked.reduce((v, s) => v + toTotal(+s.draft.weight || 0) * (+s.draft.reps || 0), 0);
     const opened = store.repo.localGet<boolean>(noteOpenKey(entry.id)) === true;
     return { entry, name, label: exLabel(name), unit, sets, unilateral: store.isUnilateral(entry.id), total: work.length, done: checked.length,
       all: sets.length > 0 && sets.every(s => s.done),
@@ -126,7 +129,7 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
       rest: store.rest(name).seconds, note: entry.data.notes != null ? String(entry.data.notes) : opened ? '' : null,
       barbell: store.preferences().exercise(name).equipment === 'barbell' };
   });
-  return { exercises, current: next ? { entryId: next.entryId, index: next.index } : null, done, total, volume, unit: store.unit() };
+  return { exercises, current: next ? { entryId: next.entryId, index: next.index } : null, done, total, volume, unit: totalUnit };
 }
 
 /** The exercise's quiet line when closed ("Best 245 lb × 5 · RPE 8") and when open ("Quads, glutes · rest 1:30"). */

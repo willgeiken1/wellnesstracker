@@ -15,7 +15,7 @@ import { ActionTile, closeSheet, foodAmount, foodKcal, foodKey, FoodRow, FoodShe
 import { MealSeg, SectionLabel } from './ui';
 import { useFoodRevision } from './use-food-revision';
 import { useFoodWeightUnit } from './weight';
-import { enAmt, enNum, useEnergyUnit } from './energy';
+import { enAmt, enLabel, enNum, useEnergyUnit } from './energy';
 
 type Tab = 'recent' | 'saved' | 'mine' | 'results';
 const savedKey = (c: Combo) => `meal:${c.name}`;
@@ -85,8 +85,8 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
     </ScrollView>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
       <View style={{ gap: 2, flexShrink: 1 }}>
-        <KitText weight={700} size={16} tracking={-0.01} numeric>{`${plural(items.length, t('foodFood'), t('foodFoods'))} · ${enAmt(totals.kcal, u)}`}</KitText>
-        <KitText weight={500} size={12.5} numeric color="text-muted">{`${num(totals.p)} g ${t('foodProteinLower')}`}</KitText>
+        <KitText weight={700} size={16} tracking={-0.01} numeric>{`${plural(items.length, t('foodFood'), t('foodFoods'))} · ${totals.kcal == null ? `– ${enLabel(u)}` : enAmt(totals.kcal, u)}`}</KitText>
+        <KitText weight={500} size={12.5} numeric color="text-muted">{`${totals.p == null ? '–' : num(totals.p)} g ${t('foodProteinLower')}`}</KitText>
       </View>
       <Button color="food" label={fill(t('foodLogInto'), { meal: lower(mealName(repo, meal)) })}
         accessibilityLabel={fill(t('foodLogNTo'), { n: plural(items.length, t('foodFood'), t('foodFoods')), meal: mealName(repo, meal) })}
