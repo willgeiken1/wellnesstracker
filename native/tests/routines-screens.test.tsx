@@ -99,6 +99,23 @@ describe('add item', () => {
   });
 });
 
+describe('add item, on hand', () => {
+  it('takes at most 99,999 on hand, in the field and when it saves', async () => {
+    const store = demoStore();
+    await render(<AddItem store={store} />, { wrapper });
+    const hand = screen.getByLabelText('On hand, optional');
+    expect(hand.props.maxLength).toBe(5);
+    await act(async () => { fireEvent.changeText(hand, '1234567'); });
+    expect(screen.getByLabelText('On hand, optional').props.value).toBe('99999');
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('On hand, optional'), '12a0'); });
+    expect(screen.getByLabelText('On hand, optional').props.value).toBe('120');
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('On hand, optional'), '99999'); });
+    await act(async () => { fireEvent.changeText(screen.getByTestId('routines-add-name'), 'Journal'); });
+    await act(async () => { fireEvent.press(screen.getByTestId('routines-add-save')); });
+    expect(store.read().items.find(i => i.name === 'Journal')).toMatchObject({ left: 99999 });
+  });
+});
+
 describe('unit converter', () => {
   it('converts what was typed and says it is not a recommendation', async () => {
     await render(<Converter />, { wrapper });

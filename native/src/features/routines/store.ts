@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import type { Repository } from '@/data/repository';
 import {
-  ALL_DAYS, addDays, clock, demoState, emptyState, itemById, normalize, nowOf, pretty, rById,
+  ALL_DAYS, MAX_ON_HAND, addDays, clock, demoState, emptyState, itemById, normalize, nowOf, pretty, rById,
   type HiddenRoutine, type Item, type ItemKind, type ItemType, type Mark, type Now, type Routine, type RoutineColor, type RoutinesState,
 } from './model';
 import { dropWhenOwnerChanges } from '@/core/session-memory';
@@ -48,6 +48,20 @@ export interface RoutinesStore {
 
 function onHandStep(i: Item) { return i.vial ? 1 : i.perDay ? (i.unit === 'g' ? (i.amt ?? 1) : 1) : 0; }
 
+/** The last id handed out, so two made in the same millisecond still differ. */
+let lastId = { base: '', k: 0 };
+/**
+ * A new id: the prefix and the time in base 36, as ids have always been, with a base-36 count after it when another id
+ * was made in the same millisecond or the plain one is taken.
+ */
+function freshId(prefix: string, at: Date, taken: (id: string) => boolean) {
+  const base = `${prefix}${at.getTime().toString(36)}`;
+  let k = lastId.base === base ? lastId.k + 1 : 0;
+  while (taken(k ? `${base}${k.toString(36)}` : base)) k++;
+  lastId = { base, k };
+  return k ? `${base}${k.toString(36)}` : base;
+}
+
 /** A store over any get and save pair. Pure enough to test without a database. */
 export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState): void; subscribe?(l: () => void): () => void; seed?(): RoutinesState }): RoutinesStore {
   let cache: RoutinesState | null = null;
@@ -60,24 +74,39 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
     }
     return cache;
   };
+  /** True while this store saves, so the change it reports back is not read as another writer's. */
+  let saving = false;
   const write = (next: RoutinesState) => {
     const today = nowOf().day, keepFrom = addDays(today, -KEEP_DAYS);
-    next.log = Object.fromEntries(Object.entries(next.log).filter(([d, m]) => d >= keepFrom && Object.keys(m).length));
-    cache = next; io.save(next); listeners.forEach(l => l());
+    const keep = <T,>(byDay: Record<string, Record<string, T>>) => Object.fromEntries(Object.entries(byDay).filter(([d, m]) => d >= keepFrom && Object.keys(m).length));
+    next.log = keep(next.log);
+    if (next.used) next.used = keep(next.used);
+    // Only a state that saved is shown: if the save throws, the last saved state stays in place.
+    saving = true;
+    try { io.save(next); } finally { saving = false; }
+    cache = next; listeners.forEach(l => l());
   };
   const edit = (fn: (s: RoutinesState) => void) => { const s = structuredCloneState(read()); fn(s); write(s); };
   io.subscribe?.(() => {
+    if (saving) return;
     // Another writer changed the stored copy: read it again next time.
     const stored = normalize(io.get());
     if (stored && JSON.stringify(stored) !== JSON.stringify(cache)) { cache = stored; listeners.forEach(l => l()); }
   });
   const setMark = (s: RoutinesState, day: string, id: string, m: Mark | null) => {
     const prev = s.log[day]?.[id] ?? null, i = itemById(s, id);
+    const used = s.used?.[day]?.[id];
     if (i && day === nowOf().day && i.left != null) {
       const step = onHandStep(i);
-      if (prev === 'd' && m !== 'd') i.left += step;
-      if (prev !== 'd' && m === 'd') i.left = Math.max(0, i.left - step);
+      // A tick takes off what is there, never below zero, and notes how much; taking it back puts back just that.
+      if (prev === 'd' && m !== 'd') i.left += used ?? step;
+      if (prev !== 'd' && m === 'd') {
+        const took = Math.max(0, Math.min(step, i.left));
+        i.left -= took;
+        s.used = { ...(s.used ?? {}), [day]: { ...(s.used?.[day] ?? {}), [id]: took } };
+      }
     }
+    if (m !== 'd' && used != null && s.used?.[day]) { const dayUsed = { ...s.used[day] }; delete dayUsed[id]; s.used = { ...s.used, [day]: dayUsed }; }
     const dayLog = { ...(s.log[day] ?? {}) };
     if (m) dayLog[id] = m; else delete dayLog[id];
     s.log[day] = dayLog;
@@ -88,20 +117,21 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
     toggleDone(id, day = nowOf().day) { edit(s => setMark(s, day, id, s.log[day]?.[id] === 'd' ? null : 'd')); },
     toggleSkip(id, day = nowOf().day) { edit(s => setMark(s, day, id, s.log[day]?.[id] === 's' ? null : 's')); },
     addItem(d) {
-      const now = clock.now(), first = rById(read(), d.routines[0]);
+      const now = clock.now(), cur = read(), first = rById(cur, d.routines[0]);
       const dose = d.kind === 'dose';
       const item: Item = {
-        id: `n${now.getTime().toString(36)}`, name: d.name.trim(), amt: dose ? d.amt : null, unit: dose ? d.unit : '',
+        id: freshId('n', now, id => cur.items.some(i => i.id === id)), name: d.name.trim(), amt: dose ? d.amt : null, unit: dose ? d.unit : '',
         dose: dose ? `${pretty(d.amt)} ${d.unit}` : 'Tick when done', type: d.type || 'Other', kind: d.kind,
         routines: [...d.routines], h: d.time ?? first?.from ?? 9, days: null, created: nowOf(now).day, note: d.note,
         ...(d.mixed.trim() && dose ? { mixed: d.mixed.trim() } : {}),
       };
-      if (d.hand) { item.left = Number(d.hand); if (d.type === 'Peptide') item.vial = Math.max(item.left, 1); else item.perDay = 1; }
+      if (d.hand) { item.left = Math.min(MAX_ON_HAND, Number(d.hand) || 0); if (d.type === 'Peptide') item.vial = Math.max(item.left, 1); else item.perDay = 1; }
       edit(s => { s.items.push(item); });
       return { item, undo: () => edit(s => { s.items = s.items.filter(i => i.id !== item.id); }) };
     },
     addRoutine(d) {
-      const r: Routine = { id: `r${clock.now().getTime().toString(36)}`, name: d.name.trim(), from: d.from, to: d.to, color: d.color,
+      const cur = read(), taken = (id: string) => cur.routines.some(x => x.id === id) || cur.hidden.some(x => x.id === id);
+      const r: Routine = { id: freshId('r', clock.now(), taken), name: d.name.trim(), from: d.from, to: d.to, color: d.color,
         days: d.days.length ? [...d.days].sort() : [...ALL_DAYS], remind: true, pauses: [] };
       edit(s => { s.routines.push(r); s.items.forEach(i => { if (d.items.includes(i.id) && !i.routines.includes(r.id)) i.routines.push(r.id); }); });
       return r;

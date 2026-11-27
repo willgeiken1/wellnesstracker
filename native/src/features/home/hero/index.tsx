@@ -17,6 +17,7 @@ import { RidgeHero } from './ridge';
 import { skyTokens } from './tones';
 import { FadeUp } from './text-motion';
 import { HeroWeek } from './week';
+import { revealNumbers } from '../hide-numbers';
 
 export { dateLine, greeting } from './model';
 
@@ -76,6 +77,8 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
   // The map sinks a little as the page scrolls (12 percent of it), as if it sat further back than the tiles.
   const mapDrift = useAnimatedStyle(() => ({ transform: [{ translateY: reduceMotion || !scrollY ? 0 : Math.max(0, scrollY.value) * 0.12 }] }));
 
+  // Hide numbers: a tap on the hidden food energy shows Home's numbers.
+  const reveal = (pi: number) => { if (pi >= 0 && input.hide && view.pillars[pi]?.key === 'food') revealNumbers(); };
   const select = (i: number) => { if (i === sel) return; tick(); setFocus(-1); setTouched(true); setSel(i); };
 
   const head = <Animated.View style={[{ paddingRight: 56 }, headStyle]}>
@@ -91,11 +94,11 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
 
   const W = winW - 32, paused = !focused || !active;
   const style = !prefs.map ? 'plain' : prefs.style === 'ridge' ? 'ridge' : failed ? 'ridge' : 'aurora';
-  const map = style === 'plain' ? <PlainHero view={view} colors={c} reduceMotion={reduceMotion} />
-    : style === 'ridge' ? <RidgeHero view={view} width={winW} colors={c} mode={mode} reduceMotion={reduceMotion} calm={calm} labels={prefs.labels} glow={prefs.glow} />
+  const map = style === 'plain' ? <PlainHero view={view} colors={c} reduceMotion={reduceMotion} onReveal={input.hide ? revealNumbers : undefined} />
+    : style === 'ridge' ? <RidgeHero view={view} width={winW} colors={c} mode={mode} reduceMotion={reduceMotion} calm={calm} labels={prefs.labels} glow={prefs.glow} onPeak={reveal} />
     : <AuroraHero view={view} width={winW} colors={c} mode={mode} sky={sky} reduceMotion={reduceMotion} calm={calm} paused={paused}
       animate={touched && !reduceMotion} levels={LEVELS[prefs.detail]} glow={prefs.glow} labels={prefs.labels}
-      focus={focus} onFocus={pi => { setTouched(true); setFocus(pi); }} onTouch={() => setTouched(true)} onFail={() => setFailed(true)} />;
+      focus={focus} onFocus={pi => { setTouched(true); setFocus(pi); reveal(pi); }} onTouch={() => setTouched(true)} onFail={() => setFailed(true)} />;
 
   return <View testID="home-hero" style={{ paddingTop: 6, paddingBottom: 6 }}>
     {head}

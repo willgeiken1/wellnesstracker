@@ -6,12 +6,18 @@ import { clamp, type Triple } from './field';
  * Pure: everything comes in through `HeroInput`, so it can be checked without a phone.
  *
  * Each pillar's value is its progress toward today's goal, 0 to 1.05 (Training minutes, Food energy, Sleep). A day with
- * training at zero while food or sleep was logged is a rest day: Training reads Rest and the score leaves it out.
+ * training at zero while food or sleep was logged is a rest day: Training reads Rest.
+ * The number in the middle is the app's day score (score/day.ts), the same one Progress shows for that day.
  */
 export type PillarKey = 'training' | 'food' | 'sleep';
 export const PILLARS: readonly PillarKey[] = ['training', 'food', 'sleep'];
 /** One logged day. A null is no reading (no sleep recorded), never drawn as zero. */
-export interface HeroDayIn { trainMin: number | null; kcal: number | null; sleepMin: number | null }
+export interface HeroDayIn {
+  trainMin: number | null; kcal: number | null; sleepMin: number | null;
+  /** The app's day score for this day (score/days.ts, the number Progress shows), null with nothing to go on. When left
+   * out the hero falls back to the mean of its arcs. */
+  score?: number | null;
+}
 export interface HeroGoals { kcal: number; trainMin: number; sleepMin: number }
 export interface HeroInput {
   now: Date;
@@ -70,6 +76,8 @@ export function dayScore(v: Triple) {
   const list = isRest(v) ? v.slice(1) : v.slice();
   return Math.round(list.reduce((s, x) => s + Math.min(1, x), 0) / list.length * 100);
 }
+/** The number shown for a day: the app's day score when given, otherwise the mean of the arcs. */
+const scoreOf = (d: HeroDayIn | undefined, v: Triple) => d && d.score !== undefined ? (d.score ?? 0) : dayScore(v);
 const pc = (v: number) => `${Math.round(Math.min(1, v) * 100)}%`;
 const fill = (s: string, map: Record<string, string | number>) => Object.entries(map).reduce((o, [k, v]) => o.split(`{${k}}`).join(String(v)), s);
 
@@ -117,14 +125,14 @@ export function heroView(input: HeroInput, sel = 6): HeroView {
   const v = dayValues(input.days[sel], input.goals), rest = isRest(v), empty = !v.some(x => x > 0);
   const pillars = pillarsFor(input.days[sel], v, input);
   const allMet = !empty && pillars.every((p, i) => p.met || (i === 0 && rest));
-  const pct = dayScore(v);
+  const pct = scoreOf(input.days[sel], v);
   const caption = (today ? t('homeHeroToday') : long(sel)) + (rest ? ` · ${t('homeHeroRestDay')}` : '') + (allMet ? ` · ${t('homeHeroAllMet')}` : '');
   const name = today ? t('homeHeroToday') : long(sel);
   const label = `${describe(name, v)} ${t('homeHeroDayScore').replace('{n}', String(pct))} ${pillars.map((p, i) => `${p.label} ${i === 0 && rest ? t('homeHeroRestSpoken') : p.spoken.split(', ')[1].replace(/\. .*$/, '')}`).join(', ')}.`;
   const week = input.days.map((d, i): HeroWeekDay => {
     const wv = dayValues(d, input.goals), isToday = i === n - 1, lg = long(i);
     return {
-      i, short: isToday ? t('homeHeroToday') : lg.slice(0, 3), long: lg, today: isToday, values: wv, pct: dayScore(wv), rest: isRest(wv),
+      i, short: isToday ? t('homeHeroToday') : lg.slice(0, 3), long: lg, today: isToday, values: wv, pct: scoreOf(d, wv), rest: isRest(wv),
       empty: !wv.some(x => x > 0), met: [wv[0] >= 1, wv[1] >= 1, wv[2] >= 1],
       label: `${lg}${isToday ? t('homeHeroTodaySuffix') : ''}. ${PILLARS.map((k, j) => `${LABEL[k]()} ${pc(wv[j])}`).join(', ')}.`,
     };

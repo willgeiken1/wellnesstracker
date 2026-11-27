@@ -64,7 +64,14 @@ export interface RoutinesState {
   items: Item[];
   /** Check-offs by day, then item id. */
   log: Record<string, Record<string, Mark>>;
+  /**
+   * What each done mark took off the on-hand count, by day then item id, so taking the tick back puts back exactly that.
+   * Saves made before it existed have none; a tick back then puts back one full step, as it always did.
+   */
+  used?: Record<string, Record<string, number>>;
 }
+/** The most an on-hand count can be. */
+export const MAX_ON_HAND = 99999;
 
 /* ---------- days and times ---------- */
 
@@ -138,7 +145,18 @@ export function pauseOn(r: Routine, day: string): Pause | null { return r.pauses
 export function currentPause(r: Routine, today: string): Pause | null { return r.pauses.find(p => today < p.until) ?? null; }
 export const isPaused = (r: Routine, day: string) => !!pauseOn(r, day);
 const dueOnWd = (i: Item, wd: number) => !i.days || i.days.includes(wd);
-const activeOn = (s: RoutinesState, i: Item, day: string) => i.routines.some(id => { const r = rById(s, id); return !!r && !isPaused(r, day); });
+/** Whether a routine runs on a weekday. */
+const runsOnWd = (r: Routine, wd: number) => r.days.includes(wd);
+/** Whether some routine the item sits in runs on a weekday, pauses aside. */
+const inRoutineOnWd = (s: RoutinesState, i: Item, wd: number) => i.routines.some(id => { const r = rById(s, id); return !!r && runsOnWd(r, wd); });
+/**
+ * Whether an item is due on a day: its own weekdays (if set) allow it, and some routine it sits in runs that weekday and
+ * is not paused that day.
+ */
+const dueOn = (s: RoutinesState, i: Item, day: string) => {
+  const wd = weekdayOf(day);
+  return dueOnWd(i, wd) && i.routines.some(id => { const r = rById(s, id); return !!r && runsOnWd(r, wd) && !isPaused(r, day); });
+};
 export const markOf = (s: RoutinesState, day: string, id: string): Mark | null => s.log[day]?.[id] ?? null;
 export const isDone = (s: RoutinesState, n: Now, i: Item) => markOf(s, n.day, i.id) === 'd';
 export const isSkipped = (s: RoutinesState, n: Now, i: Item) => markOf(s, n.day, i.id) === 's';
@@ -146,11 +164,12 @@ const byTime = (a: Item, b: Item) => a.h - b.h;
 
 /** Today's items across every running routine, by time. */
 export function todayItems(s: RoutinesState, n: Now) {
-  return s.items.filter(i => i.routines.length && dueOnWd(i, n.wd) && activeOn(s, i, n.day)).sort(byTime);
+  return s.items.filter(i => dueOn(s, i, n.day)).sort(byTime);
 }
-/** A routine's items: due today, or (all) every one of them. */
+/** A routine's items: due today (the routine runs today and the item's own days allow it), or (all) every one of them. */
 export function rItems(s: RoutinesState, rid: string, n: Now, all = false) {
-  return s.items.filter(i => i.routines.includes(rid) && (all || dueOnWd(i, n.wd))).sort(byTime);
+  const r = rById(s, rid), runs = !r || runsOnWd(r, n.wd);
+  return s.items.filter(i => i.routines.includes(rid) && (all || (runs && dueOnWd(i, n.wd)))).sort(byTime);
 }
 /** The next item to do: the first still open from now on, else the first still open today. */
 export function nextItem(s: RoutinesState, n: Now) {
@@ -174,8 +193,8 @@ export const HISTORY_DAYS = 30;
 export function hist(s: RoutinesState, i: Item, n: Now): DayState[] {
   const out: DayState[] = [];
   for (let k = 0; k < HISTORY_DAYS; k++) {
-    const day = addDays(n.day, k - (HISTORY_DAYS - 1)), wd = weekdayOf(day);
-    if (!i.routines.length || !dueOnWd(i, wd) || day < i.created || !activeOn(s, i, day)) { out.push('o'); continue; }
+    const day = addDays(n.day, k - (HISTORY_DAYS - 1));
+    if (day < i.created || !dueOn(s, i, day)) { out.push('o'); continue; }
     const m = markOf(s, day, i.id);
     if (m) { out.push(m); continue; }
     out.push(day === n.day && i.h > n.h ? 'u' : 'm');
@@ -223,10 +242,11 @@ export interface PeptideNext { i: Item; r: Routine | null; nextDay: number; when
 export function peptides(s: RoutinesState, n: Now): PeptideNext[] {
   return byType(s, 'Peptide').map(i => {
     const r = routineOf(s, i), done = isDone(s, n, i);
+    // Its own days and its routines' days both count; an item in no routine on the tab goes by its own days alone.
+    const placed = i.routines.some(id => rById(s, id));
+    const on = (wd: number) => dueOnWd(i, wd) && (!placed || inRoutineOnWd(s, i, wd));
     let nextDay = 0;
-    if (!i.days) nextDay = done ? 1 : 0;
-    else if (i.days.includes(n.wd) && !done) nextDay = 0;
-    else for (let k = 1; k <= 7; k++) if (i.days.includes((n.wd + k) % 7)) { nextDay = k; break; }
+    if (!(on(n.wd) && !done)) for (let k = 1; k <= 7; k++) if (on((n.wd + k) % 7)) { nextDay = k; break; }
     const when = `${nextDay === 0 ? 'Today' : nextDay === 1 ? 'Tomorrow' : WD[(n.wd + nextDay) % 7]} ${h12(i.h)}`;
     return { i, r, nextDay, when };
   }).sort((a, b) => a.nextDay - b.nextDay || a.i.h - b.i.h);
@@ -245,7 +265,7 @@ export function weekData(s: RoutinesState, n: Now, ahead: boolean): WeekDay[] {
     const back = ahead ? -(k + 1) : 6 - k, day = addDays(n.day, -back), wd = weekdayOf(day);
     out.push({ day, wd, today: back === 0, cells: rs.map(r => {
       const all = rItems(s, r.id, n, true);
-      if (ahead) { const sch = all.filter(i => dueOnWd(i, wd)).length; return { r, s: sch, d: 0, st: sch ? 'o2' : 'o' }; }
+      if (ahead) { const sch = runsOnWd(r, wd) ? all.filter(i => dueOnWd(i, wd)).length : 0; return { r, s: sch, d: 0, st: sch ? 'o2' : 'o' }; }
       const x = statsOf.get(r.id)!.days[HISTORY_DAYS - 1 - back], c = count(s, r.id, n);
       if (back === 0 && c.done < c.n && !x.s) return { r, s: c.n, d: c.done, st: 'l' };
       if (back === 0 && c.done < c.n) return { r, s: c.n, d: c.done, st: c.done ? 'p' : 'l' };
@@ -377,5 +397,6 @@ export function normalize(raw: unknown): RoutinesState | null {
     hidden: Array.isArray(s.hidden) ? s.hidden.filter(r => r && r.id).map(r => ({ ...fixR(r), sub: r.sub ?? '' })) : [],
     items: s.items.filter(i => i && i.id && i.name && Array.isArray(i.routines)),
     log: s.log && typeof s.log === 'object' ? s.log : {},
+    ...(s.used && typeof s.used === 'object' ? { used: s.used } : {}),
   };
 }

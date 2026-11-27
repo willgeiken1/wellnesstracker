@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions, type AccessibilityActionEvent, type LayoutChangeEvent } from 'react-native';
 import { GestureDetector, GestureHandlerRootView, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -160,6 +160,8 @@ export function TileGrid({ page, storage, scrollRef, stickyTop }: TileGridProps)
   }, [page, L, scrollGridTo]);
   const open = useCallback((id: string) => {
     const def = defs.get(id), e = store.getState().tiles.find(s => s.id === id);
+    // A covered tile (Hide numbers) shows its figures on the first tap; the next one opens it.
+    if (def?.cover?.covered()) { def.cover.reveal(); return; }
     if (def?.open && e) def.open(optionValues(def, e.style, e.options));
   }, [defs, store]);
   const resizeMove = useCallback((id: string, dx: number, dy: number) => {
@@ -256,6 +258,8 @@ interface GridTileProps {
   onCustomize: (id: string) => void; onOpen: (id: string) => void; onMove: (id: string, by: -1 | 1) => void; onCycle: (id: string) => void;
   onResizeMove: (id: string, dx: number, dy: number) => void; onResizeEnd: (id: string, cancel: boolean) => void;
 }
+
+const noSubscribe = () => () => {};
 
 const GridTile = memo(function GridTile(p: GridTileProps) {
   const { cfg, def, entry, pos, index, colors, mode, rm, editing, lifted, customizing, leaving, drag } = p;
@@ -363,13 +367,15 @@ const GridTile = memo(function GridTile(p: GridTileProps) {
   });
 
   const title = def.title;
+  const covered = useSyncExternalStore(def.cover?.subscribe ?? noSubscribe, () => def.cover?.covered() ?? false, () => def.cover?.covered() ?? false);
+  const tapLabel = covered && !editing ? def.cover!.label(title) : `${title}. ${editing ? t('tilesCustomize') : def.label ?? t('tilesOpen')}`;
   const ok = sizesOf(def, entry.style), nx = ok[(ok.indexOf(entry.size) + 1) % ok.length];
   const rzLabel = ok.length > 1 ? fill(t('tilesResize'), { title, size: SIZE_WORD[entry.size], next: SIZE_WORD[nx] })
     : fill(t(cfg.variant === 'home' ? 'tilesResizeOnlyHome' : 'tilesResizeOnly'), { title, size: SIZE_WORD[entry.size] });
   const actions = editing
     ? [{ name: 'activate', label: t('tilesCustomize') }, { name: 'earlier', label: t('tilesMoveEarlier') }, { name: 'later', label: t('tilesMoveLater') },
       { name: 'resize', label: t('tilesResizeAction') }, { name: 'remove', label: t('tilesRemoveAction') }]
-    : [{ name: 'activate', label: def.label ?? t('tilesOpen') }, { name: 'longpress', label: t(cfg.variant === 'home' ? 'tilesEditHome' : 'tilesEditPage') }];
+    : [{ name: 'activate', label: covered ? t('tilesShowNumbers') : def.label ?? t('tilesOpen') }, { name: 'longpress', label: t(cfg.variant === 'home' ? 'tilesEditHome' : 'tilesEditPage') }];
   const onAction = (e: AccessibilityActionEvent) => {
     switch (e.nativeEvent.actionName) {
       case 'activate': if (editing) p.onCustomize(id); else p.onOpen(id); break;
@@ -383,7 +389,7 @@ const GridTile = memo(function GridTile(p: GridTileProps) {
   const hideCtl = isLifted || !!lifted;
   return <GestureDetector gesture={pan}>
     <Animated.View style={[styles.tile, { width: f.w, height: f.h }, style]} pointerEvents={leaving ? 'none' : 'auto'}>
-      <Tappable dim="none" accessibilityRole="button" accessibilityLabel={`${title}. ${editing ? t('tilesCustomize') : def.label ?? t('tilesOpen')}`}
+      <Tappable dim="none" accessibilityRole="button" accessibilityLabel={tapLabel}
         accessibilityActions={actions} onAccessibilityAction={onAction}
         onPressIn={() => { if (!editing && !rm) press.value = withTiming(1, { duration: 300, easing: EASE }); }}
         onPressOut={() => { press.value = rm ? 0 : withTiming(0, { duration: 300, easing: EASE }); }}

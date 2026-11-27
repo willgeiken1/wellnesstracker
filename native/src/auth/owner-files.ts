@@ -1,0 +1,46 @@
+import { Directory, File, Paths } from 'expo-file-system';
+import type { Repository } from '../data/repository';
+
+/*
+ * Files the app keeps for one person on this phone, outside the database: the profile photo and progress photos. Each
+ * lives in its own folder in Documents, and its address in the person's local storage. Wiping the database rows on
+ * sign-out or account deletion forgets the addresses but leaves the files, which would stay on the phone and in its
+ * backups, so departure deletes them first, while the addresses can still be read.
+ */
+export const PROFILE_PHOTO_KEY = 'profilePhoto';
+export const PROFILE_PHOTO_FOLDER = 'profile-photo';
+export const PROGRESS_PHOTOS_KEY = 'progressPhotos';
+export const PROGRESS_PHOTOS_FOLDER = 'progress-photos';
+const FOLDERS = [PROFILE_PHOTO_FOLDER, PROGRESS_PHOTOS_FOLDER];
+
+/** The file a stored address names, found by its name in the app's own folder. Only a file directly inside one of the
+ * app's photo folders is ever named, whatever the address holds, and a backup restored into a new app folder still
+ * finds its file. */
+function keptFile(uri: unknown, folder: string): File | null {
+  if (typeof uri !== 'string') return null;
+  const name = uri.slice(uri.lastIndexOf('/') + 1);
+  if (!/^[A-Za-z0-9-]+\.jpg$/.test(name)) return null;
+  try { return new File(new Directory(Paths.document, folder), name); } catch { return null; }
+}
+/** Deletes a file; one already gone is fine. */
+export function dropFile(uri: string | null | undefined) { if (!uri) return; try { const f = new File(uri); if (f.exists) f.delete(); } catch { /* already gone */ } }
+
+function read(repo: Pick<Repository, 'localGet'>, key: string): unknown { try { return repo.localGet<unknown>(key); } catch { return undefined; } }
+
+/** This person's kept files, profile photo first. */
+function ownerFiles(repo: Pick<Repository, 'localGet'>): File[] {
+  const progress = read(repo, PROGRESS_PHOTOS_KEY);
+  const progressUris = Array.isArray(progress) ? progress.map(p => p && typeof p === 'object' ? (p as { uri?: unknown }).uri : null) : [];
+  return [keptFile(read(repo, PROFILE_PHOTO_KEY), PROFILE_PHOTO_FOLDER), ...progressUris.map(u => keptFile(u, PROGRESS_PHOTOS_FOLDER))]
+    .filter((f): f is File => !!f);
+}
+
+/** Departure: deletes this person's kept files. Call before their rows are wiped, while the addresses still read. */
+export function eraseOwnerFiles(repo: Pick<Repository, 'localGet'>) {
+  for (const f of ownerFiles(repo)) { try { if (f.exists) f.delete(); } catch { /* already gone */ } }
+}
+
+/** The all-owner escape: every person's rows go, so the whole photo folders go too. */
+export function eraseAllOwnerFiles() {
+  for (const name of FOLDERS) { try { const dir = new Directory(Paths.document, name); if (dir.exists) dir.delete(); } catch { /* already gone */ } }
+}

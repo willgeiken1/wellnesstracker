@@ -5,6 +5,14 @@ import { Repository, wipeAllOwners } from '../../src/data/repository';
 import { OWNER_A, OWNER_B, DEVICE_A, syntheticRow } from '../../fixtures/sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, type SignOutMarker, type SignOutStorage } from '../../src/auth/sign-out';
 
+// A small file system for the photo files kept outside the database: addresses of files that exist.
+const mockFiles=new Set<string>();
+jest.mock('expo-file-system',()=>{
+ class Directory{uri:string;constructor(base:{uri:string},name:string){this.uri=`${base.uri}${name}/`;}get exists(){return [...mockFiles].some(f=>f.startsWith(this.uri));}delete(){for(const f of [...mockFiles])if(f.startsWith(this.uri))mockFiles.delete(f);}}
+ class File{uri:string;constructor(a:string|Directory,b?:string){this.uri=typeof a==='string'?a:a.uri+b;}get exists(){return mockFiles.has(this.uri);}delete(){mockFiles.delete(this.uri);}}
+ return {Directory,File,Paths:{document:{uri:'file:///docs/'}}};
+});
+beforeEach(()=>mockFiles.clear());
 function journal() {
  let value:SignOutMarker|null=null;
  const storage:SignOutStorage={read:async()=>value,write:async marker=>{value={...marker};},remove:async()=>{value=null;}};
@@ -111,4 +119,43 @@ test.each([false,true])('escape all-owner wipe is one transaction (injected fail
   }
   if(!fail)wipeAllOwners(local.db);
  } finally {local.sqlite.close();}
+});
+
+test('departure deletes the owner\'s photo files before the wipe clears their addresses, and no one else\'s',async()=>{
+ const local=await localDatabase(),storage=journal(),other=new Repository(local.db,OWNER_B,DEVICE_A,()=>syntheticRow().id);
+ const mine=['file:///docs/profile-photo/a-1.jpg','file:///docs/progress-photos/p-1.jpg','file:///docs/progress-photos/p-2.jpg'];
+ const theirs=['file:///docs/profile-photo/b-1.jpg','file:///docs/progress-photos/b-2.jpg'];
+ for(const f of [...mine,...theirs])mockFiles.add(f);
+ local.repo.localSave('profilePhoto',mine[0]);
+ local.repo.localSave('progressPhotos',[{id:'p-1',day:'2026-11-01',kg:null,pose:'Front',uri:mine[1]},{id:'p-2',day:'2026-11-02',kg:null,pose:'Side',uri:mine[2]}]);
+ other.localSave('profilePhoto',theirs[0]);other.localSave('progressPhotos',[{id:'b-2',day:'2026-11-01',kg:null,pose:'Front',uri:theirs[1]}]);
+ const wipe=jest.spyOn(local.repo,'wipe').mockImplementation(function(this:Repository){
+  // The files are gone while the addresses can still be read.
+  expect(mine.filter(f=>mockFiles.has(f))).toEqual([]);expect(local.repo.localGet('profilePhoto')).toBe(mine[0]);
+  wipe.mockRestore();local.repo.wipe();
+ });
+ try {
+  await completeSignOut(await beginSignOut(OWNER_A,storage,1234),local.repo,storage,async()=>{});
+  expect(local.repo.localGet('profilePhoto')).toBeUndefined();expect(local.repo.localGet('progressPhotos')).toBeUndefined();
+  expect([...mockFiles].sort()).toEqual([...theirs].sort());
+  expect(other.localGet('profilePhoto')).toBe(theirs[0]);
+ } finally {local.sqlite.close();}
+});
+test('departure finds a kept file by name after a restore moved the app folder, and never reaches outside the photo folders',async()=>{
+ const local=await localDatabase(),storage=journal();
+ mockFiles.add('file:///docs/profile-photo/a-1.jpg');mockFiles.add('file:///docs/notes.jpg');mockFiles.add('file:///docs/progress-photos/keep.txt');
+ local.repo.localSave('profilePhoto','file:///old-container/Documents/profile-photo/a-1.jpg');
+ local.repo.localSave('progressPhotos',[{id:'x',day:'2026-11-01',kg:null,pose:'Front',uri:'file:///docs/notes.jpg/..'},{id:'y',day:'2026-11-01',kg:null,pose:'Front',uri:'file:///docs/progress-photos/keep.txt'}]);
+ try {
+  await completeSignOut(await beginSignOut(OWNER_A,storage,1234),local.repo,storage,async()=>{});
+  expect([...mockFiles].sort()).toEqual(['file:///docs/notes.jpg','file:///docs/progress-photos/keep.txt']);
+ } finally {local.sqlite.close();}
+});
+test.each([false,true])('escape removes every owner\'s photo folders only once the rows are gone (injected failure=%s)',async fail=>{
+ const files=['file:///docs/profile-photo/a.jpg','file:///docs/progress-photos/b.jpg'],other='file:///docs/elsewhere/c.jpg';
+ for(const f of [...files,other])mockFiles.add(f);
+ const storage={read:async()=>null,write:async()=>{},remove:async()=>{}};
+ const wipeAll=()=>{if(fail)throw new Error('synthetic');};
+ if(fail){await expect(escapeSignOut({wipeAll},storage,async()=>{})).rejects.toThrow();expect([...mockFiles].sort()).toEqual([...files,other].sort());}
+ else {await escapeSignOut({wipeAll},storage,async()=>{});expect([...mockFiles]).toEqual([other]);}
 });
