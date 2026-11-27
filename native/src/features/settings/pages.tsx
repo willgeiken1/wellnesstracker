@@ -5,7 +5,8 @@ import { Image, Linking, Platform, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ProgressBar, SegmentedControl, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
-import { useAuth } from '@/auth/provider';
+import { useAuth, type AuthState } from '@/auth/provider';
+import { syncedClean, syncLineKey } from '@/data/sync/status-line';
 import { FLOZ, readWater, setWaterUnit } from '@/features/food/water';
 import { lastWeight } from '@/features/body/model';
 import { useWorkoutStore } from '@/features/workout/use-workout';
@@ -40,6 +41,15 @@ const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min
 const mss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 const trim = (n: number, d: number) => String(+n.toFixed(d));
 /** A clock time in the person's format ("5:30 PM" or "17:30"). */
+/** Sync now: says it synced only once the run is over with everything sent; otherwise where it stands (offline, needs attention, waiting). */
+export async function syncAndSay(auth: Pick<AuthState, 'syncNow' | 'syncStatus' | 'pending' | 'conflicts'>) {
+  let done: Awaited<ReturnType<AuthState['syncNow']>>;
+  try { done = await auth.syncNow?.(); } catch { done = { status: 'attention', pending: auth.pending, conflicts: auth.conflicts }; }
+  const state = done ?? { status: auth.syncStatus, pending: auth.pending, conflicts: auth.conflicts };
+  if (syncedClean(state)) showToast(st('settingsSyncedNow'), { color: 'success' });
+  else showToast(t(syncLineKey(state)), { color: 'warning' });
+}
+
 export function clock(time: string, p: SettingsPrefs) {
   if (p.units.clock === '12') return time;
   const m = /^(\d{1,2}):(\d{2}) ?(AM|PM)$/.exec(time); if (!m) return time;
@@ -266,7 +276,7 @@ export function AccountPage() {
       <List>
         <ListRow title={st('settingsSyncAcross')} sub={p.sync.on ? st('settingsSyncAcrossOn') : st('settingsSyncAcrossOff')} toggle={p.sync.on}
           onToggle={v => { set('sync.on', v); showToast(v ? st('settingsSyncOnToast') : st('settingsSyncOffToast'), { color: v ? 'success' : 'warning' }); }} />
-        <ListRow title={st('settingsSyncNow')} chevron={false} onPress={() => { if (!p.sync.on) { showToast(st('settingsSyncFirst'), { color: 'warning' }); return; } void auth.syncNow?.(); showToast(st('settingsSyncedNow')); }} />
+        <ListRow title={st('settingsSyncNow')} chevron={false} onPress={() => { if (!p.sync.on) { showToast(st('settingsSyncFirst'), { color: 'warning' }); return; } void syncAndSay(auth); }} />
       </List>
     </> : null}
     <H>{st('settingsDevices')}</H>

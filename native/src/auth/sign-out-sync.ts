@@ -1,6 +1,6 @@
 export const SIGN_OUT_SYNC_TIMEOUT_MS = 10_000;
 /** A stalled/offline sync still reaches the caller's unsynced-loss check. */
-export async function syncBeforeSignOut(sync: () => Promise<void>): Promise<void> {
+export async function syncBeforeSignOut(sync: () => Promise<unknown>): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([

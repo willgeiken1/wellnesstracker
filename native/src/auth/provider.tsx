@@ -9,6 +9,7 @@ import { getAuthClient, clearLocalSession } from './client';
 import { openLocalDatabase } from '../data/database';
 import type { Repository } from '../data/repository';
 import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
+import type { SyncState } from '../data/sync/status-line';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed, AccountDeletionUncertain } from './sign-out';
@@ -51,7 +52,8 @@ export interface AuthState {
   signInWithGoogle?(): Promise<GoogleSignInResult>;
   /** Using the app without an account (Skip for now, Start as a guest): data stays on this phone in the guest space. */
   guest?: boolean; continueAsGuest?(): void; exitGuest?(): void;
-  signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
+  signOut(discardUnsynced?: boolean): Promise<void>; /** Resolves with where sync stands once this run is over (nothing on a build without sync). */
+  syncNow(): Promise<SyncState | void>;
   /** Permanently deletes the signed-in account on the server, then erases this phone's copy. */
   deleteAccount?(): Promise<void>;
 }
@@ -295,7 +297,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       // The account is gone: there is nothing to sync, so erase this phone's copy without the unsynced check.
       await depart();
     },
-    syncNow:()=>engine?.sync()??Promise.resolve(),
+    syncNow:()=>engine?engine.sync().then(()=>({status:engine.status,pending:currentRepo?.pending().length??0,conflicts:currentRepo?.conflicts().length??0})):Promise.resolve(),
   };
   async function depart() {
       if(!bootReady||!currentRepo||departingOwner.current)throw new Error('Sign-out recovery required.');
