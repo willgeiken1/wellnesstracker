@@ -26,10 +26,10 @@ function NumbersCover({ colors, w, h }: { colors: ThemeColors; w: number; h: num
     style={{ position: 'absolute', left: 0, top: COVER_TOP, width: w, height: Math.max(0, h - COVER_TOP), borderBottomLeftRadius: 20, borderBottomRightRadius: 20,
       overflow: 'hidden', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
     <BarBackdrop color={colors.surface} amount={Platform.OS === 'ios' || Platform.OS === 'web' ? 0.62 : 0.94} blur={14} saturate={1.1} />
-    <Text style={{ fontFamily: tokens.font.numeral, fontSize: 26, lineHeight: 26, letterSpacing: 26 * 0.12, color: colors.text }}>•••</Text>
+    <Text style={{ fontFamily: tokens.font.numeral, fontSize: 26, lineHeight: 26, color: colors.text }}>•••</Text>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
       <TileIcon name="lock" size={14} color={colors['text-muted']} />
-      <Text style={{ fontFamily: tokens.font.bodyStrong, fontSize: 12.5, color: colors['text-muted'] }}>{t('homeTapToShow')}</Text>
+      <Text style={{ fontFamily: tokens.font.bodyStrong, fontSize: 13, color: colors['text-muted'] }}>{t('homeTapToShow')}</Text>
     </View>
   </View>;
 }

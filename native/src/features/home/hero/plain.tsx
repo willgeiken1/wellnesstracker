@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { alpha, capitals } from '@/components/kit-style';
+import { Tappable } from '@/components/tappable';
 import { KitText } from '@/components/themed-text';
 import { t } from '@/i18n/en';
 import type { HeroPillar, HeroView } from './model';
@@ -30,7 +31,7 @@ export function PlainHero({ view, colors, reduceMotion, onReveal }: { view: Hero
   /** While Hide numbers covers the food energy: a tap shows Home's numbers. */ onReveal?: () => void }) {
   // The score counts up from 0 when the numbers first show and to each new day's value after; a changed value fades up.
   const pct = useCountTo(view.pct, !reduceMotion, reduceMotion ? view.pct : 0);
-  return <Pressable disabled={!onReveal} onPress={onReveal} style={{ height: PLAIN_H, marginTop: 2, marginBottom: 6, alignItems: 'center', paddingTop: 16 }} accessible
+  return <Tappable dim="row" disabled={!onReveal} onPress={onReveal} style={{ height: PLAIN_H, marginTop: 2, marginBottom: 6, alignItems: 'center', paddingTop: 16 }} accessible
     accessibilityRole={onReveal ? 'button' : 'summary'} accessibilityHint={onReveal ? t('tilesShowNumbers') : undefined} accessibilityLabel={view.label} testID="home-hero-plain">
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
       <Svg width={14} height={6}>
@@ -52,5 +53,5 @@ export function PlainHero({ view, colors, reduceMotion, onReveal }: { view: Hero
         <Bar p={p} color={colors[KEYS[i]]} bg={colors.bg} reduceMotion={reduceMotion} />
       </View>)}
     </View>
-  </Pressable>;
+  </Tappable>;
 }
