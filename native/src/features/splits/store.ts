@@ -42,6 +42,18 @@ const exercisesOf = (e: readonly (readonly [string, number, number, number])[]):
   e.map(([exercise, sets, lo, hi]) => ({ exercise, target_sets: sets, target_reps: hi, rep_min: lo, rep_max: hi }));
 const validDay = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
+/**
+ * Training days a week the person is aiming for: the chosen split's (its target in Rotate in order, the weekdays set in Set
+ * weekdays), otherwise the plan's own target, and three when neither can be read.
+ */
+export function weeklyTarget(repo: Repository): number {
+  try {
+    const def = new SplitStore(repo).def();
+    if (def) { const n = perWeekOf(def); if (n >= 1) return n; }
+  } catch { /* fall back to the plan */ }
+  try { return new PlanStore(repo).read().daysPerWeek; } catch { return 3; }
+}
+
 export class SplitStore {
   readonly workout: WorkoutStore;
   readonly plans: PlanStore;

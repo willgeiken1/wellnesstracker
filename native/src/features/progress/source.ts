@@ -7,7 +7,7 @@ import type { HealthDays } from '@/features/health/days';
 import type { OuraRecovery } from '@/features/health/oura';
 import type { Recovery } from '@/features/health/recovery';
 import { readProfile } from '@/features/onboarding/model';
-import { PlanStore } from '@/features/plans/store';
+import { weeklyTarget } from '@/features/splits/store';
 import { liftRecords } from '@/features/progress/records';
 import { dayScore } from '@/features/score/day';
 import { withDemoSleep } from '@/features/home/demo-sleep';
@@ -175,8 +175,7 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
     }
     return kg;
   };
-  let perWeek = 3;
-  try { perWeek = new PlanStore(repo).read().daysPerWeek; } catch { perWeek = 3; }
+  const perWeek = weeklyTarget(repo);
   const parsed = parseDay(today), monday = addDays(today, -((parsed.getDay() + 6) % 7));
   const records = (() => { try { return liftRecords(store); } catch { return []; } })();
   d.training = {

@@ -2,7 +2,7 @@ import type { Repository } from '@/data/repository';
 import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
 import { foodTargets, totals } from '@/features/food/model';
-import { PlanStore } from '@/features/plans/store';
+import { weeklyTarget } from '@/features/splits/store';
 import { dayPillars, dayScore, type DayPillars } from './day';
 import type { FoodDay } from './model';
 
@@ -53,8 +53,7 @@ export function scoreDays({ store, days, steps, sleepHours, foods }: ScoreDaysIn
   const trained = new Set(trainedDays);
   if (active && today) trained.add(today);
   const firstDay = [...trainedDays].sort()[0] ?? (active ? today : null);
-  let perWeek = 3;
-  try { perWeek = new PlanStore(store.repo as Repository).read().daysPerWeek; } catch { perWeek = 3; }
+  const perWeek = weeklyTarget(store.repo as Repository);
   const food = foods ?? foodDays(store.repo as Repository, days);
   const at = (list: ScoreDaysInput['steps'], i: number) => { const v = list?.[i]; return finite(v) ? v : null; };
   return days.map((day, i) => {
