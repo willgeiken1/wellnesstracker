@@ -1,5 +1,5 @@
 import type { Repository } from '@/data/repository';
-import { deleteProgressPhoto } from '@/core/owner-files';
+import { deleteProgressPhoto, PROGRESS_PHOTOS_FOLDER, PROGRESS_PHOTOS_PENDING_KEY } from '@/core/owner-files';
 import type { Row } from '@/data/rows';
 import { finite, MEASURE_KEYS, type MeasureKey, type Measured, type Pose, type ProgressPhoto } from './model';
 
@@ -19,6 +19,25 @@ export function readPhotos(repo: Repository): ProgressPhoto[] {
     .sort((a, b) => a.day.localeCompare(b.day));
 }
 export function addPhoto(repo: Repository, photo: StoredPhoto) { repo.localSave(PHOTOS, [...list<StoredPhoto>(repo, PHOTOS), photo]); }
+
+/** The address a new photo's file will have once moved in, as noted before the move. */
+const plannedAddress = (id: string) => `${PROGRESS_PHOTOS_FOLDER}/${id.replace(/[^a-zA-Z0-9-]/g, '')}.jpg`;
+function unpend(repo: Repository, address: string) {
+  try { repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, list<string>(repo, PROGRESS_PHOTOS_PENDING_KEY).filter(a => a !== address)); } catch { /* a note for a file that is gone or saved is harmless */ }
+}
+/**
+ * Takes in a new photo: notes its file's address first (nothing is moved if that fails), moves the file in, then saves the
+ * photo. If the save fails, the file is deleted; a file that can't be deleted keeps its noted address, so departure still
+ * finds it and the photo never stays on the phone unknown. Throws when the photo was not saved.
+ */
+export async function takeInPhoto(repo: Repository, photo: Omit<StoredPhoto, 'uri'>, move: (id: string) => Promise<string>): Promise<StoredPhoto> {
+  const planned = plannedAddress(photo.id);
+  repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, [...list<string>(repo, PROGRESS_PHOTOS_PENDING_KEY), planned]);
+  const saved = { ...photo, uri: await move(photo.id) };
+  try { addPhoto(repo, saved); } catch (e) { if (deleteProgressPhoto(saved.uri)) unpend(repo, planned); throw e; }
+  unpend(repo, planned);
+  return saved;
+}
 /** Deletes one progress photo: its file first, then its address. If the file can't be deleted the address stays, so it can be retried. */
 export function removePhoto(repo: Repository, id: string) {
   const all = list<StoredPhoto>(repo, PHOTOS), gone = all.find(p => p.id === id);

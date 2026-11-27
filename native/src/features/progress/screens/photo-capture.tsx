@@ -11,7 +11,7 @@ import { showToast } from '@/features/shell/toast';
 import { today as todayKey } from '@/features/onboarding/model';
 import { dShort, type Pose } from '../model';
 import { fill } from '../format';
-import { addPhoto } from '../local';
+import { takeInPhoto } from '../local';
 import { keepPhoto } from '../photo-file';
 import { useProgress } from '../use-progress';
 import { PhotoBox } from '../tiles/more';
@@ -50,8 +50,7 @@ export function PhotoCaptureSheet() {
       if (!k.reduceMotion) { flash.setValue(0.9); Animated.timing(flash, { toValue: 0, duration: 450, useNativeDriver: true }).start(); }
       const shot = await cam.current.takePictureAsync({ quality: 0.85 });
       if (!shot?.uri) throw new Error('no photo');
-      const id = randomUUID(), uri = await keepPhoto(shot.uri, id);
-      addPhoto(repo, { id, day: todayKey(), kg: null, pose, uri });
+      await takeInPhoto(repo, { id: randomUUID(), day: todayKey(), kg: null, pose }, id => keepPhoto(shot.uri, id));
       router.back();
       showToast(fill(t('progressPhotoSaved'), { pose: poseWord(pose) }), { color: 'sleep' });
     } catch {

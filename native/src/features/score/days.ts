@@ -46,9 +46,13 @@ export interface ScoreDaysInput {
 export function scoreDays({ store, days, steps, sleepHours, foods }: ScoreDaysInput): DayPillars[] {
   const today = days[days.length - 1];
   const sessions = store.trainingHistory(), active = store.active();
-  const trained = new Set(sessions.map(s => String(s.data.day)));
+  // Logged cardio is training too, so a cardio day counts as a training day, never as a rest day.
+  let cardio: string[] = [];
+  try { cardio = (store.repo as Repository).list('cardio_sessions').map(c => c.data.day).filter((d): d is string => typeof d === 'string' && (!today || d <= today)); } catch { cardio = []; }
+  const trainedDays = [...sessions.map(s => String(s.data.day)), ...cardio];
+  const trained = new Set(trainedDays);
   if (active && today) trained.add(today);
-  const firstDay = sessions.map(s => String(s.data.day)).sort()[0] ?? (active ? today : null);
+  const firstDay = [...trainedDays].sort()[0] ?? (active ? today : null);
   let perWeek = 3;
   try { perWeek = new PlanStore(store.repo as Repository).read().daysPerWeek; } catch { perWeek = 3; }
   const food = foods ?? foodDays(store.repo as Repository, days);

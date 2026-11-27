@@ -16,3 +16,13 @@ jest.mock('react-native-gesture-handler', () => require('./mocks/reanimated').ge
 // expo-router/testing-library mocks Reanimated again with 'react-native-reanimated/mock' (which loads the real package and falls
 // back to an empty object here). Point that path at the same stand-in so screens rendered through renderRouter get it too.
 jest.mock('react-native-reanimated/mock', () => require('./mocks/reanimated').reanimatedMock());
+
+// Animations started by a test keep asking for frames on real timers after its last line. A frame that fires once the
+// file's environment is torn down reads the environment's clock, which makes Jest log an error and fail the whole run
+// (process.exitCode = 1) while every test passes; CI runs the files in one process, so it saw it and local workers didn't.
+// At the end of each file, frames ask for nothing more, and the frames already waiting run while the environment is alive.
+const realSetTimeout = globalThis.setTimeout;
+afterAll(async () => {
+  globalThis.requestAnimationFrame = (() => 0) as unknown as typeof requestAnimationFrame;
+  await new Promise<void>(resolve => { realSetTimeout(resolve, 30); });
+});

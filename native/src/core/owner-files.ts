@@ -14,6 +14,9 @@ export const PROFILE_PHOTO_FOLDER = 'profile-photo';
 export const PROFILE_PHOTO_LEFTOVERS_KEY = 'profilePhotoLeftovers';
 export const PROGRESS_PHOTOS_KEY = 'progressPhotos';
 export const PROGRESS_PHOTOS_FOLDER = 'progress-photos';
+/** Addresses of new progress photos noted before their file is moved in, until the photo itself is saved. A photo whose
+ * save failed and whose file could not be deleted keeps its address here, so departure still finds the file. */
+export const PROGRESS_PHOTOS_PENDING_KEY = 'progressPhotosPending';
 const FOLDERS = [PROFILE_PHOTO_FOLDER, PROGRESS_PHOTOS_FOLDER];
 
 /** The file a stored address names, found by its name in the app's own folder. Only a file directly inside one of the
@@ -55,7 +58,9 @@ function read(repo: Pick<Repository, 'localGet'>, key: string): unknown { try { 
 /** This person's kept files, profile photo first. */
 function ownerFiles(repo: Pick<Repository, 'localGet'>): File[] {
   const progress = read(repo, PROGRESS_PHOTOS_KEY);
-  const progressUris = Array.isArray(progress) ? progress.map(p => p && typeof p === 'object' ? (p as { uri?: unknown }).uri : null) : [];
+  const progressUris: unknown[] = Array.isArray(progress) ? progress.map(p => p && typeof p === 'object' ? (p as { uri?: unknown }).uri : null) : [];
+  const pending = read(repo, PROGRESS_PHOTOS_PENDING_KEY);
+  if (Array.isArray(pending)) progressUris.push(...pending);
   const leftovers = read(repo, PROFILE_PHOTO_LEFTOVERS_KEY), profileUris = [read(repo, PROFILE_PHOTO_KEY), ...(Array.isArray(leftovers) ? leftovers : [])];
   return [...profileUris.map(u => keptFile(u, PROFILE_PHOTO_FOLDER)), ...progressUris.map(u => keptFile(u, PROGRESS_PHOTOS_FOLDER))]
     .filter((f): f is File => !!f);
