@@ -4,9 +4,9 @@ import { trainingSheetOptions } from '@/features/workout/nav';
 
 /** The exercise picker as a large form sheet. */
 export default function ExercisePickerRoute() {
-  const { mode, entry, routine } = useLocalSearchParams<{ mode?: PickerMode; entry?: string; routine?: string }>();
+  const { mode, entry, routine, session } = useLocalSearchParams<{ mode?: PickerMode; entry?: string; routine?: string; session?: string }>();
   return <>
     <Stack.Screen options={trainingSheetOptions.large} />
-    <ExercisePickerSheet mode={mode} entry={entry} routine={routine} />
+    <ExercisePickerSheet mode={mode} entry={entry} routine={routine} session={session} />
   </>;
 }

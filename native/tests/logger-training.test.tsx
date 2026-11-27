@@ -132,4 +132,11 @@ describe('logger screen', () => {
     expect(router.replace).toHaveBeenCalledWith({ pathname: '/workout/summary', params: { id: session.id, just: '1' } });
     sheet.mockRestore(); alert.mockRestore();
   });
+  test('Add exercise opens the picker for the workout on screen', async () => {
+    const { session } = sample();
+    await render(<TrainingLogger />, { wrapper });
+    await act(async () => {});
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Add exercise' }).at(-1)!);
+    expect(router.push).toHaveBeenCalledWith({ pathname: '/training/picker', params: { mode: 'add', session: session.id } });
+  });
 });

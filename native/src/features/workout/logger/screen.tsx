@@ -185,7 +185,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
       actions: [{ label: tr('trainingFinishWorkout'), run: go }] });
     else go();
   };
-  const addExercise = () => trainingNav.picker({ mode: 'add' });
+  const addExercise = () => trainingNav.picker({ mode: 'add', session: session.id });
   const name = String(session.data.name ?? '') || tr('trainingEmptyWorkout');
 
   // The header (`.nb.tr-nb`, with the jump strip inside it) floats over the exercises, which show faintly through it.

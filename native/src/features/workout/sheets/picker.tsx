@@ -17,17 +17,21 @@ import { tr } from '../tr';
 import { useWorkout } from '../use-workout';
 import { exLabel } from '../logger/model';
 import { trainingRoutes } from '../nav';
+import { dayRows, writeDay } from '../screens/plan';
 
 export type PickerMode = 'add' | 'replace' | 'routine' | 'browse';
 const groupsOf = (e: Exercise) => [e.main, ...e.helpers].map(m => muscleGroup(m)).filter(Boolean) as MuscleGroup[];
 
-/** The exercise picker sheet (`exercise-picker`): search, muscle chips, Recent and every exercise; tick several to add. */
-export function ExercisePickerSheet({ mode = 'add', entry, routine }: { mode?: PickerMode; entry?: string; routine?: string }) {
+/** The exercise picker sheet (`exercise-picker`): search, muscle chips, Recent and every exercise; tick several to add.
+ * Adding goes to the workout named by `session` (the one the logger shows, which may be a past day or a finished
+ * workout being edited), or to the live workout when none is named. */
+export function ExercisePickerSheet({ mode = 'add', entry, routine, session }: { mode?: PickerMode; entry?: string; routine?: string; session?: string }) {
   const k = useKit(), { store } = useWorkout();
   const [q, setQ] = useState(''), [muscle, setMuscle] = useState<MuscleGroup | 'All'>('All'), [sel, setSel] = useState<string[]>([]);
   const single = mode === 'replace' || mode === 'browse';
   const library = useMemo(() => store?.preferences().library() ?? [], [store]);
-  const active = store?.active();
+  const named = session ? store?.repo.get('sessions', session) : undefined;
+  const active = session ? (named && named.deleted_at === null ? named : undefined) : store?.active();
   const inNow = new Set(mode === 'routine' && routine && store ? store.templateExercises(routine).map(e => String(e.data.exercise))
     : mode === 'add' && active && store ? store.entries(active.id).map(e => String(e.data.exercise)) : []);
   const recentNames = [...new Set(store?.preferences().recent() ?? [])].slice(0, 6);
@@ -44,9 +48,9 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine }: { mode?: P
       if (mode === 'browse') { router.back(); router.push({ pathname: trainingRoutes.exercise, params: { name: picked[0] } }); return; }
       if (mode === 'replace' && entry) { store.replaceExercise(entry, picked[0], 'replace'); showToast(tr('trainingReplacedWith', { name: exLabel(picked[0]) }), { color: 'training' }); }
       else if (mode === 'routine' && routine) {
-        const row = store.repo.get('routines', routine), current = store.templateExercises(routine);
-        store.saveTemplate(String(row?.data.name ?? ''), [...current.map(e => ({ id: e.id, exercise: String(e.data.exercise), target_sets: Number(e.data.target_sets) || 3, target_reps: Number(e.data.target_reps) || 8 })),
-          ...picked.map(exercise => ({ exercise, target_sets: 3, target_reps: 10, rep_min: 8, rep_max: 12 }))], routine);
+        const row = store.repo.get('routines', routine);
+        // The rows already there keep their rep ranges and supersets, as the plan editor saves them.
+        writeDay(store, routine, [...dayRows(store, routine), ...picked.map(exercise => ({ exercise, target_sets: 3, target_reps: 10, rep_min: 8, rep_max: 12 }))]);
         showToast(tr('trainingAddedTo', { n: picked.length, name: String(row?.data.name ?? '') }), { color: 'training' });
       } else if (active) {
         for (const n of picked) store.addExercise(active.id, n, 3);

@@ -21,7 +21,7 @@ export const trainingNav = {
   detail: (id: string) => router.push({ pathname: trainingRoutes.detail, params: { id } }),
   exercise: (name: string) => router.push({ pathname: trainingRoutes.exercise, params: { name } }),
   plan: () => router.push(trainingRoutes.plan),
-  picker: (params: { mode?: 'add' | 'replace' | 'routine' | 'browse'; entry?: string; routine?: string } = {}) => router.push({ pathname: trainingRoutes.picker, params }),
+  picker: (params: { mode?: 'add' | 'replace' | 'routine' | 'browse'; entry?: string; routine?: string; session?: string } = {}) => router.push({ pathname: trainingRoutes.picker, params }),
   rest: (entry?: string) => router.push(entry ? { pathname: trainingRoutes.rest, params: { entry } } : trainingRoutes.rest),
   cardio: () => router.push(trainingRoutes.cardio),
 };

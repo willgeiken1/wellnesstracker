@@ -56,3 +56,47 @@ test('replace swaps the exercise with one tap', async () => {
   expect(names[0]).toMatch(/leg press/i);
   expect(router.back).toHaveBeenCalled();
 });
+
+/** Picks one exercise by search and presses Add. */
+async function addOne(search: string) {
+  await fireEvent.changeText(screen.getByPlaceholderText('Search exercises'), search);
+  await fireEvent.press(screen.getAllByRole('button', { name: new RegExp(`^${search}`, 'i') })[0]);
+  await fireEvent.press(screen.getByText('Add (1)'));
+}
+
+test('adding while logging a past day goes to that day, even with no workout running', async () => {
+  mockRepository = memoryRepository();
+  const store = new WorkoutStore(mockRepository);
+  const day = new Date(Date.now() - 3 * 86_400_000);
+  const past = store.startPast(`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`);
+  expect(store.active()).toBeUndefined();
+  await render(<ExercisePickerSheet mode="add" session={past.id} />, { wrapper });
+  await addOne('leg press');
+  expect(store.entries(past.id).map(e => String(e.data.exercise))).toEqual([expect.stringMatching(/leg press/i)]);
+  expect(router.back).toHaveBeenCalled();
+});
+
+test('adding while editing a finished workout goes to that workout, not the one running', async () => {
+  const { store, session: live } = sample();
+  const done = store.start(undefined, Date.now() - 7 * 86_400_000, true);
+  store.addExercise(done.id, 'Squat', 1);
+  store.finish(done.id, { startedAt: Date.now() - 7 * 86_400_000, finishedAt: Date.now() - 7 * 86_400_000 + 3_600_000, notes: '' });
+  expect(store.active()?.id).toBe(live.id);
+  await render(<ExercisePickerSheet mode="add" session={done.id} />, { wrapper });
+  await addOne('leg press');
+  expect(store.entries(done.id)).toHaveLength(2);
+  expect(store.entries(live.id)).toHaveLength(1);
+});
+
+test('adding to a template keeps the rep ranges and supersets of the exercises already in it', async () => {
+  mockRepository = memoryRepository();
+  const store = new WorkoutStore(mockRepository);
+  const push = store.saveTemplate('Push', [
+    { exercise: 'Bench Press', target_sets: 3, target_reps: 8, rep_min: 5, rep_max: 8, superset_group: 'a' },
+    { exercise: 'Overhead Press', target_sets: 3, target_reps: 10, rep_min: 8, rep_max: 10, superset_group: 'a' },
+  ]);
+  await render(<ExercisePickerSheet mode="routine" routine={push.id} />, { wrapper });
+  await addOne('leg press');
+  const rows = store.templateExercises(push.id).map(e => [String(e.data.exercise), e.data.rep_min, e.data.rep_max, e.data.superset_group]);
+  expect(rows).toEqual([['Bench Press', 5, 8, 'a'], ['Overhead Press', 8, 10, 'a'], [expect.stringMatching(/leg press/i), 8, 12, null]]);
+});
