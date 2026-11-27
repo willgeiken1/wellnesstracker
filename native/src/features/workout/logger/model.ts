@@ -6,6 +6,7 @@ import type { Draft, WorkoutStore } from '@/data/workout/store';
 import { loadSettingsPrefs } from '@/features/settings/prefs-model';
 import { clock, epley, muscleGroup } from '../training-data';
 import { tr, trCount } from '../tr';
+import { warmRamp } from '../warmups';
 
 /** The effort scale the logger offers, as on the mockup. */
 export const RPE = [6, 7, 8, 9, 10] as const;
@@ -97,11 +98,16 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
   const exercises = entries.map((entry): ExerciseView => {
     const name = String(entry.data.exercise), unit = store.unit(entry.id), drafts = store.drafts(entry.id);
     const previous = store.previous(entry), suggestion = store.suggestion(entry), range = store.repRange(entry);
-    const prevAt = (i: number) => previous.find(s => Number(s.data.position) === i);
+    // Last time's sets line up kind by kind, warm-up with warm-up and working set with working set, so warm-ups added
+    // in front this time never shift every working set's hint along by one.
+    const prevWarm = (r: Row) => store.setTag(String(r.data.entry_id), r) === 'warmup';
+    const prevKinds = { warm: previous.filter(prevWarm), work: previous.filter(r => !prevWarm(r)) };
+    const ordinal = drafts.map((d, i) => drafts.slice(0, i).filter(x => warmOf(x) === warmOf(d)).length);
+    const prevAt = (i: number) => (warmOf(drafts[i]) ? prevKinds.warm : prevKinds.work)[ordinal[i]];
     let n = 0;
     const sets = drafts.map((draft, index): SetView => {
       const warm = warmOf(draft), p = prevAt(index);
-      const preceding = drafts.slice(0, index).reverse().find(d => d.weight !== '');
+      const preceding = drafts.slice(0, index).reverse().find(d => d.weight !== '' && warmOf(d) === warm);
       const weightHint = suggestion.jump && suggestion.weight !== null ? String(suggestion.weight)
         : p ? String(displayWeight(Number(p.data.weight_kg), unit))
           : preceding?.weight ?? (suggestion.weight === null ? '' : String(suggestion.weight));
@@ -111,6 +117,12 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
       return { index, draft, done: !!draft.setId, warm, failure: draft.tag === 'failure', num: warm ? 0 : ++n,
         weightHint, repsHint, rpe: store.repo.localGet<number>(rpeKey(entry.id, index)) ?? null, lastRpe, pr: false };
     });
+    // Warm-ups ramp toward the first working set's weight (Settings › Workout › Warm-up sets), as on the mockup.
+    const warmSets = sets.filter(s => s.warm), top = Number(sets.find(s => !s.warm)?.weightHint);
+    if (warmSets.length && top > 0) {
+      const ramp = warmRamp(warmSets.length, top, unit, store.preferences().exercise(name).equipment === 'barbell' ? barFor(store, name, unit) : undefined);
+      warmSets.forEach((s, i) => { const r = ramp[Math.min(i, ramp.length - 1)]; s.weightHint = String(r.weight); s.repsHint = String(r.reps); });
+    }
     const work = sets.filter(s => !s.warm), checked = work.filter(s => s.done), one = store.isUnilateral(entry.id);
     // A one-side set is judged by its weaker side, as it is saved and as earlier sessions' records were, so an unchanged set is never a record.
     const result = (s: SetView) => {

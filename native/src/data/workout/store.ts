@@ -443,6 +443,13 @@ export class WorkoutStore {
     const session = this.repo.get('entries', entryId)?.data.session_id;
     if (session && this.repo.get('sessions', String(session))?.data.finished_at !== null) this.recompute();
   }
+  /** Put warm-up sets in front of an exercise's sets, while none of them is logged yet. */
+  prependWarmups(entryId: string, count: number) {
+    const drafts = this.drafts(entryId);
+    if (count < 1 || drafts.some(d => d.setId) || drafts.some(d => d.tag === 'warmup' || d.warmup) || drafts.length + count > 100) return;
+    const warm = Array.from({length: count}, () => ({weight: '', reps: '', tag: 'warmup', warmup: true}) as Draft);
+    this.repo.localSave(`draft:${entryId}`, [...warm, ...drafts]);
+  }
   addSet(entryId: string) {
     const drafts = this.drafts(entryId);
     if (drafts.length >= 100) return;

@@ -35,6 +35,7 @@ import { useLockAvailable } from '@/features/privacy-lock/cover';
 import { OURA_ALERT_AVAILABLE, isReminderSwitch, remindersOn } from '@/features/reminders/plan';
 import { askForReminders, notificationsInBuild, notifier, type NotifyPermission } from '@/features/reminders/notifier';
 import { useReminderSync } from '@/features/reminders/sync';
+import { warmRamp } from '@/features/workout/warmups';
 
 const KG = 2.20462;
 const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return `${h} h${m ? ` ${m} m` : ''}`; };
@@ -499,9 +500,8 @@ export function WorkoutPage() {
     if (store && own) act(() => store.preferences().savePlates(u, on ? [...own, pl] : own.filter(x => x !== pl)));
   };
   const setHaptics = (v: boolean) => { set('work.haptics', v); if (store && repo) act(() => repo.localSave('haptics', v)); };
-  const top = kg ? 100 : 225, bar = kg ? +w.barKg : +w.bar, rnd = kg ? 2.5 : 5;
-  const pct = ({ 1: [0.6], 2: [0.5, 0.75], 3: [0.4, 0.6, 0.8], 4: [0.4, 0.55, 0.7, 0.85] } as Record<number, number[]>)[w.warmN] ?? [0.5, 0.75];
-  const reps = ({ 1: [5], 2: [8, 3], 3: [8, 5, 2], 4: [8, 5, 3, 1] } as Record<number, number[]>)[w.warmN] ?? [8, 3];
+  const top = kg ? 100 : 225, bar = kg ? +w.barKg : +w.bar;
+  const ramp = warmRamp(w.warmN, top, kg ? 'kg' : 'lb', bar);
   const bars = kg ? [{ v: '20', l: '20 kg barbell' }, { v: '15', l: '15 kg barbell' }, { v: '10', l: '10 kg technique bar' }]
     : [{ v: '45', l: '45 lb barbell' }, { v: '35', l: '35 lb barbell' }, { v: '33', l: '33 lb (15 kg) barbell' }, { v: '25', l: '25 lb technique bar' }];
   const training = k.c.training;
@@ -530,11 +530,11 @@ export function WorkoutPage() {
         <View style={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 14, borderTopWidth: 1, borderTopColor: k.c.hair }}>
           <KitText weight={600} size={12.5} color="text-muted">{st('settingsWarmExample', { top, u })}</KitText>
           <View style={{ marginTop: 8, gap: 6 }}>
-            {pct.map((x, i) => { const v = Math.max(bar, Math.round(top * x / rnd) * rnd);
+            {ramp.map(({ pct: x, weight: v, reps: r }, i) => {
               return <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: alpha(training, 0.16) }}>
                   <KitText weight={700} size={11} color="training">{`W${i + 1}`}</KitText></View>
-                <KitText weight={700} size={14.5} numeric>{`${v === bar ? 'Bar' : `${v} ${u}`} × ${reps[i]}`}</KitText>
+                <KitText weight={700} size={14.5} numeric>{`${v === bar ? 'Bar' : `${v} ${u}`} × ${r}`}</KitText>
                 <KitText weight={500} size={12.5} color="text-muted" style={{ marginLeft: 'auto' }}>{`${Math.round(x * 100)}%`}</KitText>
               </View>; })}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
