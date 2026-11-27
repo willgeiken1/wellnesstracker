@@ -12,6 +12,7 @@ import type { HealthDays } from '@/features/health/days';
 import type { OuraRecovery } from '@/features/health/oura';
 import type { RecoveryRead } from '@/features/health/use-recovery';
 import { STEP_GOAL } from '@/features/score/model';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 import { showToast } from '@/features/shell/toast';
 import { t } from '@/i18n/en';
 import type { HealthDetailIn, HomeInput, RecoveryIn } from './data';
@@ -110,6 +111,7 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
   const repo = store?.repo ?? null;
   // The Apple read is a new object on each draw until it lands, so only its parts are watched.
   const appleAccess = apple.access, appleRecovery = apple.recovery;
+  const hide = useSettingsPrefs()[0].priv.hide;
   const state = useMemo(() => {
     if (!reader) return null;
     const now = new Date(minute * 60_000);
@@ -123,8 +125,8 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
       goals: HOME_GOALS,
     };
     const nextMeal = input.nextMeal;
-    return buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit }, data => homeTileAction(repo, nextMeal, data));
-  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura]);
+    return buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit }, data => homeTileAction(repo, nextMeal, data), hide);
+  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide]);
   useEffect(() => { setHomeTileState(state); }, [state]);
   return state;
 }

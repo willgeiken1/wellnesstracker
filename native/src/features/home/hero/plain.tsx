@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { alpha, capitals } from '@/components/kit-style';
@@ -26,11 +26,12 @@ function Bar({ p, color, bg, reduceMotion }: { p: HeroPillar; color: string; bg:
   </View>;
 }
 
-export function PlainHero({ view, colors, reduceMotion }: { view: HeroView; colors: Record<string, string>; reduceMotion: boolean }) {
+export function PlainHero({ view, colors, reduceMotion, onReveal }: { view: HeroView; colors: Record<string, string>; reduceMotion: boolean;
+  /** While Hide numbers covers the food energy: a tap shows Home's numbers. */ onReveal?: () => void }) {
   // The score counts up from 0 when the numbers first show and to each new day's value after; a changed value fades up.
   const pct = useCountTo(view.pct, !reduceMotion, reduceMotion ? view.pct : 0);
-  return <View style={{ height: PLAIN_H, marginTop: 2, marginBottom: 6, alignItems: 'center', paddingTop: 16 }} accessible accessibilityRole="summary"
-    accessibilityLabel={view.label} testID="home-hero-plain">
+  return <Pressable disabled={!onReveal} onPress={onReveal} style={{ height: PLAIN_H, marginTop: 2, marginBottom: 6, alignItems: 'center', paddingTop: 16 }} accessible
+    accessibilityRole={onReveal ? 'button' : 'summary'} accessibilityHint={onReveal ? t('tilesShowNumbers') : undefined} accessibilityLabel={view.label} testID="home-hero-plain">
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
       <Svg width={14} height={6}>
         <Defs><LinearGradient id="heroPlainPill" x1="0" y1="0" x2="1" y2="0"><Stop offset="0" stopColor={colors.training} /><Stop offset="0.5" stopColor={colors.sleep} /><Stop offset="1" stopColor={colors.food} /></LinearGradient></Defs>
@@ -51,5 +52,5 @@ export function PlainHero({ view, colors, reduceMotion }: { view: HeroView; colo
         <Bar p={p} color={colors[KEYS[i]]} bg={colors.bg} reduceMotion={reduceMotion} />
       </View>)}
     </View>
-  </View>;
+  </Pressable>;
 }

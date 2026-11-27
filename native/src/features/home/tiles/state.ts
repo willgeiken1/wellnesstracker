@@ -17,6 +17,8 @@ export interface HomeTileState {
   has: { stepsHourly: boolean; activeHourly: boolean; exerciseHourly: boolean; mindfulSessions: boolean; sleepScore: boolean; weightGoal: boolean };
   /** Quick-log buttons inside tiles. */
   onAction: (data: Record<string, string>) => void;
+  /** Hide numbers (Settings, Privacy): weight and energy figures on Home show as dots until a tap (see ../hide-numbers.ts). */
+  hide: boolean;
 }
 
 const HEALTH = new Set(['steps', 'active', 'exercise', 'mindful']), NIGHT = new Set(['sleep', 'sleepScore', 'hrv', 'rhr']);
@@ -37,10 +39,10 @@ export function reasons(input: HomeInput, ready: TileReady): Record<string, Empt
   return out;
 }
 
-export function buildState(input: HomeInput, units: StudioUnits, onAction: HomeTileState['onAction']): HomeTileState {
+export function buildState(input: HomeInput, units: StudioUnits, onAction: HomeTileState['onAction'], hide = false): HomeTileState {
   const ready = tileReady(input), d = input.detail;
   return {
-    data: buildTileData(input), ready, why: reasons(input, ready), units, onAction,
+    data: buildTileData(input), ready, why: reasons(input, ready), units, onAction, hide,
     has: {
       stepsHourly: !!d?.stepsHourly, activeHourly: !!d?.activeHourly, exerciseHourly: !!d?.exerciseHourly,
       mindfulSessions: !!d?.mindful, sleepScore: !!input.recovery?.sleepScore?.some(v => v !== null), weightGoal: !!input.weightGoalKg,
@@ -73,4 +75,5 @@ let current: HomeTileState | null = null;
 const listeners = new Set<() => void>();
 export function setHomeTileState(next: HomeTileState | null) { if (next === current) return; current = next; listeners.forEach(l => l()); }
 export const homeTileState = () => current;
-export const useHomeTileState = () => useSyncExternalStore(cb => { listeners.add(cb); return () => { listeners.delete(cb); }; }, () => current, () => current);
+export function subscribeHomeTileState(cb: () => void) { listeners.add(cb); return () => { listeners.delete(cb); }; }
+export const useHomeTileState = () => useSyncExternalStore(subscribeHomeTileState, () => current, () => current);
