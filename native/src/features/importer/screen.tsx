@@ -29,8 +29,11 @@ import { ThemedText } from "../../components/themed-text";
 import { t as message, type MessageKey } from "../../i18n/en";
 import { exerciseLibrary } from "../../core/workout/library";
 import {
+  nativeBackup,
+  nativeBackupPlan,
   normalizePwa,
   previewImport,
+  restoreNativeLocal,
   commitImport,
   type ImportPlan,
 } from "./local";
@@ -126,18 +129,22 @@ function ImportBody() {
     if (!repo || done)
       return { preview: null, error: false, names: [] as string[] };
     try {
+      // A file this app saved restores as it is; an older web app backup goes through the importer's mapping.
+      const own = server || input === undefined ? null : nativeBackup(input);
       const base = server
         ? plan
         : input === undefined
           ? null
-          : normalizePwa(input, bank);
+          : own
+            ? nativeBackupPlan(own)
+            : normalizePwa(input, bank);
       const valid = Object.fromEntries(
         Object.entries(mapping).filter(
           ([, value]) => value === "custom" || bank.includes(value),
         ),
       );
       const converted =
-        server || !base ? base : normalizePwa(input, bank, valid);
+        server || !base || own ? base : normalizePwa(input, bank, valid);
       return {
         preview: converted ? previewImport(repo, converted, mode) : null,
         error: false,
@@ -199,7 +206,10 @@ function ImportBody() {
         if (currentOwner.current !== repo.owner) throw Error();
         p = previewImport(repo, imported);
       }
+      const own = server ? null : nativeBackup(input);
+      const newEntries = new Set(p.plan.rows.filter((r) => r.table === "entries" && !repo.get("entries", r.id)).map((r) => r.id));
       commitImport(repo, p, true, mode === "replace");
+      if (own) restoreNativeLocal(repo, own, newEntries);
       if (server) repo.localSave("pwaImportComplete", true);
       setDone(true);
       void auth.syncNow();

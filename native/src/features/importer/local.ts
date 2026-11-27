@@ -199,3 +199,43 @@ export function commitImport(
   });
   return added;
 }
+
+/** Tables a restore may write, as for any import. */
+const RESTORE_TABLES = syncedTables.filter((t) => !["purges", "custom_exercises", "plans", "pauses"].includes(t));
+type NativeBackup = { format: "insight-phone-only" | "insight-account"; version: 1; rows: Record<string, unknown>; local: Record<string, unknown> };
+/** A file from Settings › Save a backup file (this app's own format), or null for any other file. */
+export function nativeBackup(input: unknown): NativeBackup | null {
+  const v = input as Partial<NativeBackup> | null;
+  if (!v || typeof v !== "object" || (v.format !== "insight-phone-only" && v.format !== "insight-account") || v.version !== 1) return null;
+  if (!v.rows || typeof v.rows !== "object" || Array.isArray(v.rows)) throw new Error("Invalid backup.");
+  return { format: v.format, version: 1, rows: v.rows, local: v.local && typeof v.local === "object" && !Array.isArray(v.local) ? v.local : {} };
+}
+/** The import plan for one of this app's backup files: every row still kept in it, removed ones left out. */
+export function nativeBackupPlan(backup: NativeBackup): ImportPlan {
+  const rows: ImportPlan["rows"] = [];
+  for (const table of RESTORE_TABLES) {
+    const list = backup.rows[table];
+    if (list === undefined) continue;
+    if (!Array.isArray(list)) throw new Error("Invalid backup.");
+    for (const r of list as { id?: unknown; data?: unknown; deleted_at?: unknown }[]) {
+      if (!r || typeof r.id !== "string" || !r.data || typeof r.data !== "object" || Array.isArray(r.data)) throw new Error("Invalid backup.");
+      if (r.deleted_at != null) continue;
+      rows.push({ table, id: r.id, data: r.data as ImportPlan["rows"][number]["data"] });
+    }
+  }
+  return { version: 1, rows, issues: [], unmapped: [], legacy: {} };
+}
+/**
+ * After a restore, the phone-side details saved with it (a workout's unsaved set rows, RPE, sides, settings): any the phone
+ * does not have yet, and the set rows of a workout the restore brought back. The importer's own bookkeeping is left alone.
+ */
+export function restoreNativeLocal(repo: Repository, backup: NativeBackup, newEntries: ReadonlySet<string>) {
+  repo.atomic(() => {
+    for (const [key, value] of Object.entries(backup.local)) {
+      if (key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:")) continue;
+      const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));
+      if (repo.localGet(key) !== undefined && !fresh) continue;
+      repo.localSave(key, value);
+    }
+  });
+}
