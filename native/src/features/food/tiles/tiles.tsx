@@ -7,7 +7,7 @@ import { t } from '@/i18n/en';
 import { fill } from '../../tiles/ui';
 import type { TileRenderProps } from '../../tiles/types';
 import { addSaved, addWater, comboKcal, comboProtein, mealName, quickAdd } from '../actions';
-import { clock, daySums, known, roundOr, eatingWindow, foodsLine, grams, kcalOf, num, oftenFoods, plural, shortDate, streak, weekDays, weekday, weekLetters, weekNames, type DayView, type WeekFirst } from '../day';
+import { clock, daySums, known, macrosComplete, roundOr, eatingWindow, foodsLine, grams, kcalOf, num, oftenFoods, plural, shortDate, streak, weekDays, weekday, weekLetters, weekNames, type DayView, type WeekFirst } from '../day';
 import { combos, recentFoods, shiftDay, type Food } from '../model';
 import { foodRoutes } from '../nav';
 import { burnedOn, pickFoodDay } from '../selection';
@@ -115,7 +115,7 @@ const Macros: TileBody = ({ p, d }) => {
     </View>)}</View>
   </View>;
   // Shares of calories are worked out only when protein, carbs and fat are all known; otherwise they read as unknown, never 0%.
-  const whole = !unknown('p') && !unknown('c') && !unknown('f');
+  const whole = macrosComplete(v.items);
   const sp = macroPercents(known(v.p), known(v.c), known(v.f)), pct = (i: number) => whole ? `${sp.pc[i]}%` : '–';
   const split = (h: number) => <View accessible accessibilityRole="image" accessibilityLabel={whole ? tx('foodSplitA11y', { p: sp.pc[0], c: sp.pc[1], f: sp.pc[2] }) : t('foodSplitUnavailable')}>
     <SplitBar h={h} track={whole ? undefined : k.c['surface-2']} parts={whole ? [{ v: sp.kcal[0], color: c('p') }, { v: sp.kcal[1], color: c('c') }, { v: sp.kcal[2], color: c('f') }] : []} /></View>;

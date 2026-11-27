@@ -65,6 +65,9 @@ export const known = (v: number | null) => v ?? 0;
 export const roundOr = (v: number | null) => v == null ? '–' : String(Math.round(v));
 const sum = (items: FoodItem[], key: 'kcal' | 'p' | 'c' | 'f' | 'fib') => items.reduce((a, i) => add(a, i[key]), 0);
 /** A nutrient total: 0 with nothing logged, null when food was logged but none of it gave the nutrient. */
+/** Whether every food has protein, carbs and fat listed. A share of the calories needs that: a total that adds up only the
+ * foods that list them would lean on those foods, so a mix of known and unknown has no split. */
+export const macrosComplete = (items: readonly FoodItem[]) => items.length > 0 && items.every(i => i.p != null && i.c != null && i.f != null);
 export const nutrient = (items: FoodItem[], key: 'kcal' | 'p' | 'c' | 'f' | 'fib') => items.length && items.every(i => i[key] == null) ? null : sum(items, key);
 
 export function dayView(repo: Repository, day: string, { today = attributedDay(), burned = null }: { today?: string; burned?: number | null } = {}): DayView {

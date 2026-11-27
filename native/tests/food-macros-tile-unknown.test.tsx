@@ -54,6 +54,14 @@ describe('the Macros tile with unknown macros', () => {
     expect(screen.getByLabelText('Carbs unknown')).toBeTruthy();
     expect(screen.queryByLabelText(/Carbs 0 of/)).toBeNull();
   });
+  test.each(['M', 'L'] as const)('a full food beside a calorie-only Quick add makes no split from the full one alone (%s)', async size => {
+    const repo = logged(30, 0, 0);
+    saveFood(repo, DAY, LUNCH, quickFood('Synthetic quick add', 300, null, null, null));
+    await macros(size, repo);
+    expect(screen.queryByText('100%')).toBeNull();
+    expect(screen.queryByLabelText(/Calories from protein/)).toBeNull();
+    expect(screen.getByLabelText('Some of this food has no protein, carbs or fat listed, so the split is unknown.')).toBeTruthy();
+  });
   test('with all three known, the shares show as before', async () => {
     await macros('L', logged(25, 50, 0));
     expect(screen.getByLabelText('Calories from protein 33%, carbs 67%, fat 0%')).toBeTruthy();

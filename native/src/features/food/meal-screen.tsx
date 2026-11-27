@@ -7,7 +7,7 @@ import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import { removeFood } from './actions';
-import { clock, dayView, monthDay, num, plural, shortDate, weekdayName, type FoodItem } from './day';
+import { clock, dayView, macrosComplete, monthDay, num, plural, shortDate, weekdayName, type FoodItem } from './day';
 import { combos, saveCombo, shiftDay } from './model';
 import { foodRoutes } from './nav';
 import { useFoodDay } from './selection';
@@ -70,7 +70,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
   </FoodPage>;
 
   const share = m.kcal == null ? null : Math.round(m.kcal / view.goal * 100);
-  const whole = m.p != null && m.c != null && m.f != null;
+  const whole = macrosComplete(m.items);
   const pc = whole ? macroPercents(m.p!, m.c!, m.f!).pc : [];
   const saveMeal = () => {
     const name = `${m.name}, ${monthDay(day)}`;

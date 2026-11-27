@@ -41,3 +41,12 @@ test('a meal with all three macros listed shows its split', async () => {
   expect(screen.getByTestId('food-meal-split').props.accessibilityLabel).toBe('Calories from protein 25%, carbs 50%, fat 25%');
   expect(segments()).toBe(3);
 });
+
+test('a full food beside a calorie-only quick add leaves the meal\'s split unknown, not all protein', async () => {
+  const repo = memoryRepository();
+  saveFood(repo, DAY, LUNCH, { ...blank, name: 'Synthetic chicken', energy_kj: 120 * 4.184, protein_g: 30, carbs_g: 0, fat_g: 0 });
+  saveFood(repo, DAY, LUNCH, { ...blank, name: 'Synthetic quick add', energy_kj: 300 * 4.184, protein_g: null, carbs_g: null, fat_g: null });
+  await render(<MealScreen repo={repo} meal={LUNCH} />, { wrapper });
+  expect(screen.getByTestId('food-meal-split').props.accessibilityLabel).toBe('Some of this food has no protein, carbs or fat listed, so the split is unknown.');
+  expect(segments()).toBe(0);
+});
