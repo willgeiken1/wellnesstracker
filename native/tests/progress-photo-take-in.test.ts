@@ -1,5 +1,5 @@
 import { eraseOwnerFiles, OwnerFilesNotErased } from '../src/core/owner-files';
-import { readPhotos, takeInPhoto } from '../src/features/progress/local';
+import { addPhoto, readPhotos, removePhoto, takeInPhoto } from '../src/features/progress/local';
 import type { Repository } from '../src/data/repository';
 
 // A small file system: addresses of files that exist, and files whose delete is refused.
@@ -61,5 +61,27 @@ describe('departure when a photo address list cannot be read', () => {
     const broken = { localGet: (k: string) => { if (k === 'progressPhotos') throw new Error('fixture: malformed JSON'); return undefined; } } as unknown as Repository;
     expect(() => eraseOwnerFiles(broken)).toThrow(OwnerFilesNotErased);
     expect(mockFiles.has(URI)).toBe(true);
+  });
+});
+
+describe('changing the photo list when it cannot be read', () => {
+  /** A saved photo list that won't read back, as when its stored text is damaged. Records every save. */
+  function unreadable(value: 'throws' | 'not-a-list') {
+    const saves: unknown[] = [];
+    return { saves, r: { localGet: (k: string) => { if (k !== 'progressPhotos') return undefined; if (value === 'throws') throw new Error('fixture: malformed JSON'); return { not: 'a list' }; },
+      localSave: (k: string, v: unknown) => { if (k === 'progressPhotos') saves.push(v); } } as unknown as Repository };
+  }
+  test.each(['throws', 'not-a-list'] as const)('a new photo is not saved over the old addresses (%s)', async value => {
+    const { r, saves } = unreadable(value);
+    expect(() => addPhoto(r, { ...shot, uri: URI })).toThrow();
+    await expect(takeInPhoto(r, shot, move)).rejects.toThrow();
+    expect(saves).toEqual([]);
+    // The moved-in file is deleted again, so nothing is left on the phone unknown.
+    expect(mockFiles.has(URI)).toBe(false);
+  });
+  test('removing a photo leaves the list as it is', () => {
+    const { r, saves } = unreadable('throws');
+    expect(() => removePhoto(r, 'p1')).toThrow();
+    expect(saves).toEqual([]);
   });
 });

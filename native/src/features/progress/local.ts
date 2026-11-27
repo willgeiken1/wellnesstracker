@@ -19,7 +19,17 @@ export function readPhotos(repo: Repository): ProgressPhoto[] {
     .map(p => ({ id: p.id, day: p.day, kg: finite(p.kg) ? p.kg : null, pose: (['Front', 'Side', 'Back'] as const).includes(p.pose) ? p.pose : 'Front', uri: p.uri }))
     .sort((a, b) => a.day.localeCompare(b.day));
 }
-export function addPhoto(repo: Repository, photo: StoredPhoto) { repo.localSave(PHOTOS, [...list<StoredPhoto>(repo, PHOTOS), photo]); }
+/**
+ * The photo list for a change: throws when the stored list can't be read, so a write never replaces addresses it couldn't
+ * see. Those addresses are how departure finds the files to erase.
+ */
+function photosToChange(repo: Repository): StoredPhoto[] {
+  const v = repo.localGet<StoredPhoto[]>(PHOTOS);
+  if (v == null) return [];
+  if (!Array.isArray(v)) throw new Error('The saved photo list could not be read.');
+  return v;
+}
+export function addPhoto(repo: Repository, photo: StoredPhoto) { repo.localSave(PHOTOS, [...photosToChange(repo), photo]); }
 
 /** The address a new photo's file will have once moved in, as noted before the move. */
 const plannedAddress = (id: string) => `${PROGRESS_PHOTOS_FOLDER}/${id.replace(/[^a-zA-Z0-9-]/g, '')}.jpg`;
@@ -41,7 +51,7 @@ export async function takeInPhoto(repo: Repository, photo: Omit<StoredPhoto, 'ur
 }
 /** Deletes one progress photo: its file first, then its address. If the file can't be deleted the address stays, so it can be retried. */
 export function removePhoto(repo: Repository, id: string) {
-  const all = list<StoredPhoto>(repo, PHOTOS), gone = all.find(p => p.id === id);
+  const all = photosToChange(repo), gone = all.find(p => p.id === id);
   if (gone && !deleteProgressPhoto(gone.uri)) return;
   repo.localSave(PHOTOS, all.filter(p => p.id !== id));
 }
