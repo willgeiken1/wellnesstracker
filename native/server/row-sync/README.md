@@ -37,7 +37,9 @@ already exist on the hosted project. `.github/workflows/row-sync-check.yml`
 it by hand on `main` and approve the production environment. It changes nothing:
 
 1. `live/compare.sql` compares every column (type, default, identity), column
-   grant, forced RLS, constraint, policy, trigger, index, `anon`/`authenticated`
+   grant, forced RLS, constraint (NOT NULL is compared per column, because
+   Postgres 18 also catalogs it as a constraint and older versions don't),
+   policy, trigger, index, `anon`/`authenticated`
    table privilege, `row_sync_seq` with its settings and grants, and the four
    row-sync functions (arguments, security, settings, owner, body hash) with the shape that
    `supabase/migrations` plus `apply-0001-0002.sql` produce, and lists every

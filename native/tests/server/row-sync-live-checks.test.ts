@@ -71,6 +71,7 @@ describe('full comparison (live/compare.sql)', () => {
     expect(lines).toContain('sequence grant anon row_sync_seq none');
     expect(lines).toContain('sequence grant authenticated row_sync_seq usage');
     expect(lines.some(l => l.startsWith('constraint '))).toBe(true);
+    expect(lines.filter(l => / n [0-9a-f]{32}$/.test(l) && l.startsWith('constraint '))).toEqual([]);
     expect(lines.filter(l => l.startsWith('function '))).toHaveLength(4);
   });
   test('compare passes on the applied schema', async () => {
