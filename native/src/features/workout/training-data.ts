@@ -5,6 +5,7 @@ import { WorkoutOptions } from '../../data/workout/options';
 import { WorkoutStore, type Draft } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
 import { SplitStore } from '../splits/store';
+import { entryVolumeKg } from './volume';
 import { loadSettingsPrefs, SETTINGS_PREFS_KEY, withPref } from '../settings/prefs-model';
 
 /** The ten muscle groups the Training tab counts, and the library muscles each one gathers. */
@@ -97,15 +98,17 @@ export class TrainingData {
       const exercises: LiveExercise[] = [], matrix: LiveView['matrix'] = [], groups: number[] = [];
       let volume = 0;
       for (const e of entries) {
-        const w = workingDrafts(this.workout.drafts(e.id)), from = this.workout.unit(e.id);
+        const w = workingDrafts(this.workout.drafts(e.id)), from = this.workout.unit(e.id), one = this.workout.isUnilateral(e.id);
         if (!w.length) continue;
+        const inUnit = (v: number) => from === this.unit ? v : fromKg(toKg(v, from), this.unit);
         const done = w.filter(d => d.setId).length;
         exercises.push({ entryId: e.id, name: String(e.data.exercise), done, total: w.length });
         groups.push(w.length);
         for (const d of w) {
           matrix.push(d.setId ? 1 : 0);
-          // A draft is in its exercise's unit; the volume is in the profile's.
-          if (d.setId) volume += (from === this.unit ? Number(d.weight) || 0 : fromKg(toKg(Number(d.weight) || 0, from), this.unit)) * (Number(d.reps) || 0);
+          // A draft is in its exercise's unit; the volume is in the profile's. A one-side set counts both sides.
+          if (d.setId) volume += inUnit(Number(d.weight) || 0) * (Number(d.reps) || 0)
+            + (one ? inUnit(Number(d.rightWeight || d.weight) || 0) * (Number(d.rightReps || d.reps) || 0) : 0);
         }
       }
       const at = matrix.indexOf(0);
@@ -118,7 +121,9 @@ export class TrainingData {
         if (entry && d) {
           const prev = this.workout.previous(entry)[slot.index];
           const pw = prev ? this.kg(Number(prev.data.weight_kg)) : 0, pr = prev ? Number(prev.data.reps) : 0;
-          const weight = d.weight !== '' ? Number(d.weight) : pw, reps = d.reps !== '' ? Number(d.reps) : pr;
+          // The draft is in the exercise's unit; the tile shows the profile's, like the last-time weight.
+          const from = this.workout.unit(slot.entryId);
+          const weight = d.weight !== '' ? (from === this.unit ? Number(d.weight) : displayWeight(toKg(Number(d.weight), from), this.unit)) : pw, reps = d.reps !== '' ? Number(d.reps) : pr;
           const setNo = workingDrafts(this.workout.drafts(slot.entryId).slice(0, slot.index + 1)).length || slot.index + 1;
           next = { name: String(entry.data.exercise), set: setNo, weight, reps, same: !!prev && weight === pw && reps === pr };
         }
@@ -133,7 +138,8 @@ export class TrainingData {
   history() { return this.memo('history', () => this.workout.history().filter(s => !this.workout.pastMode(s.id) || this.repo.localGet(`pastWorkout:${s.id}`) !== true)); }
   minutes(s: Row) { return Math.round(Number(s.data.duration_ms ?? 0) / 60000); }
   sessionSets(s: Row) { return this.workout.entries(s.id).flatMap(e => this.workout.working(e).filter(w => !w.warmup && w.reps > 0)); }
-  sessionVolume(s: Row) { return this.sessionSets(s).reduce((n, w) => n + fromKg(w.weight, this.unit) * w.reps, 0); }
+  /** Working volume of a finished session in the profile unit; a one-side set counts both sides. */
+  sessionVolume(s: Row) { return this.workout.entries(s.id).reduce((n, e) => n + fromKg(entryVolumeKg(this.workout, e), this.unit), 0); }
   cardioRows() { return this.memo('cardio', () => this.repo.list('cardio_sessions').sort((a, b) => String(b.data.day).localeCompare(String(a.data.day)) || b.updated_at - a.updated_at)); }
 
   /** Training minutes by day: finished sessions, logged cardio and, today, the workout going now. */

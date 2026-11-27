@@ -121,9 +121,12 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
     done += checked.length; total += work.length;
     // Drafts are in this exercise's unit; the total is in the workout's, so convert before adding.
     const toTotal = (w: number) => unit === totalUnit ? w : fromKg(toKg(w, unit), totalUnit);
-    volume += checked.reduce((v, s) => v + toTotal(+s.draft.weight || 0) * (+s.draft.reps || 0), 0);
+    // A one-side set counts both sides, as Progress and the workout summary do.
+    const one = store.isUnilateral(entry.id);
+    volume += checked.reduce((v, s) => v + toTotal(+s.draft.weight || 0) * (+s.draft.reps || 0)
+      + (one ? toTotal(+(s.draft.rightWeight || s.draft.weight) || 0) * (+(s.draft.rightReps || s.draft.reps) || 0) : 0), 0);
     const opened = store.repo.localGet<boolean>(noteOpenKey(entry.id)) === true;
-    return { entry, name, label: exLabel(name), unit, sets, unilateral: store.isUnilateral(entry.id), total: work.length, done: checked.length,
+    return { entry, name, label: exLabel(name), unit, sets, unilateral: one, total: work.length, done: checked.length,
       all: sets.length > 0 && sets.every(s => s.done),
       best: best ? { w: +best.draft.weight, r: +best.draft.reps, rpe: best.rpe } : null, prev,
       rest: store.rest(name).seconds, note: entry.data.notes != null ? String(entry.data.notes) : opened ? '' : null,
