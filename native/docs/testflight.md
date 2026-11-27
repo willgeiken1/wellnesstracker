@@ -8,7 +8,7 @@ Only Will does the steps that sign in to Apple or Expo. Agents never handle his 
 Will asked for builds and updates to happen on their own after each merge to main, replacing the manual steps below.
 - `.eas/workflows/deploy-production.yml` runs on Expo's servers when a change to `native/` merges to main. If the native code changed (new fingerprint), it builds the `production` profile and submits it to TestFlight; the build number rises on its own. If only JavaScript changed, it publishes an over-the-air update to the `production` channel instead.
 - The store build includes expo-updates (`runtimeVersion` policy `fingerprint`, checked on launch). The phone-only `free-iphone` build keeps updates off. Updates reach only builds that include expo-updates.
-- One-time setup, Will only: connect the repo in the Expo project's GitHub settings with base directory `native`; let EAS store the App Store Connect API key (`npx eas-cli@latest credentials --platform ios`, production, App Store Connect API Key, set up for EAS Submit); add the app's App Store ID to `eas.json` as `submit.production.ios.ascAppId`.
+- One-time setup, Will only: connect the repo in the Expo project's GitHub settings with base directory `native`; let EAS store the App Store Connect API key (`npx eas-cli@latest credentials --platform ios`, production, App Store Connect API Key, set up for EAS Submit). The app's App Store ID (6835021129) is in `eas.json` as `submit.production.ios.ascAppId`.
 - Free plan: 15 iOS builds and 60 workflow minutes a month. Each native merge uses a build.
 
 ## What this repo sets up
