@@ -4,6 +4,7 @@ import { randomUUID } from 'expo-crypto';
 import type { Repository } from '@/data/repository';
 import type { Row } from '@/data/rows';
 import { meals } from '@/features/food/model';
+import { rpeKey } from '@/features/workout/logger/model';
 import { addDays, finite, type ProgressData } from './model';
 import { metricView } from './metric';
 
@@ -76,7 +77,9 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
         for (const e of (entries.get(s.id) ?? []).sort(byPos)) for (const st of (sets.get(e.id) ?? []).sort(byPos)) {
           const kg = num(st.data.weight_kg), reps = num(st.data.reps);
           if (reps == null && kg == null) continue;
-          rows.push([s.data.day, s.data.name, e.data.exercise, Number(st.data.position ?? 0) + 1, kg == null ? null : kgTo(kg), unit, reps, num(st.data.rpe), st.data.tag ?? '']);
+          // The logger keeps RPE beside the set, by its exercise and place, rather than on the set row.
+          const position = Number(st.data.position ?? 0), rpe = num(st.data.rpe) ?? num(localRpe(repo, e.id, position));
+          rows.push([s.data.day, s.data.name, e.data.exercise, position + 1, kg == null ? null : kgTo(kg), unit, reps, rpe, st.data.tag ?? '']);
         }
       }
       files.push({ name: 'workouts-and-sets.csv', csv: csv(['date', 'workout', 'exercise', 'set', 'weight', 'unit', 'reps', 'rpe', 'tag'], rows) });
@@ -89,6 +92,7 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
   }
   return files;
 }
+function localRpe(repo: Repository, entryId: string, position: number): unknown { try { return repo.localGet<unknown>(rpeKey(entryId, position)); } catch { return null; } }
 const cap = (s: string) => s === 'arm' ? 'Upper arm' : s.charAt(0).toUpperCase() + s.slice(1);
 const byDay = (a: Row, b: Row) => String(a.data.day).localeCompare(String(b.data.day)) || a.id.localeCompare(b.id);
 const byPos = (a: Row, b: Row) => Number(a.data.position ?? 0) - Number(b.data.position ?? 0) || a.id.localeCompare(b.id);

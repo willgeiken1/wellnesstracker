@@ -487,8 +487,14 @@ export class WorkoutStore {
   private writeSet(entryId: string, index: number, d: Draft, id?: string) {
     return this.repo.save('sets', this.setData(entryId, index, d), id);
   }
+  /** Settings › Workout › Start automatically (features/settings/prefs.ts, `work.auto`). On unless turned off. */
+  private autoRest() {
+    try { const prefs = this.repo.localGet<{ work?: { auto?: unknown } }>('settings-prefs'); return prefs?.work?.auto !== false; } catch { return true; }
+  }
+  /** Starts the rest timer after a finished set or round, unless the person turned automatic rest off. The timer's own
+   * controls still work either way. */
   private startRest(entry: Row, index: number, setId: string, now = Date.now()) {
-    if (this.pastMode(String(entry.data.session_id))) return;
+    if (this.pastMode(String(entry.data.session_id)) || !this.autoRest()) return;
     const group = this.supersetGroup(entry);
     const members = this.entries(String(entry.data.session_id)).filter(e => !this.skipped(e.id) && (group ? this.supersetGroup(e) === group : e.id === entry.id));
     const roundDone = members.every(e => index >= this.drafts(e.id).length || !!this.drafts(e.id)[index].setId);
