@@ -65,6 +65,7 @@ export interface ExerciseView {
   /** Working sets, and how many of them are checked off. */ total: number; done: number;
   all: boolean; best: { w: number; r: number; rpe: number | null } | null; prev: { w: number; r: number } | null;
   rest: number; note: string | null; barbell: boolean;
+  /** The other exercises in its superset, by label; empty when it is in none. */ superset: string[];
 }
 export interface LoggerView {
   exercises: ExerciseView[]; current: { entryId: string; index: number } | null;
@@ -138,8 +139,10 @@ export function loggerView(store: WorkoutStore, session: Row): LoggerView {
       all: sets.length > 0 && sets.every(s => s.done),
       best: best ? { ...result(best), rpe: best.rpe } : null, prev,
       rest: store.rest(name).seconds, note: entry.data.notes != null ? String(entry.data.notes) : opened ? '' : null,
-      barbell: store.preferences().exercise(name).equipment === 'barbell' };
+      barbell: store.preferences().exercise(name).equipment === 'barbell', superset: [] };
   });
+  const groups = exercises.map(x => store.supersetGroup(x.entry));
+  exercises.forEach((x, i) => { if (groups[i]) x.superset = exercises.filter((y, j) => j !== i && groups[j] === groups[i]).map(y => y.label); });
   return { exercises, current: next ? { entryId: next.entryId, index: next.index } : null, done, total, volume, unit: totalUnit };
 }
 
@@ -149,7 +152,9 @@ export function exerciseLines(e: ExerciseView) {
   const s1 = e.best ? (e.best.rpe != null ? tr('trainingBestRpe', { set: set(e.best.w, e.best.r), rpe: e.best.rpe }) : tr('trainingBest', { set: set(e.best.w, e.best.r) }))
     : e.prev ? tr('trainingLastTime', { set: set(e.prev.w, e.prev.r) }) : trCount('trainingSetCount', e.total);
   const muscles = exMuscles(e.name), rest = tr('trainingRestShort', { time: clock(e.rest * 1000) });
-  return { s1, s2: muscles ? `${muscles} · ${rest}` : rest.replace(/^./, c => c.toUpperCase()) };
+  // In a superset the open line names its partners in place of the muscles.
+  const lead = e.superset.length ? tr('trainingSupersetNames', { names: e.superset.join(` ${tr('trainingAnd')} `) }) : muscles;
+  return { s1, s2: lead ? `${lead} · ${rest}` : rest.replace(/^./, c => c.toUpperCase()) };
 }
 
 export type CheckResult = 'done' | 'undone' | 'invalid';

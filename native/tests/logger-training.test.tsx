@@ -188,6 +188,26 @@ describe('logger screen', () => {
       expect(sheet.mock.calls.at(-1)![0].options).not.toContain('Log left and right separately');
     } finally { sheet.mockRestore(); }
   });
+  test('two exercises can be made a superset from the exercise options, shown on the open card, and unlinked', async () => {
+    const { store, squat, lunge } = sample();
+    const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions');
+    const pick = (label: string) => sheet.mockImplementationOnce((o, cb) => cb(o.options.indexOf(label)));
+    try {
+      await render(<TrainingLogger />, { wrapper });
+      await act(async () => {});
+      pick('Superset with another exercise');
+      pick('Dumbbell walking lunge');
+      await fireEvent.press(screen.getByRole('button', { name: 'Exercise options for Squat' }));
+      const group = store.supersetGroup(store.repo.get('entries', squat.id)!);
+      expect(group).not.toBeNull();
+      expect(store.supersetGroup(store.repo.get('entries', lunge.id)!)).toBe(group);
+      expect(screen.getByText(/^Superset with Dumbbell walking lunge · rest/)).toBeTruthy();
+      pick('Unlink superset');
+      await fireEvent.press(screen.getByRole('button', { name: 'Exercise options for Squat' }));
+      expect(store.supersetGroup(store.repo.get('entries', squat.id)!)).toBeNull();
+      expect(store.supersetGroup(store.repo.get('entries', lunge.id)!)).toBeNull();
+    } finally { sheet.mockRestore(); }
+  });
   test('a change to a checked-off set is saved when the field is left', async () => {
     const { store, squat } = sample();
     store.editDraft(squat.id, 0, { weight: '200', reps: '5' }); store.toggleDone(squat.id, 0);

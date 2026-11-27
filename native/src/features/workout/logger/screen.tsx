@@ -161,6 +161,8 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
     { label: tr('trainingReplace'), run: () => trainingNav.picker({ mode: 'replace', entry: e.entry.id }) },
     // Each side on its own row is set before any set is saved, as before, so a saved set never changes shape.
     ...(store.sets(e.entry.id).length ? [] : [{ label: tr(e.unilateral ? 'bilateral' : 'unilateral'), run: () => run(() => store.setUnilateral(e.entry.id, !e.unilateral)) }]),
+    ...(store.supersetGroup(e.entry) ? [{ label: tr('trainingSupersetUnlink'), run: () => run(() => store.unlinkSuperset(e.entry.id)) }] : []),
+    ...(view.exercises.length > e.superset.length + 1 ? [{ label: tr('trainingSupersetLink'), run: () => supersetWith(e) }] : []),
     { label: tr('trainingReorderTitle'), run: () => setReorder(true) },
     { label: tr('trainingRemoveExercise'), destructive: true, run: () => run(() => {
       glide();
@@ -168,6 +170,15 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
       showToast(tr('trainingRemoved', { name: e.label }), { color: 'training', action: { label: tr('trainingUndo'), onAction: () => run(undo) } });
     }) },
   ] });
+  /** Pick a partner to alternate sets with: they join one superset, of three at most (a partner's own pair comes along when it fits). */
+  const supersetWith = (e: ExerciseView) => {
+    const groupOf = (x: ExerciseView) => { const g = store.supersetGroup(x.entry); return g ? view.exercises.filter(y => store.supersetGroup(y.entry) === g).map(y => y.entry.id) : [x.entry.id]; };
+    const mine = groupOf(e), others = view.exercises.filter(x => !mine.includes(x.entry.id));
+    actionSheet({ title: tr('supersetWith', { name: e.label }), message: tr('trainingSupersetPick'), actions: others.map(x => ({ label: x.label, run: () => run(() => {
+      const ids = [...new Set([...mine, ...groupOf(x)])];
+      store.linkSuperset(ids.length <= 3 ? ids : [e.entry.id, x.entry.id]);
+    }) })) });
+  };
   const saveNote = (e: ExerciseView, text: string | null) => run(() => {
     const row = store.repo.get('entries', e.entry.id);
     if (!row) return;
