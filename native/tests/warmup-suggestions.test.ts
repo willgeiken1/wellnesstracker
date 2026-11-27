@@ -2,8 +2,12 @@ import { WorkoutStore } from '../src/data/workout/store';
 import { checkSet, loggerView } from '../src/features/workout/logger/model';
 import { DEFAULT_PREFS, SETTINGS_PREFS_KEY, withPref } from '../src/features/settings/prefs';
 import { startTraining } from '../src/features/workout/start-workout';
+import { startSplitDay } from '../src/features/splits/menu';
+import { trainingNav } from '../src/features/workout/nav';
 import { warmRamp } from '../src/features/workout/warmups';
 import { memoryRepository } from './workout-repository';
+
+jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), navigate: jest.fn() } }));
 
 /** Made-up sample: last week's squat at 225 × 5 for three sets, and a template with squat then bench. */
 function sample(prefs?: (p: typeof DEFAULT_PREFS) => typeof DEFAULT_PREFS, superset = false) {
@@ -63,5 +67,14 @@ describe('warm-up suggestions', () => {
     const grouped = sample(undefined, true);
     const view = loggerView(grouped.store, start(grouped.repo, grouped.routine.id));
     expect(view.exercises.flatMap(e => e.sets).some(x => x.warm)).toBe(false);
+  });
+  test('a split day started from the Split screen or tile opens with the same warm-ups, and none when they are off', () => {
+    jest.spyOn(trainingNav, 'logger').mockImplementation(() => {});
+    const { repo, store, routine } = sample();
+    const session = startSplitDay(repo as never, routine.id)!;
+    expect(loggerView(store, session).exercises[0].sets.map(s => s.warm)).toEqual([true, true, false, false, false]);
+    const off = sample(p => withPref(p, 'work.warm', false));
+    const plain = startSplitDay(off.repo as never, off.routine.id)!;
+    expect(loggerView(off.store, plain).exercises[0].sets.some(s => s.warm)).toBe(false);
   });
 });

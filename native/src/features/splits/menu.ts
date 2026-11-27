@@ -2,7 +2,7 @@ import type { Repository } from '@/data/repository';
 import { showToast } from '@/features/shell/toast';
 import { actionSheet, type SheetAction } from '../workout/action-sheet';
 import { trainingNav } from '../workout/nav';
-import { startTraining } from '../workout/start-workout';
+import { startTraining, suggestWarmups } from '../workout/start-workout';
 import { tr } from '../workout/tr';
 import { SplitStore, type SplitView, type Undo } from './store';
 
@@ -38,6 +38,8 @@ export function startSplitDay(repo: Repository, routineId: string) {
   const store = new SplitStore(repo);
   if (store.workout.active()) return startTraining(repo);
   const session = store.startDay(routineId);
+  // Suggest warm-up sets applies here too, as it does to any workout started from a template.
+  if (session.data.origin === 'template') suggestWarmups(repo, store.workout, session.id);
   trainingNav.logger();
   return session;
 }

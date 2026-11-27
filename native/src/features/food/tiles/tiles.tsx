@@ -114,9 +114,11 @@ const Macros: TileBody = ({ p, d }) => {
       <Sub size={10.5} style={{ marginTop: 3 }}>{t(name)}</Sub>
     </View>)}</View>
   </View>;
-  const sp = macroPercents(known(v.p), known(v.c), known(v.f));
-  const split = (h: number) => <View accessible accessibilityRole="image" accessibilityLabel={tx('foodSplitA11y', { p: sp.pc[0], c: sp.pc[1], f: sp.pc[2] })}>
-    <SplitBar h={h} parts={[{ v: sp.kcal[0], color: c('p') }, { v: sp.kcal[1], color: c('c') }, { v: sp.kcal[2], color: c('f') }]} /></View>;
+  // Shares of calories are worked out only when protein, carbs and fat are all known; otherwise they read as unknown, never 0%.
+  const whole = !unknown('p') && !unknown('c') && !unknown('f');
+  const sp = macroPercents(known(v.p), known(v.c), known(v.f)), pct = (i: number) => whole ? `${sp.pc[i]}%` : '–';
+  const split = (h: number) => <View accessible accessibilityRole="image" accessibilityLabel={whole ? tx('foodSplitA11y', { p: sp.pc[0], c: sp.pc[1], f: sp.pc[2] }) : t('foodSplitUnavailable')}>
+    <SplitBar h={h} track={whole ? undefined : k.c['surface-2']} parts={whole ? [{ v: sp.kcal[0], color: c('p') }, { v: sp.kcal[1], color: c('c') }, { v: sp.kcal[2], color: c('f') }] : []} /></View>;
   if (p.size === 'M') return <View accessible accessibilityLabel={aria} style={col}>
     <View style={{ flexDirection: 'row', gap: 14 }}>{MAC.map(([key, name]) => <View key={key} style={{ flex: 1, minWidth: 0 }}>
       <Sub size={12}>{t(name)}{left ? ` ${t('foodLeft')}` : ''}</Sub>
@@ -127,23 +129,23 @@ const Macros: TileBody = ({ p, d }) => {
     </View>)}</View>
     <View style={{ marginTop: 'auto' }}>
       {split(8)}
-      <Sub size={11.5} style={{ marginTop: 7 }}>{t('foodFromProtein')} <B size={11.5}>{sp.pc[0]}%</B> · {t('foodCarbsLower')} <B size={11.5}>{sp.pc[1]}%</B> · {t('foodFatLower')} <B size={11.5}>{sp.pc[2]}%</B></Sub>
+      <Sub size={11.5} style={{ marginTop: 7 }}>{t('foodFromProtein')} <B size={11.5}>{pct(0)}</B> · {t('foodCarbsLower')} <B size={11.5}>{pct(1)}</B> · {t('foodFatLower')} <B size={11.5}>{pct(2)}</B></Sub>
     </View>
   </View>;
   return <View style={col}>
     <Kick>{t('foodWhereFrom')}</Kick>
     <View style={{ marginTop: 9 }}>{split(12)}</View>
     <View style={{ flexDirection: 'row', gap: 12, marginTop: 9 }}>{MAC.slice(0, 3).map(([key, name], i) => <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-      <Dot color={c(key)} /><KitText weight={600} size={11.5} color="text-muted">{t(name)} </KitText><KitText weight={700} size={12} numeric>{sp.pc[i]}%</KitText></View>)}</View>
+      <Dot color={c(key)} /><KitText weight={600} size={11.5} color="text-muted">{t(name)} </KitText><KitText weight={700} size={12} numeric>{pct(i)}</KitText></View>)}</View>
     <View style={{ gap: 19, marginTop: 'auto' }}>{MAC.map(([key, name]) => {
-      const gg = g(key), gl = goal(key), togo = gl - gg;
-      return <View key={key} accessible accessibilityLabel={tx('foodOfGrams', { name: t(name), v: gg, goal: gl })} style={{ flexDirection: 'row', alignItems: 'center', columnGap: 10 }}>
+      const gg = g(key), gl = goal(key), togo = gl - gg, no = unknown(key);
+      return <View key={key} accessible accessibilityLabel={no ? `${t(name)} ${t('foodUnknownLower')}` : tx('foodOfGrams', { name: t(name), v: gg, goal: gl })} style={{ flexDirection: 'row', alignItems: 'center', columnGap: 10 }}>
         <View style={{ width: 70, gap: 3 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Dot color={c(key)} /><KitText weight={600} size={13} lineHeight={1}>{t(name)}</KitText></View>
-          <KitText weight={500} size={11} lineHeight={1} color="text-muted" numberOfLines={1}>{togo > 0 ? tx('foodGToGo', { g: togo }) : t('foodTargetMet')}</KitText>
+          <KitText weight={500} size={11} lineHeight={1} color="text-muted" numberOfLines={1}>{no ? t('foodUnknownVal') : togo > 0 ? tx('foodGToGo', { g: togo }) : t('foodTargetMet')}</KitText>
         </View>
-        <WellBar frac={gg / gl} h={8} color={c(key)} />
-        <KitText weight={700} size={14} lineHeight={1} numeric style={{ width: 74, textAlign: 'right' }}>{left ? Math.max(0, togo) : gg}<TextGap pt={2} /><KitText weight={600} tracking={0} size={10.5} color="text-muted">/{gl} g</KitText></KitText>
+        <WellBar frac={no ? 0 : gg / gl} h={8} color={c(key)} />
+        <KitText weight={700} size={14} lineHeight={1} numeric style={{ width: 74, textAlign: 'right' }}>{no ? '–' : left ? Math.max(0, togo) : gg}<TextGap pt={2} /><KitText weight={600} tracking={0} size={10.5} color="text-muted">/{gl} g</KitText></KitText>
       </View>;
     })}</View>
   </View>;
