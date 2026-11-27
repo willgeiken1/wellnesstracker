@@ -3,6 +3,7 @@ import type { Repository } from '../../data/repository';
 import type { Row } from '../../data/rows';
 import { WorkoutStore, type TemplateExercise } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
+import type { Plan } from '../plans/schedule';
 import { MUSCLE_GROUPS, muscleGroup, type MuscleGroup } from '../workout/training-data';
 import {
   cleanState, dayFocus, estimateMin, finishDay, freshState, mondayOf, perWeekOf, plusDays, reconcile, sequence, sessionCells,
@@ -300,6 +301,27 @@ export class SplitStore {
     if (!def?.days[index]) return;
     const days = def.days.map((d, i) => i === index ? { ...d, focus: focus.length ? MUSCLE_GROUPS.filter(m => focus.includes(m)) : null } : d);
     this.write({ ...def, days });
+  }
+  /**
+   * The plan builder's save, made through the chosen split so the Split screen and its rotation have the same days: the
+   * builder's days in its order (a day kept keeps its muscles), how it runs, the weekly target and the weekdays set.
+   * False when no split is chosen, and the plan is saved on its own.
+   */
+  applyPlan(plan: Plan): boolean {
+    const def = this.def();
+    if (!def) return false;
+    const focus = new Map(def.days.map(d => [d.routineId, d.focus]));
+    const days = plan.days.map(d => ({ routineId: d.routineId, focus: focus.get(d.routineId) ?? null }));
+    const at = new Map(days.map((d, i) => [d.routineId, i]));
+    const mode: SplitMode = plan.mode === 'fixed' ? 'weekdays' : 'rotate';
+    const week = mode === 'weekdays'
+      ? Array.from({ length: 7 }, (_, wd) => plan.days.findIndex(d => d.weekdays.includes(wd)))
+      : def.week.map(w => w >= 0 && def.days[w] ? at.get(def.days[w].routineId) ?? -1 : -1);
+    const same = def.days.every((d, i) => days[i]?.routineId === d.routineId);
+    const next = { ...def, mode, perWeek: Math.max(1, Math.min(7, Math.round(plan.daysPerWeek))), days, week };
+    // Days only added at the end leave where the split has got to as it is; any other change starts it again.
+    this.write(next, same ? undefined : freshState(next, 0, this.sequenceNow()));
+    return true;
   }
   /** A new empty day at the end of the split. */
   addDay(name: string): number {

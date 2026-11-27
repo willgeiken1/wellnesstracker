@@ -232,3 +232,23 @@ test('Replace from a backup made before any water, routine or measurement clears
     expect(repo.localGet('settings-fixture')).toEqual({ on: true });
   } finally { sqlite.close(); }
 });
+
+test('a row deleted or changed after a signed-out restore reaches the first account as the guest left it', async () => {
+  const { sqlite, repo: guest } = await setup();
+  try {
+    const db = drizzle(sqliteClient(sqlite));
+    const account = new Repository(db, '20000000-0000-4000-8000-000000000006', DEVICE_A, () => '30000000-0000-4000-8000-000000000891');
+    const backup = await backupOf((r) => {
+      r.save('custom_exercises', { name: 'Fixture press' }, ids.custom);
+      r.save('plans', { mode: 'fixed', days_per_week: 4 }, ids.plan);
+      r.save('pauses', { start_day: '2026-01-02', end_day: '2026-01-09' }, ids.pause);
+    }, {});
+    commitImport(guest, previewImport(guest, nativeBackupPlan(backup), 'merge', true), true);
+    guest.remove('custom_exercises', ids.custom);
+    guest.save('pauses', { ...guest.get('pauses', ids.pause)!.data, end_day: '2026-01-12' }, ids.pause);
+    expect(commitPendingAccountImport(guest, account)).toBe(2);
+    expect(account.get('custom_exercises', ids.custom)).toBeUndefined();
+    expect(account.get('pauses', ids.pause)?.data.end_day).toBe('2026-01-12');
+    expect(account.get('plans', ids.plan)?.data.days_per_week).toBe(4);
+  } finally { sqlite.close(); }
+});

@@ -30,10 +30,11 @@ function setup(enabled=true){
  const a=workout.saveTemplate('Synthetic A',[]),b=workout.saveTemplate('Synthetic B',[]);
  return {repo,workout,plans:new PlanStore(repo),days:[{routineId:a.id,weekdays:[0]},{routineId:b.id,weekdays:[4]}]};
 }
-test.each([false,true])('config round-trips only with flag %s',enabled=>{
+test.each([false,true])('config round-trips, in the synced plan row only with flag %s',enabled=>{
  const {repo,plans,days}=setup(enabled);const save=jest.spyOn(repo,'save'),list=jest.spyOn(repo,'list');
  plans.save({mode:'fixed',daysPerWeek:5,days});const restored=new PlanStore(repo).read();
- expect(restored.mode).toBe(enabled?'fixed':'rotation');expect(restored.daysPerWeek).toBe(enabled?5:3);expect(restored.days).toEqual(days);
+ // With the flag off they are kept on this phone, so the choice still saves.
+ expect(restored.mode).toBe('fixed');expect(restored.daysPerWeek).toBe(5);expect(restored.days).toEqual(days);
  if(enabled)expect(repo.list('plans')[0].data).toEqual({mode:'fixed',days_per_week:5});
  else {expect(save.mock.calls.some(([table])=>table==='plans')).toBe(false);expect(list.mock.calls.some(([table])=>table==='plans')).toBe(false);}
 });

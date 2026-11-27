@@ -103,9 +103,21 @@ export function commitPendingAccountImport(guest: Repository, account: Repositor
   if (!plan) return null;
   const native = guest.localGet<boolean>("pwaPendingAccountNative") === true;
   const local = guest.localGet<Record<string, unknown>>("pwaPendingAccountLocal");
+  // The rows come as the guest has them now: one deleted since the restore stays deleted, and one changed comes with its
+  // changes. Values the guest never stored (columns not synced yet) stay as the file had them.
+  const tables = new Set<string>(syncedTables);
+  const current: ImportPlan = {
+    ...plan,
+    rows: plan.rows.flatMap((row) => {
+      const now = tables.has(row.table) ? guest.get(row.table as Table, row.id) : undefined;
+      if (!now) return [row];
+      if (now.deleted_at !== null) return [];
+      return [{ ...row, data: { ...row.data, ...(now.data as ImportPlan["rows"][number]["data"]) } }];
+    }),
+  };
   return account.atomic(() => {
-    const newEntries = new Set(plan.rows.filter((r) => r.table === "entries" && !account.get("entries", r.id)).map((r) => r.id));
-    const added = commitImport(account, previewImport(account, plan, "merge", native), true);
+    const newEntries = new Set(current.rows.filter((r) => r.table === "entries" && !account.get("entries", r.id)).map((r) => r.id));
+    const added = commitImport(account, previewImport(account, current, "merge", native), true);
     // The phone-side details of a backup restored while signed out (water, routines, a workout's set rows) come too,
     // merged like any restore; photo addresses were never kept for the account, so no photo file changes hands.
     // They come as the guest has them now, so a drink or check-off removed since the restore stays removed.
