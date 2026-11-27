@@ -67,6 +67,18 @@ function SegRow<T extends string>({ title, sub, value, options, onChange }: { ti
 const Ext = () => { const k = useKit(); return <View style={{ marginHorizontal: -4 }}><Icon name="ext" size={16} color={k.c.ghost} /></View>; };
 
 /* ---------- Goals and targets ---------- */
+/** How far a weight goal is, in its own direction: losing when the goal is under where you started (or under today's weight
+ * with no start), gaining when it is over. `left` is what remains (0 once you reach or pass it), `done` is how far you have
+ * come from the start toward it and `total` the whole distance. Null where a weight is missing. */
+export function weightGoalStatus(nowLb: number | null, startLb: number | null, goalLb: number) {
+  const from = startLb ?? nowLb, gain = from != null && goalLb > from;
+  const toward = (a: number, b: number) => gain ? b - a : a - b;
+  return {
+    left: nowLb != null ? Math.max(0, toward(nowLb, goalLb)) : null,
+    done: nowLb != null && startLb != null ? toward(startLb, nowLb) : null,
+    total: startLb != null ? toward(startLb, goalLb) : null,
+  };
+}
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const shortDay = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 export function GoalsPage() {
@@ -83,11 +95,10 @@ export function GoalsPage() {
   const sleep = Array.from({ length: 7 }, (_, i) => 390 + i * 30).map(v => ({ v, l: hm(v) }));
   const pace = (kg ? [0.1, 0.25, 0.5, 0.75].map(k => +(k * KG).toFixed(4)) : [0.25, 0.5, 1, 1.5]).map(v => ({ v, l: paceLabel(v, p) }));
   const nowLb = g?.currentKg != null ? g.currentKg * KG : null, startLb = g?.startKg != null ? g.startKg * KG : null;
-  const left = nowLb != null ? Math.max(0, nowLb - goalLb) : null;
+  const { left, done: lost, total } = weightGoalStatus(nowLb, startLb, goalLb);
   const eta = left ? new Date(now + Math.round(left / p.goals.pace * 7) * 86400000) : null;
   const foot = nowLb == null ? st('settingsPaceFootNoWeight') : !left ? st('settingsAtGoal')
     : st('settingsPaceFoot', { pace: paceLabel(p.goals.pace, p), goal: wt(goalLb, p), date: `${MONTHS[eta!.getMonth()]} ${eta!.getDate()}` });
-  const lost = nowLb != null && startLb != null ? startLb - nowLb : null, total = startLb != null ? startLb - goalLb : null;
   const hasProgress = lost != null && total != null && total > 0;
   // Minutes trained today, as Home's Insight map counts them (finished sessions and the one running now).
   const store = useWorkoutStore(repo);
