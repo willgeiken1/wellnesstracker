@@ -64,6 +64,13 @@ test('freeiphone substitutes provider and screens across import styles, blocks b
     expect(() => config.resolver.resolveRequest(context, file.includes('node_modules') ? '@supabase/supabase-js' : './backend', 'ios')).toThrow('Backend modules are unavailable');
   }
 });
+test('freeiphone loads the kept photo files from core, not from auth', () => {
+  const context = { resolveRequest: () => ({ type: 'sourceFile', filePath: path.join(root, 'src/auth/owner-files.ts') }) };
+  expect(load('freeiphone').resolver.resolveRequest(context, '@/auth/owner-files', 'ios').filePath)
+    .toBe(path.join(root, 'src/core/owner-files.ts'));
+  expect(load('freeiphone').resolver.resolveRequest(context, './owner-files', 'ios').filePath)
+    .toBe(path.join(root, 'src/core/owner-files.ts'));
+});
 test('freeiphone substitutes workout AI transport before it can load auth or backend modules', () => {
   const context = { resolveRequest: () => ({ type: 'sourceFile', filePath: path.join(root, 'src/features/workout/ai/client.ts') }) };
   expect(load('freeiphone').resolver.resolveRequest(context, './client', 'ios').filePath)

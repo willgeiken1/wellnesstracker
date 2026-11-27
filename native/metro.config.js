@@ -21,6 +21,10 @@ if (process.env.APP_VARIANT === 'freeiphone') {
     if (relative === 'src/auth/provider.tsx' || relative === 'src/auth/screens.tsx') {
       return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only', path.basename(relative)) };
     }
+    // The kept photo files touch only the phone's own files; the phone-only build loads them from core, not auth.
+    if (relative === 'src/auth/owner-files.ts') {
+      return { type: 'sourceFile', filePath: path.join(__dirname, 'src/core/owner-files.ts') };
+    }
     if (relative === 'src/telemetry/sdk.ts') {
       return { type: 'sourceFile', filePath: path.join(__dirname, 'src/phone-only/telemetry-sdk.ts') };
     }
