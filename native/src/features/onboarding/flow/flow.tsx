@@ -22,7 +22,7 @@ import {
   type FlowDraft, type Plan, type Step,
 } from './model';
 import { Frame } from './parts';
-import { addSuggestedRoutines, readSkipped, saveOnboarding, saveResumed, underThirteen } from './save';
+import { addSuggestedRoutines, isSetUp, readSkipped, saveOnboarding, saveResumed, underThirteen } from './save';
 import { BodyStep, ConnectStep, FinaleStep, GoalsStep, HabitQuiz, NameStep, RoutineStep, TargetsStep, TimeQuiz, type Link } from './steps';
 
 /** Where the flow stands. Kept above the route, so it survives the screen being drawn again. */
@@ -55,7 +55,8 @@ export function Flow({ state, setState, resume, onBlocked, onDone }: {
   const clock24 = prefs.units.clock === '24';
   const { step, d } = state;
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
-  const ready = !!repo && (!auth.session || !!auth.initialPullComplete);
+  // An account set up on this phone can finish skipped sections even with sync turned off (no pull ever completes).
+  const ready = !!repo && (!auth.session || !!auth.initialPullComplete || isSetUp(repo));
 
   const set = (patch: Partial<FlowDraft>) => setState(s => ({ ...s, d: { ...s.d, ...patch } }));
   // Choosing among tiles ticks, as the app's segments do.

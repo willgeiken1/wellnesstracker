@@ -437,6 +437,19 @@ describe('no second setup', () => {
     expect(repo.localGet('onboardingSkipped')).toEqual({ about: false, goals: false });
     expect(router.replace).toHaveBeenLastCalledWith('/');
   });
+  test('with sync turned off (no pull ever completes) an account set up here still finishes its skipped sections', async () => {
+    const repo = memoryRepository();
+    saveOnboarding(repo, { ...basics(), skipped: { about: false, goals: true } });
+    jest.mocked(useLocalSearchParams).mockReturnValue({ resume: '1' });
+    await open(auth(repo, { initialPullComplete: false }));
+    title('obbGoalsTitle');
+    await press('onboarding-goal-train'); await press('onboarding-continue');
+    title('obbTargetsTitle');
+    await press('onboarding-continue');
+    expect(repo.list('food_targets')).toHaveLength(1);
+    expect(repo.localGet('onboardingSkipped')).toEqual({ about: false, goals: false });
+    expect(router.replace).toHaveBeenLastCalledWith('/');
+  });
   test('resume with nothing skipped goes Home', async () => {
     const repo = memoryRepository(); saveOnboarding(repo, basics());
     jest.mocked(useLocalSearchParams).mockReturnValue({ resume: '1' });

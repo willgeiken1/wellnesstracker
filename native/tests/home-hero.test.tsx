@@ -71,6 +71,16 @@ describe('the hero data', () => {
     } as never;
     expect(trainingMinutes(store, days, NOW).slice(5)).toEqual([30, 24]);
   });
+  test('logged cardio counts toward the day, as Training and Progress count it', () => {
+    const days = lastWeek(NOW);
+    const cardio = [{ data: { day: days[6], duration_ms: 25 * 60000 } }, { data: { day: days[4], duration_ms: 40 * 60000 } }, { data: { day: '2020-01-01', duration_ms: 60 * 60000 } }];
+    const store = {
+      trainingHistory: () => [{ data: { day: days[6], duration_ms: 20 * 60000 } }],
+      active: () => null,
+      repo: { list: (table: string) => table === 'cardio_sessions' ? cardio : [] },
+    } as never;
+    expect(trainingMinutes(store, days, NOW).slice(4)).toEqual([40, 0, 45]);
+  });
   test('goals fall back to the defaults, and a missing reading stays missing', () => {
     const i = heroInput(null, null, 'kcal', NOW);
     expect(i.goals).toEqual(HERO_DEFAULT_GOALS);

@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { localDay } from '@/core/workout/rules';
+import type { Repository } from '@/data/repository';
+import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
 import type { HomeTileData } from '../tiles/data-types';
 import { useHomeTileState } from '../tiles/state';
@@ -12,8 +14,9 @@ import type { HeroDayIn, HeroGoals, HeroInput } from './model';
 export const HERO_DEFAULT_GOALS: HeroGoals = { kcal: 2200, trainMin: 60, sleepMin: 480 };
 const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
 
-/** Minutes trained on each of the given local days: finished sessions' own durations, and the running session so far today. */
-export function trainingMinutes(store: Pick<WorkoutStore, 'trainingHistory' | 'active'> | null, days: readonly string[], now: Date): (number | null)[] {
+/** Minutes trained on each of the given local days: finished sessions' own durations, logged cardio (as Training and
+ * Progress count it), and the running session so far today. */
+export function trainingMinutes(store: (Pick<WorkoutStore, 'trainingHistory' | 'active'> & { repo?: Pick<Repository, 'list'> }) | null, days: readonly string[], now: Date): (number | null)[] {
   const out = days.map(() => 0), index = new Map(days.map((d, i) => [d, i]));
   if (!store) return out;
   for (const s of store.trainingHistory()) {
@@ -22,6 +25,12 @@ export function trainingMinutes(store: Pick<WorkoutStore, 'trainingHistory' | 'a
     const ms = finite(s.data.duration_ms) && s.data.duration_ms > 0 ? s.data.duration_ms
       : finite(s.data.finished_at) && finite(s.data.started_at) ? s.data.finished_at - s.data.started_at : 0;
     out[i] += Math.max(0, ms) / 60000;
+  }
+  let cardio: Row[] = [];
+  try { cardio = store.repo?.list('cardio_sessions') ?? []; } catch { cardio = []; }
+  for (const c of cardio) {
+    const i = index.get(String(c.data.day));
+    if (i !== undefined && finite(c.data.duration_ms) && c.data.duration_ms > 0) out[i] += Math.round(c.data.duration_ms / 60000);
   }
   const live = store.active(), today = days.length - 1;
   if (live && String(live.data.day) === days[today] && finite(live.data.started_at)) out[today] += Math.max(0, now.getTime() - live.data.started_at) / 60000;
