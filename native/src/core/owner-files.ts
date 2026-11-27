@@ -25,13 +25,23 @@ function keptFile(uri: unknown, folder: string): File | null {
 /** Deletes a file; one already gone is fine. */
 export function dropFile(uri: string | null | undefined) { if (!uri) return; try { const f = new File(uri); if (f.exists) f.delete(); } catch { /* already gone */ } }
 
+/** Deletes a kept file or folder. True when it is gone afterwards (or was never there); false when it is still there or
+ * that can't be told. */
+function gone(f: File | Directory): boolean {
+  try { if (f.exists) f.delete(); } catch { /* checked below */ }
+  try { return !f.exists; } catch { return false; }
+}
+
 /** Deletes one kept progress photo by its stored address. True when the file is gone afterwards (or was never there),
  * false when it could not be deleted, so the caller keeps the address and a later delete or departure can retry. */
 export function deleteProgressPhoto(uri: unknown): boolean {
   const f = keptFile(uri, PROGRESS_PHOTOS_FOLDER);
-  if (!f) return true;
-  try { if (f.exists) f.delete(); return !f.exists; } catch { return false; }
+  return !f || gone(f);
 }
+
+/** A kept file or folder that departure could not delete. Departure stops before the wipe, so the addresses and the
+ * departure marker stay and a retry finishes it. */
+export class OwnerFilesNotErased extends Error { constructor() { super('Kept files could not be deleted.'); } }
 
 function read(repo: Pick<Repository, 'localGet'>, key: string): unknown { try { return repo.localGet<unknown>(key); } catch { return undefined; } }
 
@@ -43,12 +53,16 @@ function ownerFiles(repo: Pick<Repository, 'localGet'>): File[] {
     .filter((f): f is File => !!f);
 }
 
-/** Departure: deletes this person's kept files. Call before their rows are wiped, while the addresses still read. */
+/** Departure: deletes this person's kept files. Call before their rows are wiped, while the addresses still read. Tries
+ * every file, then throws OwnerFilesNotErased if any is still there, so the wipe never forgets a file's address. */
 export function eraseOwnerFiles(repo: Pick<Repository, 'localGet'>) {
-  for (const f of ownerFiles(repo)) { try { if (f.exists) f.delete(); } catch { /* already gone */ } }
+  const left = ownerFiles(repo).filter(f => !gone(f));
+  if (left.length) throw new OwnerFilesNotErased();
 }
 
-/** The all-owner escape: every person's rows go, so the whole photo folders go too. */
+/** The all-owner escape: every person's rows go, so the whole photo folders go too. Throws OwnerFilesNotErased if a
+ * folder is still there, so the escape's marker stays and a retry deletes it. */
 export function eraseAllOwnerFiles() {
-  for (const name of FOLDERS) { try { const dir = new Directory(Paths.document, name); if (dir.exists) dir.delete(); } catch { /* already gone */ } }
+  const left = FOLDERS.filter(name => { try { return !gone(new Directory(Paths.document, name)); } catch { return false; } });
+  if (left.length) throw new OwnerFilesNotErased();
 }
