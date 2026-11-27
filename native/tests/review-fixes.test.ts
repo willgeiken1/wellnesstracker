@@ -45,6 +45,18 @@ describe('repeating a workout that had no template while another is going', () =
     expect(w.drafts(w.entries(s.id)[0].id)).toHaveLength(4);
     expect(logger).toHaveBeenCalledTimes(1);
   });
+  test('keeps which sets were warm-ups, so two warm-ups and three working sets stay that way', () => {
+    const repo = memoryRepository(), w = new WorkoutStore(repo);
+    const old = w.start(), e = w.addExercise(old.id, 'Squat', 3);
+    w.prependWarmups(e.id, 2);
+    w.addExercise(old.id, 'Lunge', 2);
+    repo.save('sessions', { ...repo.get('sessions', old.id)!.data, finished_at: Date.now() }, old.id);
+    jest.spyOn(trainingNav, 'logger').mockImplementation(() => {});
+    const s = repeatSession(repo as never, old.id)!;
+    const [squat, lunge] = w.entries(s.id).map(x => w.drafts(x.id).map(d => d.tag ?? null));
+    expect(squat).toEqual(['warmup', 'warmup', null, null, null]);
+    expect(lunge).toEqual([null, null]);
+  });
 });
 
 describe('the daily training goal is the one set in Settings', () => {

@@ -12,7 +12,7 @@ import { st } from './copy';
 import { deletionError } from './auth-errors';
 import { t } from '@/i18n/en';
 import { useDataActions } from './data-actions';
-import { RANGE_KINDS, canDeleteKind, isoDay, runDateRangeDelete, type RangeKind } from './delete-range';
+import { RANGE_KINDS, canDeleteKind, firstLoggedDay, isoDay, runDateRangeDelete, type RangeKind } from './delete-range';
 import { APP_VERSION } from './home';
 import { LEGAL_LINKS, openPage } from './links';
 import { useSettingsPrefs } from './prefs';
@@ -158,15 +158,14 @@ export function rangeDays(preset: RangeId, today = new Date(), weekStart: 'mon' 
   return [start, end];
 }
 const dayLabel = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-/** The first day anything was logged, for Since you joined. */
-function firstDay(repo: ReturnType<typeof useAuth>['repository']): Date | undefined {
-  if (!repo) return undefined;
-  let min = '';
-  try {
-    for (const table of ['sessions', 'food_entries', 'weigh_ins', 'measurements', 'cardio_sessions'] as const)
-      for (const r of repo.list(table)) { const d = r.data.day; if (r.deleted_at === null && typeof d === 'string' && (!min || d < min)) min = d; }
-  } catch { return undefined; }
-  return min ? new Date(`${min}T12:00:00`) : undefined;
+/**
+ * The days a preset shows and deletes. Since you joined starts on the first day anything that can be deleted was logged,
+ * including what is kept only on this iPhone, so the confirmed range is exactly the range removed.
+ */
+export function rangeBounds(preset: RangeId, repo: ReturnType<typeof useAuth>['repository'], today = new Date(), weekStart: 'mon' | 'sun' | 'sat' = 'mon'): [Date, Date] {
+  let joined: Date | undefined;
+  if (preset === 'all' && repo) { try { const d = firstLoggedDay(repo); joined = d ? new Date(`${d}T12:00:00`) : undefined; } catch { joined = undefined; } }
+  return rangeDays(preset, today, weekStart, joined);
 }
 
 export function DeleteRangePage() {
@@ -175,13 +174,13 @@ export function DeleteRangePage() {
   const [preset, setPreset] = useState<RangeId>('week');
   const [kinds, setKinds] = useState<Record<RangeKind, boolean>>({ workouts: true, food: true, body: false, routines: false, photos: false });
   const picked = RANGE_KINDS.filter(kd => kinds[kd] && canDeleteKind(kd)), n = picked.length;
-  const [from, to] = rangeDays(preset, new Date(), p.units.week, preset === 'all' ? firstDay(auth.repository) : undefined);
+  const [from, to] = rangeBounds(preset, auth.repository, new Date(), p.units.week);
   const label = (a: Date, b: Date) => dayLabel(a) + (a.getTime() === b.getTime() ? '' : ` to ${dayLabel(b)}`);
   const opts = RANGE_IDS.map(v => ({ v, l: st(RANGE_KEYS[v]) }));
   const can = !!auth.repository && !auth.demo;
   const go = () => {
     const repo = auth.repository; if (!repo) return;
-    const res = runDateRangeDelete(repo, isoDay(preset === 'all' ? new Date(1970, 0, 1) : from), isoDay(to), picked);
+    const res = runDateRangeDelete(repo, isoDay(from), isoDay(to), picked);
     if (res.outcome === 'failed') { showToast(st('settingsRangeFailed'), { color: 'warning' }); return; }
     // A photo whose file couldn't be deleted stays, so the sheet stays open and says so rather than announcing success.
     if (res.outcome === 'photosKept') { showToast(st(res.kept === 1 ? 'settingsRangePhotoKept' : 'settingsRangePhotosKept', { n: res.kept }), { color: 'warning' }); return; }

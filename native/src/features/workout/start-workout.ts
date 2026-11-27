@@ -49,7 +49,11 @@ export function repeatSession(repo: Repository, sessionId: string) {
   if (routine && repo.get('routines', routine)?.deleted_at === null) return startTraining(repo, routine);
   const s = startTraining(repo, undefined, () => {});
   if (s) {
-    for (const e of w.entries(sessionId)) w.addExercise(s.id, String(e.data.exercise), w.drafts(e.id).length || 3);
+    // Each exercise keeps its set count and which of its sets were warm-ups, so they don't come back as working sets.
+    for (const e of w.entries(sessionId)) {
+      const was = w.drafts(e.id), entry = w.addExercise(s.id, String(e.data.exercise), was.length || 3);
+      was.forEach((d, i) => { if ((d.tag ?? (d.warmup ? 'warmup' : null)) === 'warmup') w.editDraft(entry.id, i, { tag: 'warmup' }); });
+    }
     trainingNav.logger();
   }
   return s;

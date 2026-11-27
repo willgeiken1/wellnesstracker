@@ -1,8 +1,8 @@
 import { memoryRepository } from './workout-repository';
-import { deleteDateRange, isoDay, registerRangeDeleter, canDeleteKind } from '../src/features/settings/delete-range';
+import { deleteDateRange, firstLoggedDay, isoDay, registerRangeDeleter, canDeleteKind } from '../src/features/settings/delete-range';
 import { backupWhen } from '../src/features/settings/data-actions';
 import { readSettingsPrefs } from '../src/features/settings/prefs';
-import { rangeDays } from '../src/features/settings/more-pages';
+import { rangeBounds, rangeDays } from '../src/features/settings/more-pages';
 import type { Repository } from '../src/data/repository';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn(), replace: jest.fn() } }));
@@ -60,6 +60,40 @@ describe('Delete a date range', () => {
     expect(rangeDays('week', today, 'sun').map(isoDay)).toEqual(['2026-11-22', '2026-11-22']);
     expect(rangeDays('d30', today).map(isoDay)).toEqual(['2026-10-24', '2026-11-22']);
     expect(rangeDays('all', today, 'mon', new Date(2026, 9, 1)).map(isoDay)).toEqual(['2026-10-01', '2026-11-22']);
+  });
+});
+
+describe('Since you joined', () => {
+  const today = new Date(2026, 10, 22);
+  test('starts at the oldest thing kept only on this iPhone when it is older than any synced record', () => {
+    const { repo } = seed();
+    repo.localSave('progressNeck', [{ day: '2026-03-04', cm: 38 }]);
+    expect(firstLoggedDay(repo)).toBe('2026-03-04');
+    expect(rangeBounds('all', repo, today).map(isoDay)).toEqual(['2026-03-04', '2026-11-22']);
+  });
+  test('with only water logged, shows from the first water day, not just today', () => {
+    const repo = memoryRepository() as unknown as Repository;
+    repo.localSave('foodWater', { v: 1, log: { '2026-02-01': [{ id: 'a', oz: 8 }], '2026-02-03': [] } });
+    expect(rangeBounds('all', repo, today).map(isoDay)).toEqual(['2026-02-01', '2026-11-22']);
+  });
+  test('the range shown is the range deleted: nothing outside it goes', () => {
+    const { repo } = seed();
+    repo.localSave('progressBodyFat', [{ day: '2026-04-01', pct: 18 }]);
+    const [from, to] = rangeBounds('all', repo, today);
+    deleteDateRange(repo, isoDay(from), isoDay(to), ['workouts', 'food', 'body', 'photos']);
+    expect(repo.localGet<unknown[]>('progressBodyFat')).toEqual([]);
+    expect(live(repo, 'sessions')).toHaveLength(0);
+    expect(repo.localGet<unknown[]>('progressPhotos')).toEqual([]);
+  });
+  test('a store that adds a deleter can say how far back it goes', () => {
+    registerRangeDeleter('routines', () => 0, () => '2025-12-31');
+    const repo = memoryRepository() as unknown as Repository;
+    expect(firstLoggedDay(repo)).toBe('2025-12-31');
+    registerRangeDeleter('routines', () => 0);
+    expect(firstLoggedDay(repo)).toBeUndefined();
+  });
+  test('with nothing logged, it is today alone', () => {
+    expect(rangeBounds('all', memoryRepository() as unknown as Repository, today).map(isoDay)).toEqual(['2026-11-22', '2026-11-22']);
   });
 });
 

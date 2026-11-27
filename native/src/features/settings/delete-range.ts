@@ -10,11 +10,15 @@ export type RangeKind = (typeof RANGE_KINDS)[number];
 
 /** A store that keeps its own days outside the synced tables (routine check-ins live with the Routines tab) adds its deleter here. */
 type Deleter = (repo: Repository, from: string, to: string) => number;
+/** The first day such a store holds anything, so Since you joined starts early enough to cover it. */
+type FirstDay = (repo: Repository) => string | null | undefined;
 const extra: Partial<Record<RangeKind, Deleter>> = {};
-export function registerRangeDeleter(kind: RangeKind, fn: Deleter) { extra[kind] = fn; }
+const extraFirst: Partial<Record<RangeKind, FirstDay>> = {};
+export function registerRangeDeleter(kind: RangeKind, fn: Deleter, first?: FirstDay) { extra[kind] = fn; if (first) extraFirst[kind] = first; else delete extraFirst[kind]; }
 /** Whether anything can be deleted for this kind on this build. */
 export function canDeleteKind(kind: RangeKind) { return kind !== 'routines' || !!extra.routines; }
 
+const isDay = (d: unknown): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
 const inDays = (day: unknown, from: string, to: string) => typeof day === 'string' && day >= from && day <= to;
 const live = (repo: Repository, table: Table) => repo.list(table).filter((r: Row) => r.deleted_at === null);
 
@@ -57,6 +61,25 @@ export function deleteDateRange(repo: Repository, from: string, to: string, kind
     } else if (extra[kind]) n += extra[kind]!(repo, from, to);
   }
   return n;
+}
+
+/**
+ * The first day anything a date range can delete was logged, as YYYY-MM-DD: the synced tables and the histories kept
+ * only on this iPhone (water, neck, body fat, photos and any store that adds a deleter). Since you joined starts here,
+ * so the range it shows is the range it deletes. Undefined when nothing is logged.
+ */
+export function firstLoggedDay(repo: Repository): string | undefined {
+  let min: string | undefined;
+  const see = (d: unknown) => { if (isDay(d) && (!min || d < min)) min = d; };
+  for (const table of ['sessions', 'food_entries', 'weigh_ins', 'measurements', 'cardio_sessions'] as const) for (const r of live(repo, table)) see(r.data.day);
+  const water = repo.localGet<{ log?: Record<string, unknown[]> }>(WATER_KEY);
+  if (water?.log && typeof water.log === 'object') for (const [day, drinks] of Object.entries(water.log)) if (Array.isArray(drinks) && drinks.length) see(day);
+  for (const key of ['progressNeck', 'progressBodyFat', 'progressPhotos']) {
+    const kept = repo.localGet<{ day?: string }[]>(key);
+    if (Array.isArray(kept)) for (const x of kept) see(x?.day);
+  }
+  for (const fn of Object.values(extraFirst)) see(fn?.(repo));
+  return min;
 }
 
 /** Progress photos on these days still listed, because their files couldn't be deleted. */
