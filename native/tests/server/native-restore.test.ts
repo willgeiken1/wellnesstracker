@@ -5,7 +5,7 @@ import { sqliteClient } from './sqlite';
 import migrations from '../../src/data/migrations';
 import { Repository } from '../../src/data/repository';
 import { createPhoneBackup } from '../../src/phone-only/backup';
-import { commitImport, nativeBackup, nativeBackupPlan, previewImport, restoreNativeLocal } from '../../src/features/importer/local';
+import { commitImport, commitPendingAccountImport, nativeBackup, nativeBackupPlan, previewImport, restoreNativeLocal } from '../../src/features/importer/local';
 import { DEVICE_A } from '../../fixtures/sync';
 
 /** Photo files are kept in their own test; this restore holds no photo addresses. */
@@ -62,5 +62,27 @@ test('Replace puts the file\'s phone-side details back over the phone\'s, and a 
     // The importer's own bookkeeping and AI photos are never taken from the file.
     expect(repo.localGet('pwaImportedIds')).toEqual(['kept']);
     expect(repo.localGet('foodAi')).toBeUndefined();
+  } finally { sqlite.close(); }
+});
+
+test('a backup restored while signed out follows the first account with its custom exercises, split and breaks', async () => {
+  const { sqlite, repo: guest } = await setup();
+  try {
+    const db = drizzle(sqliteClient(sqlite));
+    let n = 500;
+    const account = new Repository(db, '20000000-0000-4000-8000-000000000001', DEVICE_A, () => `30000000-0000-4000-8000-000000000${n++}`);
+    const from = new Repository(db, 'guest', DEVICE_A, () => '30000000-0000-4000-8000-000000000099');
+    from.save('custom_exercises', { name: 'Fixture press' }, ids.custom);
+    from.save('plans', { mode: 'fixed', days_per_week: 4 }, ids.plan);
+    from.save('pauses', { start_day: '2026-01-02', end_day: '2026-01-09' }, ids.pause);
+    const plan = nativeBackupPlan(nativeBackup(JSON.parse(createPhoneBackup(from)))!);
+    commitImport(guest, previewImport(guest, plan, 'merge', true), true);
+    expect(commitPendingAccountImport(guest, account)).toBe(3);
+    expect(account.get('custom_exercises', ids.custom)?.data.name).toBe('Fixture press');
+    expect(account.get('plans', ids.plan)?.data.days_per_week).toBe(4);
+    expect(account.get('pauses', ids.pause)?.data.end_day).toBe('2026-01-09');
+    // It goes once.
+    expect(guest.localGet('pwaPendingAccountPlan')).toBeNull();
+    expect(commitPendingAccountImport(guest, account)).toBeNull();
   } finally { sqlite.close(); }
 });

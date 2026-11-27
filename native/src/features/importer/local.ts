@@ -93,6 +93,22 @@ export function previewImport(
         : 0,
   };
 }
+/**
+ * A file opened while signed out follows the first account on this device: its plan, kept by the guest's import, goes
+ * into the account once, as a merge, with the same tables it was read with. Returns how many rows it added, or null when
+ * nothing was waiting.
+ */
+export function commitPendingAccountImport(guest: Repository, account: Repository): number | null {
+  const plan = guest.localGet<ImportPlan>("pwaPendingAccountPlan");
+  if (!plan) return null;
+  const native = guest.localGet<boolean>("pwaPendingAccountNative") === true;
+  return account.atomic(() => {
+    const added = commitImport(account, previewImport(account, plan, "merge", native), true);
+    guest.localSave("pwaPendingAccountPlan", null);
+    guest.localSave("pwaPendingAccountNative", null);
+    return added;
+  });
+}
 export function commitImport(
   repo: Repository,
   preview: ImportPreview,
@@ -108,8 +124,11 @@ export function commitImport(
     throw new Error("Import confirmation required.");
   let added = 0;
   repo.atomic(() => {
-    if (repo.owner === "guest")
+    if (repo.owner === "guest") {
       repo.localSave("pwaPendingAccountPlan", preview.plan);
+      // A plan from this app's own backup holds tables a web app import can't, so the account import must know it.
+      repo.localSave("pwaPendingAccountNative", preview.native === true);
+    }
     if (preview.mode === "replace")
       for (const table of syncedTables.filter(
         (t) => t !== "purges" && t !== "home_layout",

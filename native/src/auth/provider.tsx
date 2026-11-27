@@ -1,5 +1,5 @@
 import { ImportPreviewConflict } from '../features/importer/errors';
-import { commitImport, previewImport, type ImportPlan } from '../features/importer/local';
+import { commitPendingAccountImport, type ImportPlan } from '../features/importer/local';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { Alert, AppState } from 'react-native';
 import { t } from '../i18n/en';
@@ -187,7 +187,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   },[currentRepo,demoTarget,owner,initialPullComplete,demoTransferError,transferAttempt]);
   // A file intentionally opened while signed out follows the first account on this device.
   useEffect(()=>{let active=true;if(!currentRepo||!userId||!initialPullComplete)return;
-    void openLocalDatabase().then(database=>{if(!active||activeSession.current?.user.id!==currentRepo.owner)return;const guest=database.forOwner('guest'),plan=guest.localGet<ImportPlan>('pwaPendingAccountPlan');if(!plan)return;currentRepo.atomic(()=>{commitImport(currentRepo,previewImport(currentRepo,plan),true);guest.localSave('pwaPendingAccountPlan',null);});}).catch(()=>{/* File and guest copy remain available for an explicit retry. */});return()=>{active=false;};
+    void openLocalDatabase().then(database=>{if(!active||activeSession.current?.user.id!==currentRepo.owner)return;commitPendingAccountImport(database.forOwner('guest'),currentRepo);}).catch(()=>{/* File and guest copy remain available for an explicit retry. */});return()=>{active=false;};
   },[currentRepo,userId,initialPullComplete]);
   const authenticate=async(email:string,password:string,dob?:string,create=false,apple?:{token:string;nonce:string},join=false):Promise<string|null>=>{
     // Sign in with Apple and Continue with email may create the account, so a session's under-13 block stops them too.
