@@ -57,6 +57,21 @@ describe('repeating a workout that had no template while another is going', () =
     expect(squat).toEqual(['warmup', 'warmup', null, null, null]);
     expect(lunge).toEqual([null, null]);
   });
+  test('keeps left and right logging and supersets, so no side goes unrecorded', () => {
+    const repo = memoryRepository(), w = new WorkoutStore(repo);
+    const old = w.start(), curl = w.addExercise(old.id, 'Curl', 3), press = w.addExercise(old.id, 'Press', 3), row = w.addExercise(old.id, 'Row', 3);
+    w.setUnilateral(curl.id, true);
+    w.linkSuperset([press.id, row.id]);
+    repo.save('sessions', { ...repo.get('sessions', old.id)!.data, finished_at: Date.now() }, old.id);
+    jest.spyOn(trainingNav, 'logger').mockImplementation(() => {});
+    const s = repeatSession(repo as never, old.id)!;
+    const [c, p, r] = w.entries(s.id);
+    expect([c, p, r].map(e => w.isUnilateral(e.id))).toEqual([true, false, false]);
+    expect(w.supersetGroup(c)).toBeNull();
+    expect(w.supersetGroup(p)).toBeTruthy();
+    expect(w.supersetGroup(p)).toBe(w.supersetGroup(r));
+    expect(w.supersetGroup(p)).not.toBe(w.supersetGroup(w.entries(old.id)[1]));
+  });
 });
 
 describe('the daily training goal is the one set in Settings', () => {

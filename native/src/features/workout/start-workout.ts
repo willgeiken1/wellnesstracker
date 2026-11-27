@@ -39,7 +39,7 @@ export function suggestWarmups(repo: Repository, workout: WorkoutStore, sessionI
   workout.prependWarmups(first.id, warmCount(w.warmN));
 }
 
-/** Start a finished workout again: from its template when it had one, otherwise with the same exercises and set counts. */
+/** Start a finished workout again: from its template when it had one, otherwise with the same exercises, set counts and setup. */
 export function repeatSession(repo: Repository, sessionId: string) {
   const w = new WorkoutStore(repo), last = repo.get('sessions', sessionId);
   if (!last) return startTraining(repo);
@@ -49,11 +49,16 @@ export function repeatSession(repo: Repository, sessionId: string) {
   if (routine && repo.get('routines', routine)?.deleted_at === null) return startTraining(repo, routine);
   const s = startTraining(repo, undefined, () => {});
   if (s) {
-    // Each exercise keeps its set count and which of its sets were warm-ups, so they don't come back as working sets.
+    // Each exercise keeps its set count, which of its sets were warm-ups, left and right logging and its superset,
+    // so the repeat logs the same way: warm-ups don't come back as working sets and no side goes unrecorded.
+    const groups = new Map<string, string[]>();
     for (const e of w.entries(sessionId)) {
       const was = w.drafts(e.id), entry = w.addExercise(s.id, String(e.data.exercise), was.length || 3);
       was.forEach((d, i) => { if ((d.tag ?? (d.warmup ? 'warmup' : null)) === 'warmup') w.editDraft(entry.id, i, { tag: 'warmup' }); });
+      if (w.isUnilateral(e.id)) w.setUnilateral(entry.id, true);
+      const g = w.supersetGroup(e); if (g) groups.set(g, [...(groups.get(g) ?? []), entry.id]);
     }
+    for (const ids of groups.values()) if (ids.length >= 2 && ids.length <= 3) w.linkSuperset(ids);
     trainingNav.logger();
   }
   return s;
