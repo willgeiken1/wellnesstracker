@@ -132,8 +132,8 @@ describe('past workout screen', () => {
   test('save as a template keeps the exercises and set counts; delete asks first and removes it', async () => {
     const { store, today } = sample();
     expect(templateFrom(store, today.id)).toEqual([
-      { id: undefined, exercise: 'Squat', target_sets: 2, target_reps: 5, rep_min: undefined, rep_max: undefined },
-      { id: undefined, exercise: 'Dumbbell Walking Lunge', target_sets: 2, target_reps: 10, rep_min: undefined, rep_max: undefined }]);
+      { id: undefined, exercise: 'Squat', target_sets: 2, target_reps: 5, rep_min: undefined, rep_max: undefined, superset_group: null },
+      { id: undefined, exercise: 'Dumbbell Walking Lunge', target_sets: 2, target_reps: 10, rep_min: undefined, rep_max: undefined, superset_group: null }]);
     mockParams = { id: today.id };
     await render(<WorkoutDetail />, { wrapper });
     await fireEvent.press(screen.getByRole('button', { name: 'Save as template' }));

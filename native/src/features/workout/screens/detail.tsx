@@ -27,15 +27,19 @@ import { EyebrowLine, Page, StatsCard } from './page';
 /** A finished workout as a template: its exercises in order with the sets done, keeping a plan day's rows and rep ranges. */
 export function templateFrom(store: WorkoutStore, sessionId: string, routineId?: string | null) {
   const prior = routineId ? store.templateExercises(routineId) : [], used = new Set<string>();
-  return store.entries(sessionId).flatMap(e => {
+  const rows = store.entries(sessionId).flatMap(e => {
     const name = String(e.data.exercise), done = store.working(e).filter(s => !s.warmup && s.reps > 0);
     if (!done.length) return [];
     const row = prior.find(r => !used.has(r.id) && String(r.data.exercise).toLowerCase() === name.toLowerCase());
     if (row) used.add(row.id);
-    const range = row ? store.repRange(row) : null;
+    // The template row already carries its own options (rep range, superset), read through the store.
+    const num = (v: unknown) => v == null || v === '' || !Number.isFinite(Number(v)) ? undefined : Number(v);
+    const group = row ? (row.data.superset_group as string | null | undefined) ?? null : store.supersetGroup(e);
     return [{ id: row?.id, exercise: name, target_sets: Math.min(100, done.length), target_reps: row ? Number(row.data.target_reps) || 8 : Math.min(100, Math.max(...done.map(s => s.reps))),
-      rep_min: range?.min, rep_max: range?.max }];
+      rep_min: row ? num(row.data.rep_min) : undefined, rep_max: row ? num(row.data.rep_max) : undefined, superset_group: group }];
   });
+  // A superset left with one logged exercise is no superset.
+  return rows.map(r => r.superset_group && rows.filter(x => x.superset_group === r.superset_group).length < 2 ? { ...r, superset_group: null } : r);
 }
 
 /** A past workout (`workout-detail`): its numbers, any record, notes, every exercise's sets, and start again, save as a template or delete. */
