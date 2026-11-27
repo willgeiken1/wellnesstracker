@@ -83,7 +83,7 @@ export function BodyStep({ eyebrow, d, set, health, onFill, onUnit }: {
           options={heightOptions(d.unit)} current={heightMenuValue(d.heightIn, d.unit)} onPick={v => set({ heightIn: Number(v), t: null })} />
         <View style={CELL}><BoxField label={t('obbWeight')}>
           <NumberInput testID="onboarding-weight" unit={us ? 'lb' : 'kg'} accessibilityLabel={us ? t('obbWeightLb') : t('obbWeightKg')} keyboardType="decimal-pad"
-            value={d.weight} onChangeText={weight => set({ weight, t: null })} />
+            value={d.weight} onChangeText={weight => set({ weight, healthKg: null, t: null })} />
         </BoxField></View>
       </View>
       <View style={{ flexDirection: 'row', gap: 10 }}>

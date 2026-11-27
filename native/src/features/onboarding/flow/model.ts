@@ -27,6 +27,9 @@ export interface FlowDraft {
   heightIn: number | null;
   weight: string; age: string; sex: SexChoice; activity: Activity | '';
   filled: boolean;
+  /** The Apple Health reading (kg) that filled the weight, while the field still holds it (converted when units change);
+   * null once a weight is typed. That reading is already kept in the Health store, so setup never saves it again. */
+  healthKg: number | null;
   goals: Record<GoalId, boolean>;
   plan: Plan; t: Macros | null; edited: boolean;
   quiz: { wake: string; keep: Partial<Record<HabitId, boolean>>; wind: string };
@@ -36,7 +39,7 @@ export interface FlowDraft {
 }
 
 export function blankDraft(unit: Unit = 'lb'): FlowDraft {
-  return { name: '', unit, heightIn: null, weight: '', age: '', sex: '', activity: '', filled: false,
+  return { name: '', unit, heightIn: null, weight: '', age: '', sex: '', activity: '', filled: false, healthKg: null,
     goals: { train: false, eat: false, sleep: false, routines: false }, plan: 'maintain', t: null, edited: false,
     quiz: { wake: '', keep: {}, wind: '' }, routine: false, skipped: { about: false, goals: false } };
 }

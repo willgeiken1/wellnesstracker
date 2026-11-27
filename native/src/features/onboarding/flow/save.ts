@@ -43,13 +43,22 @@ function saveAbout(repo: Repository, d: FlowDraft, day: string) {
   repo.save('profile', { ...current?.data, name: firstName(d.name) || null, dob: age ? dobFor(age, Number(day.slice(0, 4))) : null, weight_unit: d.unit,
     height_m: d.heightIn ? Math.round(d.heightIn * 0.0254 * 10000) / 10000 : null }, current?.id);
   repo.localSave('profileExtras', { sex: d.sex === 'female' || d.sex === 'male' ? d.sex : '', activity: d.activity || 'light' });
-  if (kg) repo.save('weigh_ins', { day, weight_kg: kg, entered_value: Number(String(d.weight).replace(',', '.')), entered_unit: d.unit, source: 'app' });
+  // A weight filled from Apple Health is a Health reading the connect import already keeps in the Health store; saving it
+  // here as a typed weigh-in would put it in the backed-up, synced database. Only a weight typed here is saved.
+  if (kg && d.healthKg === null) repo.save('weigh_ins', { day, weight_kg: kg, entered_value: Number(String(d.weight).replace(',', '.')), entered_unit: d.unit, source: 'app' });
   savePrefs(repo, { 'units.weight': d.unit, 'units.height': d.unit === 'kg' ? 'cm' : 'ftin', 'units.distance': d.unit === 'kg' ? 'km' : 'mi' });
 }
 
 /** Goals: the goal choices for Home's first tiles, and the daily targets in Food's table (mirrored to Settings' goals). */
 function saveGoals(repo: Repository, d: FlowDraft, t: Macros, day: string) {
   repo.localSave(ONBOARDING_GOALS, { train: !!d.goals.train, eat: !!d.goals.eat, sleep: !!d.goals.sleep, routines: !!d.goals.routines } satisfies Record<GoalId, boolean>);
+  // Targets sync, so numbers worked out from an Apple Health weight are never saved (as Food's own estimates never use
+  // one). Food estimates them again from the first weight typed in. Numbers the person changed are their own.
+  if (t.est && !d.edited && d.healthKg !== null) {
+    repo.localSave('targetBasis', 'estimated');
+    repo.localSave('targetPlan', d.plan);
+    return;
+  }
   const targets: Targets = { energy_kj: t.kcal * 4.184, protein_g: t.p, carbs_g: t.c, fat_g: t.f };
   const row = repo.list('food_targets').find(r => r.data.day === day);
   repo.save('food_targets', { day, ...targets }, row?.id);
