@@ -1,5 +1,6 @@
 import type { Repository } from '@/data/repository';
 import type { Row, Table } from '@/data/rows';
+import { deleteProgressPhoto } from '@/auth/owner-files';
 import { WATER_KEY } from '@/features/food/water';
 
 /** What Delete a date range can remove, in the order the sheet lists them. */
@@ -47,8 +48,9 @@ export function deleteDateRange(repo: Repository, from: string, to: string, kind
         if (Array.isArray(kept)) { const next = kept.filter(x => !inDays(x?.day, from, to)); n += kept.length - next.length; repo.localSave(key, next); }
       }
     } else if (kind === 'photos') {
-      const kept = repo.localGet<{ day?: string }[]>('progressPhotos');
-      if (Array.isArray(kept)) { const next = kept.filter(x => !inDays(x?.day, from, to)); n += kept.length - next.length; repo.localSave('progressPhotos', next); }
+      // Each photo's file goes first; a photo whose file can't be deleted keeps its address, so a later try can find it.
+      const kept = repo.localGet<{ day?: string; uri?: unknown }[]>('progressPhotos');
+      if (Array.isArray(kept)) { const next = kept.filter(x => !inDays(x?.day, from, to) || !deleteProgressPhoto(x?.uri)); n += kept.length - next.length; repo.localSave('progressPhotos', next); }
     } else if (extra[kind]) n += extra[kind]!(repo, from, to);
   }
   return n;

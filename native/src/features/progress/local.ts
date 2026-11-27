@@ -1,4 +1,5 @@
 import type { Repository } from '@/data/repository';
+import { deleteProgressPhoto } from '@/auth/owner-files';
 import type { Row } from '@/data/rows';
 import { finite, MEASURE_KEYS, type MeasureKey, type Measured, type Pose, type ProgressPhoto } from './model';
 
@@ -18,7 +19,12 @@ export function readPhotos(repo: Repository): ProgressPhoto[] {
     .sort((a, b) => a.day.localeCompare(b.day));
 }
 export function addPhoto(repo: Repository, photo: StoredPhoto) { repo.localSave(PHOTOS, [...list<StoredPhoto>(repo, PHOTOS), photo]); }
-export function removePhoto(repo: Repository, id: string) { repo.localSave(PHOTOS, list<StoredPhoto>(repo, PHOTOS).filter(p => p.id !== id)); }
+/** Deletes one progress photo: its file first, then its address. If the file can't be deleted the address stays, so it can be retried. */
+export function removePhoto(repo: Repository, id: string) {
+  const all = list<StoredPhoto>(repo, PHOTOS), gone = all.find(p => p.id === id);
+  if (gone && !deleteProgressPhoto(gone.uri)) return;
+  repo.localSave(PHOTOS, all.filter(p => p.id !== id));
+}
 
 export function readReminder(repo: Repository): boolean { try { return repo.localGet<boolean>(REMIND) !== false; } catch { return true; } }
 export function saveReminder(repo: Repository, on: boolean) { repo.localSave(REMIND, on); }

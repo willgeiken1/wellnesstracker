@@ -50,7 +50,8 @@ export interface ProgressData {
   wake: Daily;
   hrvBand: readonly [number, number] | null; rhrBand: readonly [number, number] | null;
   sleepGoalMin: number; stepGoal: number;
-  sources: { oura: boolean; apple: boolean; ouraSynced: string | null };
+  /** heart: where the HRV and resting heart rate shown came from, which can be Apple Health even with Oura connected. */
+  sources: { oura: boolean; apple: boolean; ouraSynced: string | null; heart: 'Oura' | 'Apple Health' | null };
   weight: { kg: number | null; day: string | null; time: string | null; startKg: number | null; startDay: string | null; goalKg: number | null };
   /** Body fat readings, oldest first; `health` marks one from a smart scale through Apple Health. */
   bodyFat: { day: string; pct: number; health?: boolean }[];
@@ -218,7 +219,7 @@ export function emptyProgress(today: string, unit: Unit, now = Date.now()): Prog
     pillars: { training: null, food: null, sleep: null }, yesterdayScore: null, weekPillars: Array.from({ length: 7 }, () => ({ training: null, food: null, sleep: null })),
     baseline: { score: null, training: null, food: null, sleep: null }, dayNotes: Array(7).fill(''),
     night: null, wake: Array(7).fill(null), hrvBand: null, rhrBand: null, sleepGoalMin: 480, stepGoal: 8000,
-    sources: { oura: false, apple: false, ouraSynced: null },
+    sources: { oura: false, apple: false, ouraSynced: null, heart: null },
     weight: { kg: null, day: null, time: null, startKg: null, startDay: null, goalKg: null },
     bodyFat: [], measures: [], photos: [],
     training: { goalMin: null, weekVolumeKg: 0, lastWeekVolumeKg: 0, sessions: 0, active: null, plan: { name: null, perWeek: 3, done: 0 }, next: null, records: [], streak: 0 },

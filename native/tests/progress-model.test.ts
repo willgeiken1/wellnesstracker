@@ -1,6 +1,7 @@
 import { WorkoutStore } from '../src/data/workout/store';
 import { addDays, emptyProgress, goalEta, HISTORY, series, stats, weekReport, type ProgressData } from '../src/features/progress/model';
 import { buildProgress } from '../src/features/progress/source';
+import { metricView } from '../src/features/progress/metric';
 import { addPhoto, readMeasures, readPhotos, saveMeasures } from '../src/features/progress/local';
 import { fill } from '../src/features/progress/format';
 import { saveWeighIn } from '../src/features/body/model';
@@ -98,6 +99,21 @@ describe('buildProgress', () => {
     const empty = buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: apple, ring: ring(nulls(30), nulls(30)) });
     expect(empty.days.hrv.slice(-2)).toEqual([null, 45]);
     expect(empty.days.rhr.slice(-2)).toEqual([null, 60]);
+  });
+  test('heart readings are labelled by the source they came from, even with Oura connected', () => {
+    const apple = recovery([...nulls(29), 45], [...nulls(29), 60]);
+    const fromOura = buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: apple, ring: ring([...nulls(29), 30], [...nulls(29), 52]) });
+    expect(fromOura.sources.heart).toBe('Oura');
+    expect(metricView(fromOura, 'hrv').src).toBe('Oura');
+    // Oura is connected but has no heart readings, so the Apple Health ones shown are labelled Apple Health.
+    const fromApple = buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: apple, ring: ring(nulls(30), nulls(30)) });
+    expect(fromApple.sources.oura).toBe(true);
+    expect(fromApple.sources.heart).toBe('Apple Health');
+    expect(metricView(fromApple, 'hrv').src).toBe('Apple Health');
+    expect(metricView(fromApple, 'rhr').src).toBe('Apple Health');
+    expect(metricView(fromApple, 'hrv').about).toBe(metricView(buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: apple, ring: null }), 'hrv').about);
+    const none = buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: null, ring: ring(nulls(30), nulls(30)) });
+    expect(none.sources.heart).toBeNull();
   });
   test('a photo shows the weigh-in of its day or the week before, and what is kept on the phone holds no weight', () => {
     const s = store(), repo = s.repo;

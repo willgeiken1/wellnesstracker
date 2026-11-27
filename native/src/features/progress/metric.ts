@@ -20,14 +20,16 @@ export const metricName = (key: MetricKey) => key === 'hrv' ? HRV_NAME : msg(`pr
 export function metricView(d: ProgressData, key: MetricKey): MetricView {
   const name = metricName(key), short = key === 'rhr' ? t('progressRhrShort') : name;
   const ouraOrApple = d.sources.oura || d.demo ? t('progressSrcOura') : t('progressSrcApple');
+  // HRV and resting heart rate name the source their readings came from, not just whether Oura is connected.
+  const heartOura = d.demo || d.sources.heart === 'Oura', heartSrc = heartOura ? t('progressSrcOura') : t('progressSrcApple');
   switch (key) {
     case 'weight': {
       const g = d.weight.goalKg;
       return { key, name, short, unit: d.unit, goal: g == null ? null : d.unit === 'lb' ? g * 2.2046226218487757 : g, goalL: g == null ? null : fill(t('progressGoalIs'), { v: wGoal(g, d.unit) }), band: null, about: t('progressAboutWeight'), src: t('progressSrcApple') };
     }
     case 'sleep': return { key, name, short, unit: '', goal: d.sleepGoalMin / 60, goalL: fill(t('progressGoalIs'), { v: hmShort(d.sleepGoalMin) }), band: null, tick: v => `${Math.round(v)}h`, about: t('progressAboutSleep'), src: ouraOrApple };
-    case 'hrv': return { key, name, short, unit: 'ms', goal: null, goalL: null, band: d.hrvBand, about: d.sources.oura || d.demo ? t('progressAboutHrv') : t('progressAboutHrvApple'), src: ouraOrApple };
-    case 'rhr': return { key, name, short, unit: 'bpm', goal: null, goalL: null, band: d.rhrBand, about: t('progressAboutRhr'), src: ouraOrApple };
+    case 'hrv': return { key, name, short, unit: 'ms', goal: null, goalL: null, band: d.hrvBand, about: heartOura ? t('progressAboutHrv') : t('progressAboutHrvApple'), src: heartSrc };
+    case 'rhr': return { key, name, short, unit: 'bpm', goal: null, goalL: null, band: d.rhrBand, about: t('progressAboutRhr'), src: heartSrc };
     case 'steps': return { key, name, short, unit: 'steps', goal: d.stepGoal, goalL: fill(t('progressGoalIs'), { v: fmt(d.stepGoal) }), band: null, tick: v => v ? `${Math.round(v / 1000)}k` : '0', about: fill(t('progressAboutSteps'), { goal: fmt(d.stepGoal) }), src: t('progressSrcApple') };
     case 'kcal': {
       const g = d.food.goalKcal;

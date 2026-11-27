@@ -25,6 +25,14 @@ function keptFile(uri: unknown, folder: string): File | null {
 /** Deletes a file; one already gone is fine. */
 export function dropFile(uri: string | null | undefined) { if (!uri) return; try { const f = new File(uri); if (f.exists) f.delete(); } catch { /* already gone */ } }
 
+/** Deletes one kept progress photo by its stored address. True when the file is gone afterwards (or was never there),
+ * false when it could not be deleted, so the caller keeps the address and a later delete or departure can retry. */
+export function deleteProgressPhoto(uri: unknown): boolean {
+  const f = keptFile(uri, PROGRESS_PHOTOS_FOLDER);
+  if (!f) return true;
+  try { if (f.exists) f.delete(); return !f.exists; } catch { return false; }
+}
+
 function read(repo: Pick<Repository, 'localGet'>, key: string): unknown { try { return repo.localGet<unknown>(key); } catch { return undefined; } }
 
 /** This person's kept files, profile photo first. */

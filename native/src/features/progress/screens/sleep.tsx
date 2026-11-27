@@ -45,7 +45,7 @@ export function SleepScreen() {
   const d = useProgress(), k = useKit(), S = d.night, goal = d.sleepGoalMin;
   const [seg, setSeg] = useState<number | null>(null), [night, setNight] = useState(6);
   const sw = d.days.sleep.slice(-7), wake = d.wake.slice(-7), days = Array.from({ length: 7 }, (_, i) => addDays(d.today, i - 6));
-  const hrv = d.days.hrv[d.days.hrv.length - 1], rhr = d.days.rhr[d.days.rhr.length - 1], src = S?.source ?? (d.sources.oura || d.demo ? 'Oura' : 'Apple Health');
+  const hrv = d.days.hrv[d.days.hrv.length - 1], rhr = d.days.rhr[d.days.rhr.length - 1], src = S?.source ?? (d.sources.oura || d.demo ? 'Oura' : 'Apple Health'), heartSrc = d.demo || d.sources.heart === 'Oura' ? 'Oura' : 'Apple Health';
   const A0 = -180, A1 = 540, pos = (m: number) => `${(m - A0) / (A1 - A0) * 100}%` as const;
   const win = sw.map((h, i) => { const wk = wake[i]; return finite(h) && finite(wk) ? { bed: wk - Math.round(h * 60), wake: wk, h } : finite(h) ? { bed: null, wake: null, h } : null; });
   const dayName = (i: number) => i === 6 ? t('progressLastNight') : fill(t('progressMorning'), { day: weekday(days[i]) });
@@ -107,7 +107,7 @@ export function SleepScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><View style={{ width: 14, height: 8, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: mix(k.c.sleep, 'transparent', 0.55) }} /><Cap size={11.5}>{fill(t('progressHoursFromBed'), { n: goal / 60 })}</Cap></View>
       </View>
     </Card>
-    <SectionHeader title={t('progressHeart')} aside={fill(t('progressFromSrcCap'), { src })} />
+    <SectionHeader title={t('progressHeart')} aside={fill(t('progressFromSrcCap'), { src: heartSrc })} />
     <List>{[hrRow('hrv', finite(hrv) ? hrv : null, d.hrvBand, 'ms'), hrRow('rhr', finite(rhr) ? rhr : null, d.rhrBand, 'bpm')]}</List>
     <SectionHeader title={t('progressSources')} />
     <List>

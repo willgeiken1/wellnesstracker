@@ -107,7 +107,8 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
     d.night = { min: night.deep + core + night.rem + night.awake, deep: night.deep, core, rem: night.rem, awake: night.awake, bed: null, wake: null,
       source: ring?.night ? 'Oura' : 'Apple Health', segments: null };
   }
-  d.sources = { oura: !!ring, apple: !!health || !!recovery, ouraSynced: null };
+  const appleHeart = !ouraHeart && !!recovery && [...(recovery.hrv ?? []), ...(recovery.restingHeartRate ?? [])].some(finite);
+  d.sources = { oura: !!ring, apple: !!health || !!recovery, ouraSynced: null, heart: ouraHeart ? 'Oura' : appleHeart ? 'Apple Health' : null };
 
   /* food */
   const byDay = new Set(repo.list('food_entries').map(r => String(r.data.day)));
