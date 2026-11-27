@@ -72,14 +72,15 @@ export interface LoggerView {
 
 const warmOf = (d: Draft) => d.tag === 'warmup' || !!d.warmup;
 
-/** The best estimated one rep max for this exercise before this session, in the display unit. */
+/** The best estimated one rep max of this exercise's working sets before this session, in the display unit. */
 function priorBest(store: WorkoutStore, name: string, session: Row, unit: Unit) {
   const started = Number(session.data.started_at);
   let best = 0;
   for (const s of store.history()) {
     if (s.id === session.id || Number(s.data.started_at) >= started) continue;
-    for (const e of store.entries(s.id)) if (e.data.exercise === name) for (const set of store.sets(e.id)) {
-      best = Math.max(best, epley(displayWeight(Number(set.data.weight_kg), unit), Number(set.data.reps)));
+    // Warm-ups never set the bar, as the finished summary's comparison leaves them out too.
+    for (const e of store.entries(s.id)) if (e.data.exercise === name) for (const set of store.working(e)) {
+      if (!set.warmup) best = Math.max(best, epley(displayWeight(set.weight, unit), set.reps));
     }
   }
   return best;

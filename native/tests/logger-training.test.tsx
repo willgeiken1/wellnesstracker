@@ -75,6 +75,19 @@ describe('logger model', () => {
     checkSet(store, e, e.sets[0]);
     expect(loggerView(store, session).exercises[0].sets[0].pr).toBe(true);
   });
+  test("an earlier warm-up never hides a working set's record", () => {
+    mockRepository = memoryRepository();
+    const store = new WorkoutStore(mockRepository);
+    const past = store.start(undefined, Date.now() - 7 * 86_400_000), old = store.addExercise(past.id, 'Squat', 2);
+    store.editDraft(old.id, 0, { weight: '60', reps: '20', tag: 'warmup' }); store.toggleDone(old.id, 0);
+    store.editDraft(old.id, 1, { weight: '75', reps: '5' }); store.toggleDone(old.id, 1);
+    store.finish(past.id, { startedAt: Date.now() - 7 * 86_400_000, finishedAt: Date.now() - 7 * 86_400_000 + 3_600_000, notes: '' });
+    const now = store.start(), sq = store.addExercise(now.id, 'Squat', 1);
+    store.editDraft(sq.id, 0, { weight: '80', reps: '5' });
+    const e = loggerView(store, now).exercises[0];
+    checkSet(store, e, e.sets[0]);
+    expect(loggerView(store, now).exercises[0].sets[0].pr).toBe(true);
+  });
   test('a one-side set is a record only when its weaker side beats the best before', () => {
     mockRepository = memoryRepository();
     const store = new WorkoutStore(mockRepository);
