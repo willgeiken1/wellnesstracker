@@ -1,7 +1,7 @@
 import { localDay } from '@/core/workout/rules';
 import type { WorkoutStore } from '@/data/workout/store';
 import { attributedDay, foodTargets, totals } from '@/features/food/model';
-import { PlanStore } from '@/features/plans/store';
+import { weeklyTarget } from '@/features/splits/store';
 import type { HealthDays } from '../health/days';
 import { SCORE_WEIGHTS_KEY, WINDOW_DAYS, cleanWeights, insightScore, type FoodDay, type Score, type Weights } from './model';
 
@@ -14,8 +14,9 @@ export function readWeights(store: WorkoutStore): Weights {
 export function saveWeights(store: WorkoutStore, weights: Weights): boolean {
   try { store.repo.localSave(SCORE_WEIGHTS_KEY, weights); return true; } catch { return false; }
 }
+/** The chosen split's weekly target, as Home's score and Training use; the plan's only when no split is chosen. */
 function workoutGoal(store: WorkoutStore): number {
-  try { return new PlanStore(store.repo).read().daysPerWeek; } catch { return 3; }
+  try { return weeklyTarget(store.repo); } catch { return 3; }
 }
 
 /** Works the score out from what is logged on this phone plus, when given, steps and sleep held in memory. Saves nothing. */

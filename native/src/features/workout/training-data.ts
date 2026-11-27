@@ -4,7 +4,7 @@ import type { Row } from '../../data/rows';
 import { WorkoutOptions } from '../../data/workout/options';
 import { WorkoutStore, type Draft } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
-import { SplitStore } from '../splits/store';
+import { SplitStore, weeklyTarget } from '../splits/store';
 import { entryVolume, entryVolumeKg } from './volume';
 import { loadSettingsPrefs, SETTINGS_PREFS_KEY, withPref } from '../settings/prefs-model';
 
@@ -208,7 +208,9 @@ export class TrainingData {
       });
       let next = days.find(d => d.kind === 'next') ?? null;
       if (next && live && next.kind === 'next' && days.length > 1 && liveRow?.data.routine_id === next.routineId) next = days[(next.index + 1) % days.length];
-      return { mode: p.mode, perWeek: p.days.length ? p.daysPerWeek : Math.max(1, Math.min(7, p.daysPerWeek)), days, next };
+      // The week's target is the chosen split's (the same as the score's), and the plan's only when no split is chosen.
+      const target = weeklyTarget(this.repo);
+      return { mode: p.mode, perWeek: Math.max(1, Math.min(7, Math.round(target) || 3)), days, next };
     });
   }
   /** About how long a plan day takes: its own past sessions, or three minutes a set. */

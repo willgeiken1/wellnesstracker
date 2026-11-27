@@ -1,6 +1,9 @@
 import type { Repository } from '../src/data/repository';
 import { scoreDays } from '../src/features/score/days';
 import { SplitStore, presetFor, weeklyTarget } from '../src/features/splits/store';
+import { TrainingData } from '../src/features/workout/training-data';
+import { readScore } from '../src/features/score/read';
+import { WorkoutStore } from '../src/data/workout/store';
 import { memoryRepository } from './workout-repository';
 
 // Made-up split and cardio only.
@@ -21,5 +24,18 @@ describe('the score and Progress use the chosen split’s weekly target', () => 
     const repo = memoryRepository(), split = new SplitStore(repo), ul = presetFor(split, 'ul')!;
     split.choose({ key: 'ul', name: ul.preset.name, mode: 'weekdays', perWeek: 2, week: [0, 1, -1, 0, 1, -1, -1], days: ul.drafts.slice(0, 2), start: 0 }, MON);
     expect(weeklyTarget(repo)).toBe(4);
+  });
+  test('Training’s This week target and the workout summary follow a six-day split, not the plan’s three', () => {
+    const repo = memoryRepository(), split = new SplitStore(repo), ul = presetFor(split, 'ul')!;
+    expect(new TrainingData(repo as never, MON.getTime()).plan().perWeek).toBe(3);
+    split.choose({ key: 'ul', name: ul.preset.name, mode: 'rotate', perWeek: 6, days: ul.drafts, start: 0 }, MON);
+    expect(new TrainingData(repo as never, MON.getTime()).plan().perWeek).toBe(6);
+  });
+  test('the score detail screen measures workouts against the six-day split too', () => {
+    const repo = memoryRepository(), split = new SplitStore(repo), ul = presetFor(split, 'ul')!;
+    const goal = () => readScore(new WorkoutStore(repo as never), MON, null).parts.workoutGoal;
+    expect(goal()).toBe(3);
+    split.choose({ key: 'ul', name: ul.preset.name, mode: 'rotate', perWeek: 6, days: ul.drafts, start: 0 }, MON);
+    expect(goal()).toBe(6);
   });
 });
