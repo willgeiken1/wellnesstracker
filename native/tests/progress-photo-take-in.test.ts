@@ -85,3 +85,25 @@ describe('changing the photo list when it cannot be read', () => {
     expect(saves).toEqual([]);
   });
 });
+
+describe('the noted addresses of photos still being taken in', () => {
+  const EARLIER = 'file:///docs/progress-photos/earlier.jpg';
+  test.each(['throws', 'not-a-list'] as const)('a new photo moves nothing and writes nothing over a list that can\'t be read (%s)', async value => {
+    const saves: [string, unknown][] = [];
+    const r = { localGet: (k: string) => { if (k !== 'progressPhotosPending') return undefined; if (value === 'throws') throw new Error('fixture: malformed JSON'); return EARLIER; },
+      localSave: (k: string, v: unknown) => { saves.push([k, v]); } } as unknown as Repository;
+    const moved = jest.fn(move);
+    await expect(takeInPhoto(r, shot, moved)).rejects.toThrow();
+    expect(moved).not.toHaveBeenCalled();
+    expect(saves).toEqual([]);
+  });
+  test('a list that stops reading after the save is left as it is, earlier addresses and all', async () => {
+    const store = new Map<string, unknown>([['progressPhotosPending', [EARLIER]]]);
+    let reads = 0;
+    const r = { localGet: (k: string) => { if (k === 'progressPhotosPending' && ++reads > 1) throw new Error('fixture: malformed JSON'); return store.get(k); },
+      localSave: (k: string, v: unknown) => { store.set(k, v); } } as unknown as Repository;
+    await takeInPhoto(r, shot, move);
+    expect(readPhotos(r).map(p => p.uri)).toEqual([URI]);
+    expect(store.get('progressPhotosPending')).toEqual([EARLIER, 'progress-photos/p1.jpg']);
+  });
+});

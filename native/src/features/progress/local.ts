@@ -23,18 +23,20 @@ export function readPhotos(repo: Repository): ProgressPhoto[] {
  * The photo list for a change: throws when the stored list can't be read, so a write never replaces addresses it couldn't
  * see. Those addresses are how departure finds the files to erase.
  */
-function photosToChange(repo: Repository): StoredPhoto[] {
-  const v = repo.localGet<StoredPhoto[]>(PHOTOS);
+function listToChange<T>(repo: Repository, key: string): T[] {
+  const v = repo.localGet<T[]>(key);
   if (v == null) return [];
   if (!Array.isArray(v)) throw new Error('The saved photo list could not be read.');
   return v;
 }
+const photosToChange = (repo: Repository) => listToChange<StoredPhoto>(repo, PHOTOS);
 export function addPhoto(repo: Repository, photo: StoredPhoto) { repo.localSave(PHOTOS, [...photosToChange(repo), photo]); }
 
 /** The address a new photo's file will have once moved in, as noted before the move. */
 const plannedAddress = (id: string) => `${PROGRESS_PHOTOS_FOLDER}/${id.replace(/[^a-zA-Z0-9-]/g, '')}.jpg`;
 function unpend(repo: Repository, address: string) {
-  try { repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, list<string>(repo, PROGRESS_PHOTOS_PENDING_KEY).filter(a => a !== address)); } catch { /* a note for a file that is gone or saved is harmless */ }
+  // A list that can't be read is left as it is: it may name an earlier file that only it remembers.
+  try { repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, listToChange<string>(repo, PROGRESS_PHOTOS_PENDING_KEY).filter(a => a !== address)); } catch { /* a note for a file that is gone or saved is harmless */ }
 }
 /**
  * Takes in a new photo: notes its file's address first (nothing is moved if that fails), moves the file in, then saves the
@@ -43,7 +45,8 @@ function unpend(repo: Repository, address: string) {
  */
 export async function takeInPhoto(repo: Repository, photo: Omit<StoredPhoto, 'uri'>, move: (id: string) => Promise<string>): Promise<StoredPhoto> {
   const planned = plannedAddress(photo.id);
-  repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, [...list<string>(repo, PROGRESS_PHOTOS_PENDING_KEY), planned]);
+  // Throws, before anything is moved, when the noted addresses can't be read, rather than write over them.
+  repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, [...listToChange<string>(repo, PROGRESS_PHOTOS_PENDING_KEY), planned]);
   const saved = { ...photo, uri: await move(photo.id) };
   try { addPhoto(repo, saved); } catch (e) { if (deleteProgressPhoto(saved.uri)) unpend(repo, planned); throw e; }
   unpend(repo, planned);
