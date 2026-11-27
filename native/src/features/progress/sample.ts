@@ -1,3 +1,4 @@
+import { SAMPLE_NIGHTS } from '@/features/home/demo-sleep';
 import type { Unit } from '@/features/onboarding/model';
 import { t } from '@/i18n/en';
 import { fill, wtS } from './format';
@@ -32,7 +33,7 @@ export function sampleProgress(today: string, unit: Unit, now = Date.now()): Pro
   const d = emptyProgress(today, unit, now), back = (n: number) => addDays(today, -n);
   const N10 = Array(10).fill(null);
   const scoreWeek = [78, 74, 92, 81, 88, 85, 63], kcalWeek = [2140, 2310, 1980, 2260, 2050, 2410, 1364], minWeek = [52, 0, 61, 48, 0, 55, 24];
-  const sleepWeek = [7.4, 8.1, 6.9, 7.6, 8.3, 7.9, 6.88], hrv = [52, 57, 49, 55, 58, 56, 54], rhr = [57, 55, 58, 56, 55, 55, 56];
+  const sleepWeek = SAMPLE_NIGHTS.map(h => Number(h.toFixed(2))), hrv = [52, 57, 49, 55, 58, 56, 54], rhr = [57, 55, 58, 56, 55, 55, 56];
   const steps = [9120, 6480, 11250, 8340, 5960, 10410, 7940];
   const weight30 = [184.4, 184.6, 184.1, 184.3, 183.9, 184.0, 183.8, 183.6, 183.9, 183.5, 183.4, 183.6, 183.2, 183.1, 183.3, 182.9, 183.0, 182.8, 182.9, 182.6, 182.7, 182.5, 182.6, 182.4, 182.3, 182.5, 182.2, 182.3, 182.0, 182.1];
   const r5 = rng(5), train: number[] = [];

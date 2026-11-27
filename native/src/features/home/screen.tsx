@@ -1,5 +1,5 @@
 import { router, type Href } from 'expo-router';
-import { useMemo, useRef, type ComponentRef } from 'react';
+import { useEffect, useMemo, useRef, type ComponentRef } from 'react';
 import { View } from 'react-native';
 import Animated, { useAnimatedRef, useScrollOffset } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +29,7 @@ import { useHomeTiles } from './tiles/use-home-tiles';
 import { withDemoSleep } from './demo-sleep';
 import { useAuth } from '@/auth/provider';
 import { useFocused } from './use-focused';
+import { coverNumbers } from './hide-numbers';
 
 registerHomeTiles();
 
@@ -51,6 +52,9 @@ export function Home() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const focused = useFocused();
+  // Hide numbers: a tap shows Home's numbers only until Home is left.
+  useEffect(() => { if (!focused) coverNumbers(); }, [focused]);
+  useEffect(() => () => coverNumbers(), []);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollY = useScrollOffset(scrollRef);
   // Health readings stay in memory for this screen only.

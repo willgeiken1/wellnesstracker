@@ -33,9 +33,10 @@ function settled(s: Springs, g: Group, i: number) {
   return Math.abs(s.x[g][i] - s.tg[g][i]) < e && Math.abs(s.vel[g][i]) < e * 6;
 }
 
-export interface RidgeProps { view: HeroView; width: number; colors: Record<string, string>; mode: 'dark' | 'light'; reduceMotion: boolean; calm: boolean; labels: boolean; glow: number; detail?: 0 | 1 | 2 }
+export interface RidgeProps { view: HeroView; width: number; colors: Record<string, string>; mode: 'dark' | 'light'; reduceMotion: boolean; calm: boolean; labels: boolean; glow: number; detail?: 0 | 1 | 2;
+  /** Told which peak was tapped (Hide numbers shows the numbers on a tap of the hidden food peak). */ onPeak?: (i: number) => void }
 
-export function RidgeHero({ view, width: W, colors, mode, reduceMotion, calm, labels, glow, detail = 1 }: RidgeProps) {
+export function RidgeHero({ view, width: W, colors, mode, reduceMotion, calm, labels, glow, detail = 1, onPeak }: RidgeProps) {
   const H = HERO_H, K = useMemo(() => ridgeColors(colors, mode), [colors, mode]);
   const [focus, setFocus] = useState(-1);
   const sp = useRef<Springs>({ x: { v: z3(), a: z3(), p: [0], f: [1, 1, 1] }, vel: { v: z3(), a: z3(), p: [0], f: z3() }, tg: { v: z3(), a: z3(), p: [0], f: [1, 1, 1] } });
@@ -95,7 +96,7 @@ export function RidgeHero({ view, width: W, colors, mode, reduceMotion, calm, la
       <SvgXml xml={xml} width={W} height={H} />
     </View>
     {/* The peak itself shows the tap: the chosen pillar lights up and the others fade. */}
-    {labels ? xs.map((x, i) => <Tappable dim="none" key={i} onPress={() => setFocus(f => f === i ? -1 : i)} accessibilityRole="button"
+    {labels ? xs.map((x, i) => <Tappable dim="none" key={i} onPress={() => { onPeak?.(i); setFocus(f => f === i ? -1 : i); }} accessibilityRole="button"
       accessibilityLabel={view.pillars[i].spoken} accessibilityState={{ selected: focus === i }} testID={`home-hero-peak-${view.pillars[i].key}`}
       style={{ position: 'absolute', left: x - 64, top: yb + 20, width: 128, height: 62 }} />) : null}
   </View>;

@@ -1,14 +1,16 @@
 import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
 import { dailyWeights } from '@/features/body/model';
-import { foodTargets, totals } from '@/features/food/model';
+import { foodTargets } from '@/features/food/model';
 import type { HealthDays } from '@/features/health/days';
 import type { OuraRecovery } from '@/features/health/oura';
 import type { Recovery } from '@/features/health/recovery';
 import { readProfile } from '@/features/onboarding/model';
 import { PlanStore } from '@/features/plans/store';
 import { liftRecords } from '@/features/progress/records';
-import { dayPillars, dayScore } from '@/features/score/day';
+import { dayScore } from '@/features/score/day';
+import { withDemoSleep } from '@/features/home/demo-sleep';
+import { foodDays, scoreDays } from '@/features/score/days';
 import { t } from '@/i18n/en';
 import { fill, hm } from './format';
 import { readBodyFat, readMeasures, readPhotos } from './local';
@@ -77,7 +79,20 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
   const weightOn = (day: string) => { const i = index.get(day); if (i == null) return null; for (let j = i; j >= Math.max(0, i - 7); j--) { const w = d.days.weight[j]; if (finite(w)) return w; } return null; };
   const withKg = photos.map(p => ({ ...p, kg: p.kg ?? weightOn(p.day) }));
   d.photos = demo ? [...d.photos, ...withKg] : withKg;
-  if (demo) return d;
+  if (demo) {
+    // Sample data keeps the design's charts, but each day's score is worked out from the sample logs and the sample
+    // nights by the same function as for anyone else, so Home's hero and Progress show one score for a day.
+    const sleep = withDemoSleep(null, repo.owner, 7)?.sleepHours ?? null;
+    if (sleep) { d.days.sleep = d.days.sleep.slice(); sleep.forEach((h, i) => { d.days.sleep[HISTORY - 7 + i] = h; }); }
+    const all = scoreDays({ store, days, steps: null, sleepHours: d.days.sleep });
+    const scores = all.map(dayScore);
+    d.days.score = d.days.score.map((v, i) => scores[i] ?? v);
+    d.pillars = all[HISTORY - 1];
+    d.weekPillars = all.slice(-7);
+    { const y = d.days.score[HISTORY - 2]; d.yesterdayScore = finite(y) ? y : null; }
+    d.baseline = { ...d.baseline, score: round(avg(d.days.score.slice(-29, -1))) };
+    return d;
+  }
 
   /* health: steps and sleep from Apple Health and Oura (merged per day), HRV and resting heart rate from one source only */
   d.days.steps = tail(health?.steps);
@@ -95,18 +110,8 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
   d.sources = { oura: !!ring, apple: !!health || !!recovery, ouraSynced: null };
 
   /* food */
-  const entries = repo.list('food_entries'), byDay = new Map<string, Row[]>();
-  for (const r of entries) { const k = String(r.data.day); byDay.set(k, [...(byDay.get(k) ?? []), r]); }
-  const foodDay = (day: string) => {
-    const rows = byDay.get(day) ?? [];
-    if (!rows.length) return { logged: false, kcal: null, protein: null, goalKcal: null, goalProtein: null };
-    const s = totals(rows);
-    let targets: ReturnType<typeof foodTargets>['targets'] = null;
-    try { targets = foodTargets(repo, day).targets; } catch { /* a day without a target still counts */ }
-    return { logged: true, kcal: s.energy_kj == null ? null : s.energy_kj / KJ, protein: s.protein_g,
-      goalKcal: targets ? targets.energy_kj / KJ : null, goalProtein: targets ? targets.protein_g : null };
-  };
-  const foods = days.map(foodDay);
+  const byDay = new Set(repo.list('food_entries').map(r => String(r.data.day)));
+  const foods = foodDays(repo, days);
   d.days.kcal = foods.map(f => f.logged && finite(f.kcal) ? f.kcal : null);
   const todayFood = foods[HISTORY - 1];
   let targetsToday: ReturnType<typeof foodTargets>['targets'] = null;
@@ -148,18 +153,13 @@ export function buildProgress({ store, now, demo, health, recovery, ring }: Sour
     active: active && activeMin != null ? { name: String(active.data.name ?? t('progressWorkout')), min: activeMin } : null,
     plan: { name: null, perWeek, done: sessions.filter(s => String(s.data.day) >= monday).length }, next: null,
     records: records.map(r => ({ name: r.exercise, kg: r.unit === 'lb' ? r.weight / LB : r.weight, reps: 0, day: r.day, unit: r.unit })),
-    streak: streak(today, new Set([...byDay.keys(), ...minutes.keys()])),
+    streak: streak(today, new Set([...byDay, ...minutes.keys()])),
   };
 
-  /* the day score, each day */
-  const logsTraining = !!firstDay, trainedDays = new Set([...minutes.keys(), ...(active ? [today] : [])]);
-  const steps = d.days.steps, sleep = d.days.sleep;
-  const pillarsAt = (i: number) => {
-    const day = days[i];
-    const week = daysEnding(day, 7).filter(x => trainedDays.has(x)).length;
-    return dayPillars({ trained: trainedDays.has(day), weekWorkouts: week, perWeek, steps: steps[i], food: foods[i], sleepHours: sleep[i], logsTraining: logsTraining && day >= firstDay! });
-  };
-  const all = days.map((_, i) => pillarsAt(i));
+  /* the day score, each day: the same function Home's hero reads */
+  const logsTraining = !!firstDay;
+  const sleep = d.days.sleep;
+  const all = scoreDays({ store, days, steps: d.days.steps, sleepHours: sleep, foods });
   d.days.score = all.map(dayScore);
   d.pillars = all[HISTORY - 1];
   { const y = d.days.score[HISTORY - 2]; d.yesterdayScore = finite(y) ? y : null; }

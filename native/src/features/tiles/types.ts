@@ -79,6 +79,17 @@ export interface TileDef {
   label?: string;
   /** What a tap opens. The page packet wires this to its routes. */
   open?: (options: TileOptionValues) => void;
+  /** A cover over the tile's figures (Hide numbers): while covered, a tap shows them instead of opening the tile. */
+  cover?: TileCover;
+}
+
+/** An outside store that says when a tile's figures are covered, what VoiceOver says then, and how a tap shows them. */
+export interface TileCover {
+  subscribe: (listener: () => void) => () => void;
+  covered: () => boolean;
+  /** The tile's label while covered, from its title ("Weight hidden. Show numbers"). */
+  label: (title: string) => string;
+  reveal: () => void;
 }
 
 /** [id, size, style key?, options?] the compact form a default layout is written in. */

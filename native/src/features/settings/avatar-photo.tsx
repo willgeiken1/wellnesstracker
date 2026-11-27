@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import { randomUUID } from 'expo-crypto';
 import { useAuth } from '@/auth/provider';
+import { dropFile, PROFILE_PHOTO_FOLDER, PROFILE_PHOTO_KEY } from '@/auth/owner-files';
 import type { Repository } from '@/data/repository';
 import { Icon, Tappable, useKit } from '@/components/kit';
 import { useTheme } from '@/design/theme-provider';
@@ -14,17 +15,17 @@ import { actionSheet } from './sheet-actions';
 /*
  * The profile photo (pages/settings.js `.st-acct .cam`, `photo`): taken or chosen from the library, cropped square and kept
  * on this phone only, as Progress photos are. The file lives in the app's Documents folder, its address in the person's
- * local storage, which is never synced, uploaded or sent anywhere. Without a photo the avatar shows the initial.
+ * local storage, which is never synced, uploaded or sent anywhere. Without a photo the avatar shows the initial. Signing out
+ * and deleting the account delete the file (src/auth/owner-files.ts).
  */
-const KEY = 'profilePhoto';
-const FOLDER = 'profile-photo';
+const KEY = PROFILE_PHOTO_KEY;
+const FOLDER = PROFILE_PHOTO_FOLDER;
 
 function storedUri(repo: Repository | null | undefined): string | null {
   if (!repo) return null;
   try { const uri = repo.localGet<string | null>(KEY); return typeof uri === 'string' && uri ? uri : null; } catch { return null; }
 }
 function exists(uri: string) { try { return new File(uri).exists; } catch { return false; } }
-function dropFile(uri: string | null) { if (!uri) return; try { const f = new File(uri); if (f.exists) f.delete(); } catch { /* already gone */ } }
 
 /** The kept photo's address, or null when there is none or its file is gone (a backup restored on another phone). */
 export function readProfilePhoto(repo: Repository | null | undefined): string | null {
