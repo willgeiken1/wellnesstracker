@@ -17,6 +17,12 @@ export const HRV_NAME = 'HRV';
 /** A metric's name, as Progress shows it. */
 export const metricName = (key: MetricKey) => key === 'hrv' ? HRV_NAME : msg(`progressM${cap(key)}`);
 
+/** Where the weigh-ins shown came from. With none yet, Apple Health only when it is connected (or in the example), else Insight. */
+function weightSrc(d: ProgressData) {
+  const from = d.weight.from ?? (d.demo || d.sources.apple ? 'health' : 'app');
+  return from === 'both' ? t('progressSrcAppleAndInsight') : from === 'app' ? t('progressSrcInsight') : t('progressSrcApple');
+}
+
 export function metricView(d: ProgressData, key: MetricKey): MetricView {
   const name = metricName(key), short = key === 'rhr' ? t('progressRhrShort') : name;
   const ouraOrApple = d.sources.oura || d.demo ? t('progressSrcOura') : t('progressSrcApple');
@@ -25,7 +31,7 @@ export function metricView(d: ProgressData, key: MetricKey): MetricView {
   switch (key) {
     case 'weight': {
       const g = d.weight.goalKg;
-      return { key, name, short, unit: d.unit, goal: g == null ? null : d.unit === 'lb' ? g * 2.2046226218487757 : g, goalL: g == null ? null : fill(t('progressGoalIs'), { v: wGoal(g, d.unit) }), band: null, about: t('progressAboutWeight'), src: t('progressSrcApple') };
+      return { key, name, short, unit: d.unit, goal: g == null ? null : d.unit === 'lb' ? g * 2.2046226218487757 : g, goalL: g == null ? null : fill(t('progressGoalIs'), { v: wGoal(g, d.unit) }), band: null, about: t('progressAboutWeight'), src: weightSrc(d) };
     }
     case 'sleep': return { key, name, short, unit: '', goal: d.sleepGoalMin / 60, goalL: fill(t('progressGoalIs'), { v: hmShort(d.sleepGoalMin) }), band: null, tick: v => `${Math.round(v)}h`, about: t('progressAboutSleep'), src: ouraOrApple };
     case 'hrv': return { key, name, short, unit: 'ms', goal: null, goalL: null, band: d.hrvBand, about: heartOura ? t('progressAboutHrv') : t('progressAboutHrvApple'), src: heartSrc };

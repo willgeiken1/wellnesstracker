@@ -84,6 +84,19 @@ describe('buildProgress', () => {
     expect(d.weight.kg).toBeNull();
     expect(d.food.eatenKcal).toBeNull();
   });
+  test("weight names where its readings came from, never Apple Health for a weight typed in Insight", () => {
+    const typed = memoryRepository();
+    saveWeighIn(typed as never, 80, 'kg', '2026-11-05');
+    expect(metricView(buildProgress({ store: new WorkoutStore(typed), now: NOW, demo: false, health: null, recovery: null, ring: null }), 'weight').src).toBe('Logged in Insight');
+    const scale = memoryRepository();
+    scale.save('weigh_ins', { day: '2026-11-05', weight_kg: 80, entered_value: 80, entered_unit: 'kg', source: 'healthkit' });
+    expect(metricView(buildProgress({ store: new WorkoutStore(scale), now: NOW, demo: false, health: null, recovery: null, ring: null }), 'weight').src).toBe('Apple Health');
+    saveWeighIn(scale as never, 79.5, 'kg', '2026-11-06');
+    expect(metricView(buildProgress({ store: new WorkoutStore(scale), now: NOW, demo: false, health: null, recovery: null, ring: null }), 'weight').src).toBe('Apple Health and Insight');
+    // With no weigh-ins yet, Apple Health is named only when it is connected.
+    expect(metricView(buildProgress({ store: store(), now: NOW, demo: false, health: null, recovery: null, ring: null }), 'weight').src).toBe('Logged in Insight');
+    expect(metricView(buildProgress({ store: store(), now: NOW, demo: false, health: health(nulls(30)), recovery: null, ring: null }), 'weight').src).toBe('Apple Health');
+  });
   test('cardio logged on its own counts toward training minutes, from its first day', () => {
     const repo = memoryRepository();
     repo.save('cardio_sessions', { day: '2026-11-10', kind: 'run', duration_ms: 30 * 60000, distance_m: 5000, notes: '' });

@@ -54,7 +54,8 @@ export interface ProgressData {
   sources: { oura: boolean; apple: boolean; ouraSynced: string | null; heart: 'Oura' | 'Apple Health' | null };
   /** Where each day of `days.sleep` came from, when the health reading says (Oura, or Apple Health filling a gap). */
   sleepFrom?: ('Oura' | 'Apple Health' | null)[];
-  weight: { kg: number | null; day: string | null; time: string | null; startKg: number | null; startDay: string | null; goalKg: number | null };
+  /** `from` is where the weigh-ins shown came from: Apple Health, typed into Insight, or both; unset with none. */
+  weight: { kg: number | null; day: string | null; time: string | null; startKg: number | null; startDay: string | null; goalKg: number | null; from?: 'health' | 'app' | 'both' };
   /** Body fat readings, oldest first; `health` marks one from a smart scale through Apple Health. */
   bodyFat: { day: string; pct: number; health?: boolean }[];
   measures: Measured[];

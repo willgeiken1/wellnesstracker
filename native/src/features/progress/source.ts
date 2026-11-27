@@ -1,3 +1,4 @@
+import { isHealthSource } from '@/data/health-store';
 import type { Row } from '@/data/rows';
 import type { WorkoutStore } from '@/data/workout/store';
 import { dailyWeights } from '@/features/body/model';
@@ -69,8 +70,12 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
   const d: ProgressData = demo ? base : { ...base };
 
   /* weight */
-  const weighed = dailyWeights(repo.list('weigh_ins').filter(r => String(r.data.day) <= today));
+  const weighRows = repo.list('weigh_ins').filter(r => String(r.data.day) <= today), weighed = dailyWeights(weighRows);
   if (weighed.length) {
+    // The label under weight names where these readings came from, so a weight typed in Insight is never put down to Apple Health.
+    const shown = weighRows.filter(r => r.deleted_at === null && typeof r.data.weight_kg === 'number' && r.data.weight_kg > 0);
+    const app = shown.some(r => r.data.source === 'app'), health = shown.some(r => isHealthSource(r.data.source));
+    if (!demo && (app || health)) d.weight.from = app && health ? 'both' : app ? 'app' : 'health';
     if (demo) d.days.weight = d.days.weight.slice();
     for (const w of weighed) { const i = index.get(w.day); if (i != null) d.days.weight[i] = w.kg; }
     const last = weighed[weighed.length - 1];
