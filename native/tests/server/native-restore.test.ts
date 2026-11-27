@@ -193,3 +193,23 @@ test('a Replace while signed out leaves only its own file waiting for the accoun
     expect(account.localGet('progressNeck')).toEqual([{ day: '2026-01-10', cm: 37 }]);
   } finally { sqlite.close(); }
 });
+
+test('a drink removed after a signed-out restore stays removed when the first account takes the restore', async () => {
+  const { sqlite, repo: guest } = await setup();
+  try {
+    const db = drizzle(sqliteClient(sqlite));
+    const account = new Repository(db, '20000000-0000-4000-8000-000000000005', DEVICE_A, () => '30000000-0000-4000-8000-000000000890');
+    const drink = (id: string, oz: number) => ({ id, c: 'glass', name: 'Glass', oz, icon: 'glass', at: 1 });
+    const backup = await backupOf((r) => r.save('custom_exercises', { name: 'Fixture press' }, ids.custom),
+      { foodWater: { v: 1, unit: 'oz', goal: 2, containers: [], log: { '2026-01-09': [drink('w1', 16), drink('w2', 8)] } },
+        progressNeck: [{ day: '2026-01-09', cm: 38 }] });
+    commitImport(guest, previewImport(guest, nativeBackupPlan(backup), 'merge', true), true);
+    restoreNativeLocal(guest, backup, new Set(), 'merge', noPhotos);
+    // After the restore, still signed out: one drink taken back, and the neck history cleared.
+    guest.localSave('foodWater', { v: 1, unit: 'oz', goal: 2, containers: [], log: { '2026-01-09': [drink('w1', 16)] } });
+    guest.localSave('progressNeck', null);
+    commitPendingAccountImport(guest, account);
+    expect(account.localGet('foodWater')).toEqual({ v: 1, unit: 'oz', goal: 2, containers: [], log: { '2026-01-09': [drink('w1', 16)] } });
+    expect(account.localGet('progressNeck')).toBeUndefined();
+  } finally { sqlite.close(); }
+});

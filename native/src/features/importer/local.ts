@@ -108,8 +108,16 @@ export function commitPendingAccountImport(guest: Repository, account: Repositor
     const added = commitImport(account, previewImport(account, plan, "merge", native), true);
     // The phone-side details of a backup restored while signed out (water, routines, a workout's set rows) come too,
     // merged like any restore; photo addresses were never kept for the account, so no photo file changes hands.
-    if (native && local && typeof local === "object" && !Array.isArray(local))
-      restoreNativeLocal(account, { format: "insight-phone-only", version: 1, rows: {}, local }, newEntries, "merge", { names: () => null, settle: () => {} });
+    // They come as the guest has them now, so a drink or check-off removed since the restore stays removed.
+    if (native && local && typeof local === "object" && !Array.isArray(local)) {
+      const now = Object.fromEntries(
+        Object.keys(local).flatMap((key) => {
+          const value = guest.localGet<unknown>(key);
+          return value === undefined || value === null ? [] : [[key, value]];
+        }),
+      );
+      restoreNativeLocal(account, { format: "insight-phone-only", version: 1, rows: {}, local: now }, newEntries, "merge", { names: () => null, settle: () => {} });
+    }
     guest.localSave("pwaPendingAccountPlan", null);
     guest.localSave("pwaPendingAccountNative", null);
     guest.localSave("pwaPendingAccountLocal", null);
