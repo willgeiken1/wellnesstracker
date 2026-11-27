@@ -11,6 +11,7 @@ import { appleHealth } from '@/features/health/apple';
 import type { HealthDays } from '@/features/health/days';
 import type { OuraRecovery } from '@/features/health/oura';
 import type { RecoveryRead } from '@/features/health/use-recovery';
+import { weekScores } from '@/features/score/days';
 import { STEP_GOAL } from '@/features/score/model';
 import { useSettingsPrefs } from '@/features/settings/prefs';
 import { showToast } from '@/features/shell/toast';
@@ -125,7 +126,8 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
       goals: HOME_GOALS,
     };
     const nextMeal = input.nextMeal;
-    return buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit }, data => homeTileAction(repo, nextMeal, data), hide);
+    const scores = weekScores(reader, now, health);
+    return { ...buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit }, data => homeTileAction(repo, nextMeal, data), hide), scores };
   }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide]);
   useEffect(() => { setHomeTileState(state); }, [state]);
   return state;

@@ -5,6 +5,9 @@ const WEEK_HOURS = [5.6, 7.2, 6.4, 8, 7.6, 8.16];
 /** Last night in the example week: 6 h 53 m. */
 const LAST_NIGHT_HOURS = 413 / 60;
 
+/** The example week's seven nights, oldest first, ending last night. Progress's sample week shows the same nights. */
+export const SAMPLE_NIGHTS: readonly number[] = [...WEEK_HOURS, LAST_NIGHT_HOURS];
+
 const anySleep = (h: HealthDays | null) => !!h?.sleepHours?.some(v => typeof v === 'number' && v > 0);
 
 /**
@@ -14,7 +17,7 @@ const anySleep = (h: HealthDays | null) => !!h?.sleepHours?.some(v => typeof v =
  */
 export function withDemoSleep(health: HealthDays | null, owner: string | null | undefined, days: number): HealthDays | null {
   if (owner !== 'demo' || anySleep(health) || days < 1) return health;
-  const week = [...WEEK_HOURS, LAST_NIGHT_HOURS].slice(-days);
+  const week = SAMPLE_NIGHTS.slice(-days);
   const sleepHours = [...Array.from({ length: days - week.length }, () => null), ...week];
   return {
     steps: null, activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null,

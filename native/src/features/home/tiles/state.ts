@@ -19,6 +19,8 @@ export interface HomeTileState {
   onAction: (data: Record<string, string>) => void;
   /** Hide numbers (Settings, Privacy): weight and energy figures on Home show as dots until a tap (see ../hide-numbers.ts). */
   hide: boolean;
+  /** The day score for each of the last 7 days, oldest first (see score/days.ts): the same numbers Progress shows. */
+  scores?: readonly (number | null)[];
 }
 
 const HEALTH = new Set(['steps', 'active', 'exercise', 'mindful']), NIGHT = new Set(['sleep', 'sleepScore', 'hrv', 'rhr']);

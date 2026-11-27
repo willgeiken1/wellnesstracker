@@ -32,8 +32,9 @@ export function lastWeek(now: Date): string[] {
   return Array.from({ length: 7 }, (_, i) => localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - i))));
 }
 
-/** The hero's input from Home's shared tile data (food, sleep, units) and the workout store (minutes trained). */
-export function heroInput(data: HomeTileData | null, store: WorkoutStore | null, energy: 'kcal' | 'kJ', now: Date, hide = false): HeroInput {
+/** The hero's input from Home's shared tile data (food, sleep, units, each day's score) and the workout store (minutes trained). */
+export function heroInput(data: HomeTileData | null, store: WorkoutStore | null, energy: 'kcal' | 'kJ', now: Date, hide = false,
+  scores?: readonly (number | null)[]): HeroInput {
   const days = lastWeek(now), train = trainingMinutes(store, days, now);
   const last7 = <T,>(list: readonly T[] | undefined | null) => { const l = list ?? []; return days.map((_, i) => l[l.length - 7 + i]); };
   const kcal = last7(data?.calories.series as (number | null)[] | undefined), sleepH = last7(data?.sleep.series as (number | null)[] | undefined);
@@ -41,6 +42,7 @@ export function heroInput(data: HomeTileData | null, store: WorkoutStore | null,
     trainMin: train[i],
     kcal: finite(kcal[i]) ? kcal[i] : null,
     sleepMin: finite(sleepH[i]) && sleepH[i]! > 0 ? Math.round(sleepH[i]! * 60) : null,
+    ...(scores ? { score: finite(scores[i]) ? scores[i] : null } : {}),
   }));
   const goals: HeroGoals = {
     kcal: finite(data?.calories.goal) && data.calories.goal > 0 ? Math.round(data.calories.goal) : HERO_DEFAULT_GOALS.kcal,
@@ -57,5 +59,5 @@ export function useHeroInput(now: Date): HeroInput {
   const { store } = useWorkout();
   const hide = useNumbersHidden();
   const minute = Math.floor(now.getTime() / 60000);
-  return useMemo(() => heroInput(state?.data ?? null, store, state?.units.energy ?? 'kcal', new Date(minute * 60000), hide), [state, store, minute, hide]);
+  return useMemo(() => heroInput(state?.data ?? null, store, state?.units.energy ?? 'kcal', new Date(minute * 60000), hide, state?.scores), [state, store, minute, hide]);
 }
