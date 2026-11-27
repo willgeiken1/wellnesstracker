@@ -70,3 +70,15 @@ test('a merge keeps the phone\'s photos and their files', () => {
 test('the restore leaves out of an account hand-off every photo address departure looks for', () => {
   expect([...PHOTO_ADDRESS_KEYS].sort()).toEqual([PROFILE_PHOTO_KEY, PROFILE_PHOTO_LEFTOVERS_KEY, PROGRESS_PHOTOS_KEY, PROGRESS_PHOTOS_PENDING_KEY].sort());
 });
+
+test('Replace from a backup made before any photo clears the photo lists and deletes their files', () => {
+  const r = phone();
+  mockStuck.add(progress('p2'));
+  restoreNativeLocal(r, { format: 'insight-phone-only', version: 1, rows: {}, local: {} }, new Set(), 'replace', photos);
+  expect(mockFiles.has(progress('p1'))).toBe(false);
+  expect(mockFiles.has(profile('a1'))).toBe(false);
+  expect(r.localGet('progressPhotos')).toBeNull();
+  expect(r.localGet('profilePhoto')).toBeNull();
+  // The one that won't delete keeps its address, so account deletion still finds it.
+  expect(r.localGet('progressPhotosPending')).toEqual([progress('p2')]);
+});

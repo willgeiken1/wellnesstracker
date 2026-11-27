@@ -297,6 +297,8 @@ export interface RestorePhotos<T> {
 /** Photo addresses (as src/core/owner-files.ts keeps them). Their files belong to one person on this phone, so a
  * signed-out restore never hands them on to an account. */
 export const PHOTO_ADDRESS_KEYS = ["profilePhoto", "profilePhotoLeftovers", "progressPhotos", "progressPhotosPending"];
+/** What a Replace restore clears when the file doesn't hold it: the histories kept in local storage and the photo lists. */
+const REPLACE_CLEARS = ["foodWater", "routines", "progressNeck", "progressBodyFat", ...PHOTO_ADDRESS_KEYS];
 /** Details a restore never takes from the file: the importer's own bookkeeping, AI photos and barcode caches. */
 const skipped = (key: string) => key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:");
 
@@ -365,6 +367,10 @@ export function restoreNativeLocal<T>(
 ) {
   repo.atomic(() => {
     const before = photos.names(repo);
+    // Replace puts the phone back as the file has it, so a history or photo list the file never had goes too, and the
+    // photo files it named go with it below.
+    if (mode === "replace")
+      for (const key of REPLACE_CLEARS) if (!Object.hasOwn(backup.local, key) && repo.localGet(key) != null) repo.localSave(key, null);
     for (const [key, value] of Object.entries(backup.local)) {
       if (skipped(key)) continue;
       const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));

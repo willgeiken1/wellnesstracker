@@ -213,3 +213,22 @@ test('a drink removed after a signed-out restore stays removed when the first ac
     expect(account.localGet('progressNeck')).toBeUndefined();
   } finally { sqlite.close(); }
 });
+
+test('Replace from a backup made before any water, routine or measurement clears those histories, and a merge keeps them', async () => {
+  const { sqlite, repo } = await setup();
+  try {
+    const history = { foodWater: { v: 1, unit: 'oz', goal: 2, containers: [], log: { '2026-01-10': [{ id: 'w1', oz: 8 }] } },
+      routines: { v: 1, routines: [{ id: 'r1', name: 'Morning' }], hidden: [], items: [], log: {} },
+      progressNeck: [{ day: '2026-01-10', cm: 38 }], progressBodyFat: [{ day: '2026-01-10', pct: 20 }] };
+    const older = { format: 'insight-phone-only' as const, version: 1 as const, rows: {}, local: { timer: { seconds: 90 } } };
+    for (const [key, value] of Object.entries(history)) repo.localSave(key, value);
+    repo.localSave('settings-fixture', { on: true });
+    restoreNativeLocal(repo, older, new Set(), 'merge', noPhotos);
+    for (const [key, value] of Object.entries(history)) expect(repo.localGet(key)).toEqual(value);
+    restoreNativeLocal(repo, older, new Set(), 'replace', noPhotos);
+    for (const key of Object.keys(history)) expect(repo.localGet(key)).toBeNull();
+    expect(repo.localGet('timer')).toEqual({ seconds: 90 });
+    // A detail that isn't a history stays as the phone has it.
+    expect(repo.localGet('settings-fixture')).toEqual({ on: true });
+  } finally { sqlite.close(); }
+});
