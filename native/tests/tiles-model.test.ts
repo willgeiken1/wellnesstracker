@@ -10,7 +10,7 @@ describe('tile catalogue', () => {
     expect(tilePageIds().sort()).toEqual(['food', 'home', 'progress', 'routines', 'training']);
   });
   it('starts each page on the design default layout, in reading order', () => {
-    expect(ids('home')).toEqual(['next:M', 'protein:S', 'water:S', 'steps:S', 'weight:S']);
+    expect(ids('home')).toEqual(['next:M', 'workout:M', 'protein:S', 'water:S', 'steps:S', 'weight:S']);
     expect(defaultLayout(tilePage('home'))[0].style).toBe('B');
     expect(ids('training')).toEqual(['session:L', 'goal:S', 'streak:S', 'week:L', 'next:M', 'e1rm:S', 'records:S', 'muscles:L', 'recent:M']);
     expect(ids('food')).toEqual(['cal:M', 'macros:M', 'meals:L', 'water:S', 'protein:S', 'fits:M', 'week:M', 'window:S', 'streak:S', 'quick:M']);

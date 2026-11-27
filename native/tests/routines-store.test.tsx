@@ -87,7 +87,7 @@ describe('routines store', () => {
   it('adds a routine with its items, and reorders the list', () => {
     const store = createRoutinesStore(memory(() => demoState()).io);
     const r = store.addRoutine({ name: 'Afternoon', from: 15, to: 17, days: [5, 1, 2], color: 'food', items: ['fish'] });
-    expect(rById(store.read(), r.id)).toMatchObject({ name: 'Afternoon', days: [1, 2, 5], remind: true });
+    expect(rById(store.read(), r.id)).toMatchObject({ name: 'Afternoon', days: [1, 2, 5], remind: false });
     expect(store.read().items.find(i => i.id === 'fish')!.routines).toEqual(['midday', r.id]);
     store.reorder([r.id, 'night']);
     expect(store.read().routines.map(x => x.id)).toEqual([r.id, 'night', 'morning', 'midday']);

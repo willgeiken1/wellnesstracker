@@ -64,7 +64,7 @@ test('connecting puts the Steps and Sleep tiles on Home by id only; a quiet visi
   // Home's starting tiles, then the health tiles it did not have, each saved as id, size, style and no options: no readings.
   expect([...first.local.keys()]).toEqual(['tiles-home']);
   const tiles = (first.local.get('tiles-home') as { tiles: [string, string, string, object][] }).tiles;
-  expect(tiles.map(([id]) => id).sort()).toEqual(['next', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful'].sort());
+  expect(tiles.map(([id]) => id).sort()).toEqual(['next', 'workout', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful'].sort());
   for (const [id, size, style, options] of tiles) {
     expect(typeof id === 'string' && typeof size === 'string' && typeof style === 'string').toBe(true);
     expect(options).toEqual({});

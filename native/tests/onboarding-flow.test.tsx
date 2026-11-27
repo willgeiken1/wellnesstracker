@@ -205,7 +205,7 @@ describe('what setup saves', () => {
     const s = mockStore.read();
     // The new account's empty Morning and Night take the suggested windows; Midday is left as it was.
     expect(s.routines.map(r => [r.id, r.name, r.from, r.to, r.color, r.days, r.remind])).toEqual([
-      ['morning', 'Morning', 7.5, 8.5, 'warning', [0, 1, 2, 3, 4, 5, 6], false], ['midday', 'Midday', 12, 14, 'recovery', [0, 1, 2, 3, 4, 5, 6], true],
+      ['morning', 'Morning', 7.5, 8.5, 'warning', [0, 1, 2, 3, 4, 5, 6], false], ['midday', 'Midday', 12, 14, 'recovery', [0, 1, 2, 3, 4, 5, 6], false],
       ['night', 'Night', 21.5, 22.5, 'sleep', [0, 1, 2, 3, 4, 5, 6], false]]);
     expect(s.items.map(i => i.name)).toEqual(['Glass of water', 'Ten minutes outside', 'Read, 15 minutes']);
     expect(s.items.every(i => i.kind === 'check' && i.type === 'Other' && i.amt === null)).toBe(true);
@@ -279,7 +279,7 @@ describe('the flow', () => {
     title('obbRoutineTitle');
     await act(async () => { fireEvent.press(screen.getByTestId('onboarding-continue')); await new Promise(r => setTimeout(r, 30)); });
     title('obbFinaleTitle');
-    expect(repo.localGet<RoutinesState>(ROUTINES_KEY)!.routines.map(r => [r.name, r.from, r.remind])).toEqual([['Morning', 6.5, false], ['Midday', 12, true], ['Night', 20.5, false]]);
+    expect(repo.localGet<RoutinesState>(ROUTINES_KEY)!.routines.map(r => [r.name, r.from, r.remind])).toEqual([['Morning', 6.5, false], ['Midday', 12, false], ['Night', 20.5, false]]);
     expect(mockStore.read().items.map(i => i.name)).toEqual(['Glass of water', 'Screens off']);
     expect(screen.getByRole('progressbar', { name: 'Setup progress, 100 percent' })).toBeTruthy();
     await press('onboarding-finish');

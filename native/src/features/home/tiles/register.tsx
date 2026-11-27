@@ -8,6 +8,7 @@ import { TileIcon } from '@/features/tiles/tile-icon';
 import { showToast } from '@/features/shell/toast';
 import { implementTile, tilePage } from '@/features/tiles/registry';
 import type { TileOptionValues, TileRenderProps } from '@/features/tiles/types';
+import { SessionTile } from '@/features/workout/tiles/today';
 import { EmptyTile } from './empty';
 import { Markup } from './markup';
 import { homeTileState, tileView, useHomeTileState } from './state';
@@ -92,7 +93,11 @@ let done = false;
 export function registerHomeTiles() {
   if (done) return;
   done = true;
+  // The Workout tile reads the workout store itself, so it shows the live workout or the next one to start in every state.
+  implementTile('home', 'workout', { render: p => <SessionTile {...p} />,
+    open: () => go(homeTileState()?.data.next.activeWorkout ? '/workout' : '/workouts') });
   for (const def of tilePage('home').tiles) {
+    if (def.id === 'workout') continue;
     const o = OPEN[def.id];
     const styles = Object.fromEntries((def.versions ?? []).map(v => [v.key, { render }]));
     implementTile('home', def.id, { render, styles, ...(o ? { open: o.open, ...(o.label ? { label: o.label } : null) } : null),

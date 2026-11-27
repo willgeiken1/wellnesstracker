@@ -1,3 +1,4 @@
+import { backdropAt } from './scroll-spread';
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
@@ -34,18 +35,21 @@ export function backdropPaths(values: Triple, levels: number, pw: number, ph: nu
 
 export interface BackdropProps {
   values: Triple; levels: number; width: number; height: number; colors: Record<string, string>; sky: SkyTokens; dark: boolean; lines: boolean;
-  /** The page's scroll offset: the three line layers drift up at 4, 8.5 and 13 percent of it, so the backdrop stays nearly fixed. */
+  /** The page's scroll offset: the three line layers move up at 62, 70 and 78 percent of it (scroll-spread.ts), and fade out
+   * at their foot so no edge shows as they rise. */
   scrollY?: SharedValue<number>; reduceMotion?: boolean;
 }
 
 /** One depth of line work, drawn 30 points past every edge and drifting with the scroll; the page-wide fade stays put. */
 function BackdropLayer({ i, w, h, H, scrollY, still, children }: { i: number; w: number; h: number; H: number; scrollY?: SharedValue<number>; still: boolean; children: ReactNode }) {
-  const drift = useAnimatedStyle(() => ({ transform: [{ translateY: still || !scrollY ? 0 : -Math.max(0, scrollY.value) * (0.04 + 0.045 * i) }] }));
+  // Moves up at about 70 percent of the page, the nearer lines a little faster, so the map reads as a layer under the page
+  // rather than a still picture. Pulling past the top leaves it in place.
+  const drift = useAnimatedStyle(() => ({ transform: [{ translateY: scrollY ? backdropAt(i, scrollY.value, still) : 0 }] }));
   return <Animated.View style={[{ position: 'absolute', left: -P, top: -P, width: w, height: h }, drift]}>
     <Svg width={w} height={h}>
       <Defs>
         <LinearGradient id={`hbFade${i}`} gradientUnits="userSpaceOnUse" x1="0" y1={P} x2="0" y2={P + H}>
-          <Stop offset="0" stopColor="#FFFFFF" stopOpacity={1} /><Stop offset="0.6" stopColor="#FFFFFF" stopOpacity={0.55} /><Stop offset="1" stopColor="#FFFFFF" stopOpacity={0.3} />
+          <Stop offset="0" stopColor="#FFFFFF" stopOpacity={1} /><Stop offset="0.6" stopColor="#FFFFFF" stopOpacity={0.55} /><Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
         </LinearGradient>
         <Mask id={`hbMask${i}`} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}><Rect width={w} height={h} fill={`url(#hbFade${i})`} /></Mask>
       </Defs>

@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { signOutError } from './auth-errors';
 import { signOutUnsynced, t } from '@/i18n/en';
 import { Image, Linking, Platform, TextInput, View } from 'react-native';
@@ -31,6 +31,8 @@ import { backupWhen } from './data-actions';
 import { rateInsight } from './rate';
 import { switchLock } from '@/features/privacy-lock/turn-on';
 import { useLockAvailable } from '@/features/privacy-lock/cover';
+import { isReminderSwitch, plannedWorkoutDays, planReminders, type PlannedReminder } from '@/features/reminders/plan';
+import { notifier, syncReminders, type NotifyPermission } from '@/features/reminders/notifier';
 
 const KG = 2.20462;
 const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return `${h} h${m ? ` ${m} m` : ''}`; };
@@ -285,15 +287,44 @@ export function AccountPage() {
 }
 
 /* ---------- Reminders ---------- */
-const REM_OFF: SettingsPrefs['rem'] = { cap: false, workout: false, workoutTime: '5:30 PM', rest: false, weekly: false, food: false, breakfast: false, lunch: false, dinner: false, oura: false };
+const REM_OFF: SettingsPrefs['rem'] = { v: 2, cap: false, workout: false, workoutTime: '5:30 PM', rest: false, weekly: false, food: false, breakfast: false, lunch: false, dinner: false, oura: false };
 /** `limited`: the phone-only build, which cannot send notifications. Every reminder is shown as it will be, switched off
- * and greyed out, and the hero says they come later, so no switch claims to do something it cannot. */
+ * and greyed out, and the hero says they come later, so no switch claims to do something it cannot.
+ *
+ * Every reminder starts off. iOS is first asked for notifications when the person turns one on here: if they say no
+ * (or said no before), the switch goes back off and a note says where to allow them. Whenever iOS allows them, the
+ * time-based reminders that are on are put on the phone's schedule again after each change. */
 export function RemindersPage({ limited = false }: { limited?: boolean }) {
   const [p, set] = useSettingsPrefs();
+  const repository = useOptionalAuth()?.repository ?? null;
+  const [perm, setPerm] = useState<NotifyPermission | null>(null);
   const r = limited ? REM_OFF : p.rem, n = (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => r[key]).length;
   const times = ['6:00 AM', '7:00 AM', '12:00 PM', '5:30 PM', '7:00 PM'].map(v => ({ v, l: clock(v, p) }));
+  const days = plannedWorkoutDays(repository), plan = JSON.stringify(planReminders(p.rem, days));
+  // Reads what iOS allows (never asks), then keeps the schedule in step with the switches while it is allowed.
+  useEffect(() => {
+    if (limited) return;
+    let live = true;
+    void notifier().permission().then(s => { if (live) setPerm(s); });
+    return () => { live = false; };
+  }, [limited]);
+  useEffect(() => {
+    if (!limited && perm === 'granted') void syncReminders(JSON.parse(plan) as PlannedReminder[]);
+  }, [limited, perm, plan]);
+  const turn = (key: keyof SettingsPrefs['rem'], on: boolean) => {
+    set(`rem.${key}`, on);
+    if (!on || !isReminderSwitch(key)) return;
+    void (async () => {
+      const n = notifier();
+      let s = perm ?? await n.permission();
+      if (s === 'undetermined') s = await n.request();
+      setPerm(s);
+      // Without notifications in this build the choice is only kept; once iOS has said no, it would never arrive.
+      if (s === 'denied') { set(`rem.${key}`, false); showToast(st('settingsRemNeedsIos'), { color: 'warning' }); }
+    })();
+  };
   const tog = (title: string, key: keyof SettingsPrefs['rem'], sub?: string, value?: string) =>
-    <ListRow key={key} testID={`reminders-${key}`} title={title} sub={sub} value={value} toggle={!!r[key]} disabled={limited} onToggle={v => set(`rem.${key}`, v)} />;
+    <ListRow key={key} testID={`reminders-${key}`} title={title} sub={sub} value={value} toggle={!!r[key]} disabled={limited} onToggle={v => turn(key, v)} />;
   return <SetPage back={st('settings')} title={st('settingsRemindersTitle')} testID="settings-reminders">
     <Hero icon="bell" color="danger" title={st('settingsOnlyWhatHelps')} body={limited ? st('settingsRemHeroLater') : st(r.cap ? 'settingsRemHeroCap' : 'settingsRemHero', { n })} />
     <Gap />
@@ -301,7 +332,7 @@ export function RemindersPage({ limited = false }: { limited?: boolean }) {
     <H>{st('settingsTraining')}</H>
     <List>
       {tog(st('settingsWorkoutReminder'), 'workout', st('settingsWorkoutReminderSub'))}
-      {r.workout ? <PickRow key="time" title={st('settingsTime')} value={r.workoutTime} options={times} onPick={v => set('rem.workoutTime', v)} /> : null}
+      {r.workout ? <PickRow key="time" testID="reminders-workoutTime" title={st('settingsTime')} value={r.workoutTime} options={times} onPick={v => set('rem.workoutTime', v)} /> : null}
       {tog(st('settingsRestAlert'), 'rest', st('settingsRestAlertSub'))}
     </List>
     <H>{st('settingsWeeklyReport')}</H>
@@ -318,7 +349,9 @@ export function RemindersPage({ limited = false }: { limited?: boolean }) {
     {limited ? null : <>
       <Gap />
       <List footer={st('settingsIosNotifFoot')}>
-        <ListRow title={st('settingsIosNotifications')} chevron={false} right={<Ext />} onPress={() => { void Linking.openSettings().catch(() => {}); }} />
+        <ListRow testID="reminders-ios" title={st('settingsIosNotifications')} chevron={false} right={<Ext />}
+          value={perm === 'granted' ? st('settingsAllowed') : perm === 'denied' ? st('settingsNotAllowed') : undefined}
+          onPress={() => { void Linking.openSettings().catch(() => {}); }} />
       </List>
     </>}
   </SetPage>;

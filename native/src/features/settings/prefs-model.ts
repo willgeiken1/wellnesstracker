@@ -20,7 +20,11 @@ export const DEFAULT_PREFS = {
   look: { density: 'balanced' as Density, icon: 'litPeaks' as AppIconId },
   // Face ID lock starts off and is only turned on in Settings, Privacy (owner's decision).
   priv: { lock: false, after: '1', blur: true, hide: false, crash: true, analytics: false },
-  rem: { cap: true, workout: true, workoutTime: '5:30 PM', rest: true, weekly: true, food: false, breakfast: true, lunch: true, dinner: true, oura: true },
+  // Every reminder starts off and is only turned on in Settings, Reminders, which is also the first time iOS is asked
+  // for notifications (owner's decision). "At most 2 a day" is a limit, not a reminder, so it stays on. Breakfast, lunch
+  // and dinner only apply once Food reminders is on, so turning Food on still starts with all three meals. `v` marks a
+  // save made with these defaults (see readSettingsPrefs).
+  rem: { v: 2, cap: true, workout: false, workoutTime: '5:30 PM', rest: false, weekly: false, food: false, breakfast: true, lunch: true, dinner: true, oura: false },
   work: { rest: 120, auto: true, warm: true, warmN: 2, awake: true, haptics: true, bar: '45', barKg: '20',
     plates: { '55': false, '45': true, '35': true, '25': true, '10': true, '5': true, '2_5': true } as Record<string, boolean>,
     platesKg: { '25': true, '20': true, '15': true, '10': true, '5': true, '2_5': true, '1_25': true } as Record<string, boolean> },
@@ -29,6 +33,10 @@ export const DEFAULT_PREFS = {
   later: {} as Record<string, boolean>,
 };
 export type SettingsPrefs = typeof DEFAULT_PREFS;
+
+const REM_VERSION = 2;
+/** The reminders a new person started with before every reminder started off (2026-11-27). */
+const OLD_REM_DEFAULTS: Record<string, unknown> = { cap: true, workout: true, workoutTime: '5:30 PM', rest: true, weekly: true, food: false, breakfast: true, lunch: true, dinner: true, oura: true };
 
 const ENUMS: Record<string, readonly string[]> = {
   'units.weight': ['lb', 'kg'], 'units.height': ['ftin', 'cm'], 'units.energy': ['kcal', 'kJ'], 'units.water': ['floz', 'ml'],
@@ -53,6 +61,14 @@ export function readSettingsPrefs(saved: unknown): SettingsPrefs {
     }
   };
   merge(out as unknown as Record<string, unknown>, saved, '', false);
+  // A save from before reminders started off, whose reminders still read exactly as those old defaults, was never a
+  // choice about reminders (any change to another setting saved them along with it): it takes the new defaults. Any
+  // reminder that differs from the old defaults was set by the person, so every reminder in that save is kept.
+  const savedRem = isObj(saved) && isObj(saved.rem) ? saved.rem : null;
+  if (savedRem && savedRem.v !== REM_VERSION && Object.entries(OLD_REM_DEFAULTS).every(([key, value]) => savedRem[key] === undefined || savedRem[key] === value)) {
+    out.rem = { ...DEFAULT_PREFS.rem };
+  }
+  out.rem.v = REM_VERSION;
   // Plates are open sets: a saved plate the defaults do not list is still kept.
   for (const set of ['plates', 'platesKg'] as const) {
     const from = isObj(saved) && isObj(saved.work) ? saved.work[set] : undefined;

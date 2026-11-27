@@ -156,7 +156,8 @@ describe('Settings pages', () => {
   test('Reminders counts what is on in its intro', async () => {
     mockSection = 'reminders';
     await show(<Section />);
-    expect(screen.getByText(/4 are on, and you will get at most 2 a day\./)).toBeTruthy();
+    // Every reminder starts off; At most 2 a day is a limit and stays on.
+    expect(screen.getByText(/0 are on, and you will get at most 2 a day\./)).toBeTruthy();
   });
   test('Delete account offers Save a backup first whenever there is a log of your own to back up', async () => {
     mockSection = 'delete-account';

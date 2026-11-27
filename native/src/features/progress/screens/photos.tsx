@@ -32,7 +32,7 @@ export function PhotosScreen() {
   const d = useProgress(), k = useKit(), auth = useAuth(), u = d.unit, ph = d.photos;
   // The two photos in the comparison (oldest and newest to start); the next tap replaces `next`.
   const [cmp, setCmp] = useState<[number, number]>([0, Math.max(0, ph.length - 1)]), [next, setNext] = useState(0);
-  const [remind, setRemind] = useState(() => auth.repository ? readReminder(auth.repository) : true);
+  const [remind, setRemind] = useState(() => auth.repository ? readReminder(auth.repository) : false);
   const pair = [...cmp].sort((a, b) => a - b).map(i => ph[Math.min(i, ph.length - 1)]).filter(Boolean);
   const pick = (i: number) => {
     const at = cmp.indexOf(i);

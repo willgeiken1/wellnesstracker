@@ -45,7 +45,8 @@ export function removePhoto(repo: Repository, id: string) {
   repo.localSave(PHOTOS, all.filter(p => p.id !== id));
 }
 
-export function readReminder(repo: Repository): boolean { try { return repo.localGet<boolean>(REMIND) !== false; } catch { return true; } }
+/** The weekly photo reminder starts off, like every reminder; only a saved On (the person's own choice) turns it on. */
+export function readReminder(repo: Repository): boolean { try { return repo.localGet<boolean>(REMIND) === true; } catch { return false; } }
 export function saveReminder(repo: Repository, on: boolean) { repo.localSave(REMIND, on); }
 
 /** Whether new Apple Health weigh-ins fill in on their own when Body opens. On unless turned off in Log weight. */

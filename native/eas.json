@@ -21,6 +21,7 @@
       "distribution": "store",
       "environment": "production",
       "autoIncrement": true,
+      "channel": "production",
       "node": "24.21.0",
       "env": {
         "EXPO_NO_DOTENV": "1",

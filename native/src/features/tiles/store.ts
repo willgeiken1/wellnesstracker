@@ -2,7 +2,7 @@ import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { addEntry, cleanLayout, customizeEntry, defaultLayout, moveEntry, removeEntry, restoreEntry, sameOptions, setEntrySize } from './model';
 import { tilePage } from './registry';
-import type { LayoutEntry, TileOptionValues, TilePageId, TileSize } from './types';
+import type { LayoutEntry, TileOptionValues, TilePageConfig, TilePageId, TileSize } from './types';
 
 /**
  * Each page's tile layout (which tiles, order, size, style, options), saved on this phone with the owner's other
@@ -12,17 +12,37 @@ export const tileLayoutKey = (page: TilePageId) => `tiles-${page}`;
 const LAYOUT_VERSION = 1;
 export type TileStorage = Pick<Repository, 'owner' | 'localGet' | 'localSave'>;
 
+/** The newest arrival a page's saved layouts are checked against (0 for a page whose starting layout never grew). */
+const layoutRev = (cfg: TilePageConfig) => (cfg.arrivals ?? []).reduce((n, a) => Math.max(n, a.rev), 0);
+/**
+ * A layout saved before a tile joined the page's starting layout gets that tile, once. A layout saved since is the
+ * person's own choice: a tile missing from it was removed on purpose and stays in the tray.
+ */
+export function addArrivals(cfg: TilePageConfig, tiles: readonly LayoutEntry[], savedRev: number): LayoutEntry[] {
+  let out = tiles.slice();
+  for (const a of cfg.arrivals ?? []) {
+    if (a.rev <= savedRev || out.some(e => e.id === a.id)) continue;
+    const entry = addEntry(cfg, [], a.id, a.size, a.style)[0];
+    if (!entry) continue;
+    const at = a.after ? out.findIndex(e => e.id === a.after) : -1;
+    out = restoreEntry(out, entry, at + 1);
+  }
+  return out;
+}
 /** Reads a saved layout. Unknown tiles are dropped; a missing, reset or damaged save gives the page's starting layout. */
 export function loadTileLayout(storage: TileStorage | null | undefined, page: TilePageId): LayoutEntry[] {
   const cfg = tilePage(page);
   let saved: unknown;
   try { saved = storage?.localGet<unknown>(tileLayoutKey(page)); } catch { saved = undefined; }
-  const list = saved && typeof saved === 'object' ? (saved as { tiles?: unknown }).tiles : undefined;
-  return Array.isArray(list) ? cleanLayout(cfg, list) : defaultLayout(cfg);
+  const rec = saved && typeof saved === 'object' ? saved as { tiles?: unknown; rev?: unknown } : undefined;
+  if (!Array.isArray(rec?.tiles)) return defaultLayout(cfg);
+  const rev = typeof rec.rev === 'number' && Number.isFinite(rec.rev) ? rec.rev : 0;
+  return addArrivals(cfg, cleanLayout(cfg, rec.tiles), rev);
 }
 /** Saves a layout (null clears it, so the page starts from its defaults again). Throws if the local write fails. */
 export function saveTileLayout(storage: TileStorage | null | undefined, page: TilePageId, tiles: readonly LayoutEntry[] | null): void {
-  storage?.localSave(tileLayoutKey(page), tiles ? { v: LAYOUT_VERSION, tiles: tiles.map(e => [e.id, e.size, e.style, e.options]) } : null);
+  const rev = layoutRev(tilePage(page));
+  storage?.localSave(tileLayoutKey(page), tiles ? { v: LAYOUT_VERSION, ...(rev ? { rev } : null), tiles: tiles.map(e => [e.id, e.size, e.style, e.options]) } : null);
 }
 
 /* ---------- the shell's toast, with Undo ---------- */

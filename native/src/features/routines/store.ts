@@ -128,7 +128,7 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
     addRoutine(d) {
       const cur = read(), taken = (id: string) => cur.routines.some(x => x.id === id) || cur.hidden.some(x => x.id === id);
       const r: Routine = { id: freshId('r', clock.now(), taken), name: d.name.trim(), from: d.from, to: d.to, color: d.color,
-        days: d.days.length ? [...d.days].sort() : [...ALL_DAYS], remind: true, pauses: [] };
+        days: d.days.length ? [...d.days].sort() : [...ALL_DAYS], remind: false, pauses: [] };
       edit(s => { s.routines.push(r); s.items.forEach(i => { if (d.items.includes(i.id) && !i.routines.includes(r.id)) i.routines.push(r.id); }); });
       return r;
     },
