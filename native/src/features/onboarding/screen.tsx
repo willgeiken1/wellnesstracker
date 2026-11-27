@@ -37,7 +37,8 @@ export function Onboarding() {
   const known = !!repo && (!auth.session || !!auth.initialPullComplete);
   const skipped = known && repo ? readSkipped(repo) : null;
   const leave = !repo ? null
-    : !auth.session && !auth.phoneOnly ? (auth.demo ? '/sign-in' : '/auth')
+    // A guest (Skip for now, Start as a guest) sets up on this phone like a phone-only profile; the demo has no setup.
+    : !auth.session && !auth.phoneOnly && (auth.demo || !auth.guest) ? (auth.demo ? '/sign-in' : '/auth')
     : !known ? null
     : resume ? (skipped && (skipped.about || skipped.goals) ? null : '/')
     : isSetUp(repo) ? '/' : null;

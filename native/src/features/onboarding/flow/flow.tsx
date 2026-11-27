@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Button, KitText, useKit, useSelectionHaptic } from '@/components/kit';
 import { useAuth } from '@/auth/provider';
+import { isHealthSource } from '@/data/health-store';
 import type { Repository } from '@/data/repository';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
@@ -92,16 +93,16 @@ export function Flow({ state, setState, resume, onBlocked, onDone }: {
     router.replace(resume ? '/' : '/auth');
   };
 
-  // Fill from Apple Health: connecting reads body weight into the app; the newest reading fills the field.
+  // Fill from Apple Health: connecting reads body weight into the Health store; the newest Health reading fills the field.
   const fill = useRef<'idle' | 'asked' | 'busy'>('idle');
   useEffect(() => {
     if (fill.current === 'asked' && apple.busy) fill.current = 'busy';
     else if (fill.current === 'busy' && !apple.busy) {
       fill.current = 'idle';
       if (apple.access !== 'asked' || !repo) return;
-      const kg = lastWeight(repo.list('weigh_ins'));
+      const kg = lastWeight(repo.list('weigh_ins').filter(r => isHealthSource(r.data.source)));
       if (!kg) { setState(s => ({ ...s, noFill: true })); return; }
-      setState(s => ({ ...s, d: { ...s.d, filled: true, t: null, weight: (s.d.unit === 'kg' ? kg : kg * KG).toFixed(1) } }));
+      setState(s => ({ ...s, d: { ...s.d, filled: true, healthKg: kg, t: null, weight: (s.d.unit === 'kg' ? kg : kg * KG).toFixed(1) } }));
     }
   }, [apple.busy, apple.access, repo, setState]);
 
