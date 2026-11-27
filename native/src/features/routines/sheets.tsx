@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Platform, ScrollView, Share, TextInput, View, type GestureResponderEvent } from 'react-native';
 import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
-import { router } from 'expo-router';
 import { Chip, Icon, type IconName, KitText, List, ListRow, SegmentedControl, SheetHeader, Tappable, font, mix, useKit } from '@/components/kit';
 import { capitals } from '@/components/kit-style';
 import { tokens } from '@/design/tokens';
@@ -9,7 +8,7 @@ import { showToast } from '@/features/shell/toast';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import {
-  addDays, convert, CONVERT_UNITS, dateOf, fnum, h12, hax, IU_FOR, ITEM_TYPES, needsVitamin, pretty, rById, rItems, rng, ROUTINE_COLORS, shortDate, UNITS,
+  addDays, convert, CONVERT_UNITS, dateOf, MAX_ON_HAND, fnum, h12, hax, IU_FOR, ITEM_TYPES, needsVitamin, pretty, rById, rItems, rng, ROUTINE_COLORS, shortDate, UNITS,
   type ConvertUnit, type ItemKind, type ItemType, type RoutineColor, type Vitamin,
 } from './model';
 import { closeRoutines, routinesRoutes } from './nav';
@@ -23,6 +22,9 @@ const TYPE_NAME: Record<ItemType, string> = {
   Supplement: t('routinesTSupplement'), Peptide: t('routinesTPeptide'), Medication: t('routinesTMedication'), Enhancer: t('routinesTEnhancer'), Other: t('routinesTOther'),
 };
 
+/** Digits the On hand field takes: enough for MAX_ON_HAND. */
+const HAND_DIGITS = String(MAX_ON_HAND).length;
+
 /** The open Add item sheet takes a note from the converter it opened. */
 let noteSink: ((note: string) => void) | null = null;
 
@@ -32,8 +34,11 @@ function useWidth() {
   return [w, (e: { nativeEvent: { layout: { width: number } } }) => setW(e.nativeEvent.layout.width)] as const;
 }
 
-/** Touch handlers that report the x of a press and a drag, in the view's own points. */
-function pressX(onX: (x: number, start: boolean) => void, onEnd?: () => void) {
+/**
+ * Touch handlers that report the x of a press and a drag, in the view's own points. A hook, so the handlers it is given
+ * (which may read refs) are known to run on touches only, never while rendering.
+ */
+function usePressX(onX: (x: number, start: boolean) => void, onEnd?: () => void) {
   return {
     onStartShouldSetResponder: () => true, onMoveShouldSetResponder: () => true, onResponderTerminationRequest: () => false,
     onResponderGrant: (e: GestureResponderEvent) => onX(e.nativeEvent.locationX, true),
@@ -82,6 +87,7 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
     closeRoutines();
     showToast(t('routinesItemAdded'), { color: 'sleep', action: { label: t('routinesUndo'), onAction: undo } });
   };
+  const pressAdd = usePressX(x => setFromX(x));
   const arcH = (aw * 122) / 300;
   const lbl = { fill: c['text-muted'], fontFamily: tokens.font.bodyStrong } as const;
 
@@ -158,7 +164,7 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
           accessibilityValue={{ text: d.time != null ? h12(d.time) : t('routinesRoutineStart') }}
           accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
           onAccessibilityAction={e => { const v = d.time ?? 7; set({ time: e.nativeEvent.actionName === 'increment' ? Math.min(23, v + 0.25) : Math.max(5, v - 0.25) }); }}
-          {...pressX(x => setFromX(x))} style={{ height: arcH || 1 }}>
+          {...pressAdd} style={{ height: arcH || 1 }}>
           {aw > 0 ? <Svg width={aw} height={arcH} viewBox="0 0 300 122" pointerEvents="none">
             <Path d="M20 100 A130 80 0 0 1 280 100" fill="none" stroke={c['hair-2']} strokeWidth={2} strokeDasharray="1 6" strokeLinecap="round" />
             {RL.map(r => { const on = d.routines.includes(r.id); return <Path key={r.id} d={aseg(r.from, Math.min(23, r.to))} fill="none" stroke={c[r.color]} strokeLinecap="round" strokeWidth={on ? 9 : 4} opacity={on ? 1 : 0.4} />; })}
@@ -198,7 +204,8 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
     </Blk>
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <MiniField label={t('routinesOnHand')} placeholder={t('routinesHiddenPh')} value={d.hand} numeric onChange={v => set({ hand: v.replace(/\D/g, '') })} />
+        <MiniField label={t('routinesOnHand')} placeholder={t('routinesHiddenPh')} value={d.hand} numeric maxLength={HAND_DIGITS}
+          onChange={v => { const n = v.replace(/\D/g, ''); set({ hand: n && Number(n) > MAX_ON_HAND ? String(MAX_ON_HAND) : n }); }} />
         {dose ? <MiniField label={t('routinesMixedOn')} placeholder={t('routinesNotMixed')} value={d.mixed} onChange={v => set({ mixed: v })} /> : null}
       </View>
       <Help>{dose ? t('routinesHelpDose') : t('routinesHelpCheck')}</Help>
@@ -212,11 +219,13 @@ export function AddItem({ store, type, routine }: { store: RoutinesStore; type?:
 }
 
 /** A small labelled field on the well (`.rt-mini`). */
-function MiniField({ label, placeholder, value, onChange, numeric }: { label: string; placeholder: string; value: string; onChange: (v: string) => void; numeric?: boolean }) {
+function MiniField({ label, placeholder, value, onChange, numeric, maxLength }: {
+  label: string; placeholder: string; value: string; onChange: (v: string) => void; numeric?: boolean; maxLength?: number;
+}) {
   const k = useKit(), rt = useRt();
   return <View style={{ flex: 1, backgroundColor: rt.well, borderRadius: 16, paddingVertical: 9, paddingHorizontal: 12, gap: 2, minHeight: 56, boxShadow: rt.edge }}>
     <KitText weight={600} size={11} color="text-muted">{label}</KitText>
-    <TextInput accessibilityLabel={label} value={value} onChangeText={onChange} placeholder={placeholder} autoComplete="off"
+    <TextInput accessibilityLabel={label} value={value} onChangeText={onChange} placeholder={placeholder} autoComplete="off" maxLength={maxLength}
       keyboardType={numeric ? 'number-pad' : 'default'} inputMode={numeric ? 'numeric' : 'text'}
       placeholderTextColor={k.c.ghost ?? k.c['text-muted']} selectionColor={k.c.accent} cursorColor={k.c.accent}
       style={[font(600, 15), { color: k.c.text, padding: 0, fontVariant: ['tabular-nums'] }]} />
@@ -411,6 +420,7 @@ export function NewRoutine({ store }: { store: RoutinesStore }) {
     closeRoutines();
     showToast(fill(t('routinesSaved'), { name: nm }), { color: 'sleep' });
   };
+  const pressNew = usePressX(onX, () => { drag.current = null; });
   const h = (aw * 132) / 260;
   return <RtSheet testID="routines-new" header={<SheetTitle title={t('routinesNewRoutine')} onClose={closeRoutines} closeLabel={t('routinesCancel')} />}>
     <Blk>
@@ -425,7 +435,7 @@ export function NewRoutine({ store }: { store: RoutinesStore }) {
         <View onLayout={onAw} accessible accessibilityRole="adjustable" accessibilityLabel={t('routinesWindowArc')} accessibilityValue={{ text: rng(from, to) }}
           accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
           onAccessibilityAction={e => { const d = e.nativeEvent.actionName === 'increment' ? 0.5 : -0.5; setTo(x => Math.max(from + 0.5, Math.min(23, x + d))); }}
-          {...pressX(onX, () => { drag.current = null; })} style={{ height: h || 1 }}>
+          {...pressNew} style={{ height: h || 1 }}>
           {aw > 0 ? <Svg width={aw} height={h} viewBox="0 0 260 132" pointerEvents="none">
             <Path d="M16 112 A114 84 0 0 1 244 112" fill="none" stroke={c['hair-2']} strokeWidth={2} strokeDasharray="1 6" strokeLinecap="round" />
             {s.routines.map(r => <Path key={r.id} d={nseg(r.from, Math.min(23, r.to))} fill="none" stroke={c[r.color]} strokeWidth={6} opacity={0.3} strokeLinecap="round" />)}
