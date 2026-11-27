@@ -13,6 +13,7 @@ import { heroInput, lastWeek } from '../src/features/home/hero/data';
 import { heroView } from '../src/features/home/hero/model';
 import { addDrink, litresOn, readWater } from '../src/features/food/water';
 import { defaultMeals } from '../src/features/food/model';
+import { createLocalRoutinesStore } from '../src/features/routines/store';
 jest.mock('expo-sqlite', () => require('./server/expo-sqlite-stub'));
 
 const AFTERNOON = new Date(2026, 10, 22, 16, 12).getTime();
@@ -149,6 +150,28 @@ describe('Explore with sample data: the example week', () => {
       expect(Object.values(log).flat().map(d => d.id)).toEqual([drink.id]);
       expect(log[today].map(d => d.oz)).toEqual([glass.oz]);
       expect(demo.localGet('foodWater')).toBeUndefined();
+    } finally { sqlite.close(); }
+  }, 60000);
+
+  test('routines and items made in Look around first carry over with their check-offs, and the sample ones stay behind', async () => {
+    const { demo, account, sqlite } = await demoRepo();
+    try {
+      seedDemo(demo, AFTERNOON);
+      const store = createLocalRoutinesStore(demo);
+      const { item } = store.addItem({ name: 'Zinc', type: 'Supplement', kind: 'dose', amt: 15, unit: 'mg', routines: ['morning'], time: 8, hand: '', mixed: '', note: null });
+      const routine = store.addRoutine({ name: 'Evening walk', from: 18, to: 19, days: [], color: 'training', items: [item.id, 'vd3'] });
+      store.toggleDone(item.id);
+      store.toggleDone('k2');
+      const day = Object.keys(store.read().log).find(d => store.read().log[d][item.id] === 'd')!;
+      promoteDemo(demo, account);
+      const after = createLocalRoutinesStore(account).read();
+      expect(after.items.map(i => i.id)).toEqual([item.id]);
+      expect(after.items[0].routines).toEqual(['morning', routine.id]);
+      expect(after.routines.map(r => r.id)).toEqual(['morning', 'midday', 'night', routine.id]);
+      expect(after.hidden).toEqual([]);
+      expect(Object.values(after.log).flatMap(m => Object.keys(m))).toEqual([item.id]);
+      expect(after.log[day][item.id]).toBe('d');
+      expect(demo.localGet('routines')).toBeUndefined();
     } finally { sqlite.close(); }
   }, 60000);
 
