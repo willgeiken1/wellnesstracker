@@ -1066,7 +1066,7 @@ export const en = {
   trainingSetTitle: '{name}, set {n}', trainingWarmTitle: '{name}, warm-up set',
   trainingExHistory: 'Exercise history', trainingRemoveNote: 'Remove note', trainingRestFor: 'Rest for this exercise', trainingReplace: 'Replace exercise', trainingRemoveExercise: 'Remove exercise', trainingSupersetLink: 'Superset with another exercise', trainingSupersetUnlink: 'Unlink superset', trainingSupersetNames: 'Superset with {names}', trainingAnd: 'and', trainingSupersetPick: 'Alternate sets with the exercise you pick. Rest comes after each round.',
   trainingNewPr: 'New PR · {name} {set}', trainingSaveError: 'That didn’t save. Try again.', trainingSetInvalid: 'Add a weight and reps first.',
-  trainingFocusMode: 'Focus mode', trainingCloseFocus: 'Close focus mode', trainingFocusWarm: 'Warm-up set · {n} working sets to follow', trainingFocusSet: 'Set {n} of {of} · {k} of {total} overall',
+  trainingFocusMode: 'Focus mode', trainingFocusSide: 'Side', trainingFocusRightNext: 'Right side next', trainingCloseFocus: 'Close focus mode', trainingFocusWarm: 'Warm-up set · {n} working sets to follow', trainingFocusSet: 'Set {n} of {of} · {k} of {total} overall',
   trainingFocusSetFail: 'Set {n} of {of} · to failure · {k} of {total} overall', trainingLastTimeRpe: 'Last time {set} · RPE {rpe}', trainingNotBefore: 'Not done before',
   trainingLessWeight: 'Less weight', trainingMoreWeight: 'More weight', trainingFewerReps: 'Fewer reps', trainingMoreReps: 'More reps',
   trainingLogSet: 'Log set', trainingLogWarm: 'Log warm-up', trainingAllChecked: 'Every set is checked off', trainingAllCheckedSub: 'Finish to see your summary.',

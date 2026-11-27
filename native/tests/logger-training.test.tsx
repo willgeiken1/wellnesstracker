@@ -167,6 +167,25 @@ describe('logger screen', () => {
     expect(set.right_reps).toBe(8);
     expect(Number(set.right_weight_kg)).toBeLessThan(Number(set.left_weight_kg));
   });
+  test('focus mode logs a one-side exercise a side at a time, each with its own numbers', async () => {
+    const { store, squat } = sample();
+    store.setUnilateral(squat.id, true);
+    await render(<TrainingLogger />, { wrapper });
+    await act(async () => {});
+    await fireEvent.press(screen.getByRole('button', { name: 'Focus mode: large text for the current set' }));
+    expect(screen.getByRole('tab', { name: 'Left', selected: true })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'More reps' }));
+    expect(screen.queryByRole('button', { name: 'Log set' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Right side next' }));
+    expect(screen.getByRole('tab', { name: 'Right', selected: true })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Fewer reps' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Fewer reps' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Log set' }));
+    const set = store.sets(squat.id)[0].data;
+    expect(set.left_reps).toBe(6);
+    expect(set.right_reps).toBe(4);
+    expect(screen.getByRole('tab', { name: 'Left', selected: true })).toBeTruthy();
+  });
   test('an exercise can be set to log each side on its own before any set is saved, and back', async () => {
     const { store, squat } = sample();
     const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions');
