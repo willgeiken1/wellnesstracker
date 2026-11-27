@@ -7,6 +7,7 @@ import Section from '../src/app/settings/[section]';
 import { readProfile, saveProfileUnit } from '../src/features/onboarding/model';
 import { WorkoutStore } from '../src/data/workout/store';
 import { loadSettingsPrefs } from '../src/features/settings/prefs';
+import { readWater, setWaterUnit } from '../src/features/food/water';
 
 /* Settings, Units: the weight unit Progress, Body and Training read from the profile follows the Units choice. */
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '1.0.0', extra: { phoneOnly: false } } } }));
@@ -44,4 +45,17 @@ test('without a profile row the unit change writes no profile', () => {
   const repo = memoryRepository();
   saveProfileUnit(repo, 'kg');
   expect(repo.list('profile')).toHaveLength(0);
+});
+
+test('choosing mL in Units is the unit water is logged in, and the water sheet\'s choice shows in Units', async () => {
+  const repo = memoryRepository();
+  await render(<AuthContext.Provider value={auth(repo)}><ThemeProvider><Section /></ThemeProvider></AuthContext.Provider>);
+  expect(readWater(repo).unit).toBe('oz');
+  await fireEvent.press(screen.getByText('mL'));
+  expect(readWater(repo).unit).toBe('ml');
+  expect(loadSettingsPrefs(repo).units.water).toBe('ml');
+  setWaterUnit(repo, 'oz');
+  expect(loadSettingsPrefs(repo).units.water).toBe('floz');
+  await fireEvent.press(screen.getByText('mL'));
+  expect(readWater(repo).unit).toBe('ml');
 });

@@ -1,5 +1,6 @@
 import type { Repository } from '../../data/repository';
 import { shiftDay } from './model';
+import { loadSettingsPrefs, SETTINGS_PREFS_KEY, withPref } from '../settings/prefs-model';
 
 /**
  * Water on the phone: the person's containers (one tap each), their unit, their goal and the drinks of each day.
@@ -79,7 +80,14 @@ export function setContainers(repo: Repository, containers: Container[], unit?: 
   const s = readWater(repo);
   write(repo, { ...s, containers: fixQuick(containers), unit: unit ?? s.unit });
 }
-export function setWaterUnit(repo: Repository, unit: WaterUnit) { const s = readWater(repo); if (s.unit !== unit) write(repo, { ...s, unit }); }
+/** One water unit for the app: the water logger's and Settings, Units' are kept the same, whichever changes it. */
+export function setWaterUnit(repo: Repository, unit: WaterUnit) {
+  const s = readWater(repo), pref = unit === 'ml' ? 'ml' : 'floz', prefs = loadSettingsPrefs(repo);
+  repo.atomic(() => {
+    if (s.unit !== unit) write(repo, { ...s, unit });
+    if (prefs.units.water !== pref) repo.localSave(SETTINGS_PREFS_KEY, withPref(prefs, 'units.water', pref));
+  });
+}
 export function setWaterGoal(repo: Repository, litres: number) { if (litres > 0.5 && litres < 8) write(repo, { ...readWater(repo), goal: litres }); }
 
 /* Amounts as the person reads them: 57 oz or 1,680 mL. Totals round to whole ounces or 10 mL; sizes keep one decimal (16.9 oz). */

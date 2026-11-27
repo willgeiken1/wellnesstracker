@@ -1,6 +1,7 @@
 import type { Repository } from '@/data/repository';
 import { deleteProgressPhoto, PROGRESS_PHOTOS_FOLDER, PROGRESS_PHOTOS_PENDING_KEY } from '@/core/owner-files';
 import type { Row } from '@/data/rows';
+import { HEALTH_WEIGHT_KEY as HEALTH_WEIGHT } from '@/features/health/weights';
 import { finite, MEASURE_KEYS, type MeasureKey, type Measured, type Pose, type ProgressPhoto } from './model';
 
 /**
@@ -8,7 +9,7 @@ import { finite, MEASURE_KEYS, type MeasureKey, type Measured, type Pose, type P
  * neck measurement (the synced measurements table has no neck column) and body fat typed in by hand. All in the
  * repository's local, per-person storage, which is never part of the sync queue.
  */
-const PHOTOS = 'progressPhotos', NECK = 'progressNeck', FAT = 'progressBodyFat', REMIND = 'progressPhotoReminder', HEALTH_WEIGHT = 'progressWeightFromHealth';
+const PHOTOS = 'progressPhotos', NECK = 'progressNeck', FAT = 'progressBodyFat', REMIND = 'progressPhotoReminder';
 
 export interface StoredPhoto { id: string; day: string; kg: number | null; pose: Pose; uri: string }
 function list<T>(repo: Repository, key: string): T[] { try { const v = repo.localGet<T[]>(key); return Array.isArray(v) ? v : []; } catch { return []; } }

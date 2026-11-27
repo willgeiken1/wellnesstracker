@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ProgressBar, SegmentedControl, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
 import { useAuth } from '@/auth/provider';
-import { FLOZ } from '@/features/food/water';
+import { FLOZ, readWater, setWaterUnit } from '@/features/food/water';
 import { lastWeight } from '@/features/body/model';
 import { useWorkoutStore } from '@/features/workout/use-workout';
 import { saveWorkoutRest, workoutRest } from './workout-data';
@@ -402,16 +402,26 @@ export function UnitsPage() {
   // Progress, Body and Training read the weight unit from the profile, so it changes with this choice.
   const setWeight = (v: 'lb' | 'kg') => { set('units.weight', v); if (repo) { try { saveProfileUnit(repo, v); } catch { /* the setting still changes */ } } };
   const u = p.units;
+  // The water logger keeps its own unit, so this choice changes both, and shows the one water is logged in.
+  const [rev, redraw] = useState(0);
+  let water = u.water;
+  // rev is read so the logger's unit is read again after each change (the compiler keeps only what is read).
+  try { if (repo && rev >= 0) water = readWater(repo).unit === 'ml' ? 'ml' : 'floz'; } catch { /* the saved choice */ }
+  const setWater = (v: 'floz' | 'ml') => {
+    if (!repo) { set('units.water', v); return; }
+    try { setWaterUnit(repo, v === 'ml' ? 'ml' : 'oz'); } catch { set('units.water', v); }
+    redraw(n => n + 1);
+  };
   const weeks = [{ v: 'mon' as const, l: 'Monday' }, { v: 'sun' as const, l: 'Sunday' }, { v: 'sat' as const, l: 'Saturday' }];
   const order = { mon: ['Monday', 'Sunday'], sun: ['Sunday', 'Saturday'], sat: ['Saturday', 'Friday'] }[u.week];
-  const sample = [wt(182.1, p), u.height === 'cm' ? '180 cm' : '5 ft 11 in', u.energy === 'kJ' ? '5,190 kJ' : '1,240 kcal', u.water === 'ml' ? '1,680 mL' : '57 oz',
+  const sample = [wt(182.1, p), u.height === 'cm' ? '180 cm' : '5 ft 11 in', u.energy === 'kJ' ? '5,190 kJ' : '1,240 kcal', water === 'ml' ? '1,680 mL' : '57 oz',
     u.distance === 'km' ? '5.8 km' : '3.6 mi', clock(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), p)];
   return <SetPage back={st('settings')} title={st('settingsUnitsTitle')} testID="settings-units">
     <List>
       <SegRow title={st('settingsWeight')} value={u.weight} onChange={setWeight} options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
       <SegRow title={st('settingsHeight')} value={u.height} onChange={v => set('units.height', v)} options={[{ value: 'ftin', label: 'ft, in' }, { value: 'cm', label: 'cm' }]} />
       <SegRow title={st('settingsEnergy')} value={u.energy} onChange={v => set('units.energy', v)} options={[{ value: 'kcal', label: 'kcal' }, { value: 'kJ', label: 'kJ' }]} />
-      <SegRow title={st('settingsWater')} value={u.water} onChange={v => set('units.water', v)} options={[{ value: 'floz', label: 'fl oz' }, { value: 'ml', label: 'mL' }]} />
+      <SegRow title={st('settingsWater')} value={water} onChange={setWater} options={[{ value: 'floz', label: 'fl oz' }, { value: 'ml', label: 'mL' }]} />
       <SegRow title={st('settingsDistance')} value={u.distance} onChange={v => set('units.distance', v)} options={[{ value: 'mi', label: 'mi' }, { value: 'km', label: 'km' }]} />
       <SegRow title={st('settingsTime')} value={u.clock} onChange={v => set('units.clock', v)} options={[{ value: '12', label: '12-hour' }, { value: '24', label: '24-hour' }]} />
       <PickRow title={st('settingsWeekStarts')} value={u.week} options={weeks} onPick={v => set('units.week', v)} />
