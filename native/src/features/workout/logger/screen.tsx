@@ -107,7 +107,9 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
     if (!s.done) return;
     const changed = SET_FIELDS.filter(f => edits[key(e, s, f)] != null);
     setEdits(m => { const n = { ...m }; for (const f of SET_FIELDS) delete n[key(e, s, f)]; return n; });
-    const patch = Object.fromEntries(changed.filter(f => edits[key(e, s, f)] !== (s.draft[f] ?? '')).map(f => [f, edits[key(e, s, f)]]));
+    // The card hands back the set as shown, edits included, so compare with what is saved for it.
+    const saved = view.exercises.find(x => x.entry.id === e.entry.id)?.sets[s.index]?.draft ?? {};
+    const patch = Object.fromEntries(changed.filter(f => edits[key(e, s, f)] !== ((saved as Partial<Record<SetField, string>>)[f] ?? '')).map(f => [f, edits[key(e, s, f)]]));
     if (!Object.keys(patch).length) return;
     run(() => store.editDraft(e.entry.id, s.index, patch));
   };

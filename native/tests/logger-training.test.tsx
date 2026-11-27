@@ -158,6 +158,18 @@ describe('logger screen', () => {
     expect(set.right_reps).toBe(8);
     expect(Number(set.right_weight_kg)).toBeLessThan(Number(set.left_weight_kg));
   });
+  test('a change to a checked-off set is saved when the field is left', async () => {
+    const { store, squat } = sample();
+    store.editDraft(squat.id, 0, { weight: '200', reps: '5' }); store.toggleDone(squat.id, 0);
+    await render(<TrainingLogger />, { wrapper });
+    await act(async () => {});
+    const reps = screen.getByLabelText('Squat, set 1, reps');
+    await fireEvent.changeText(reps, '7');
+    await fireEvent(reps, 'blur');
+    await act(async () => {});
+    expect(store.sets(squat.id)[0].data.reps).toBe(7);
+    expect(screen.getByLabelText('Squat, set 1, reps').props.value).toBe('7');
+  });
   test('shows the top bar, jump strip, progress and the open exercise with its set cards', async () => {
     sample();
     await render(<TrainingLogger />, { wrapper });
