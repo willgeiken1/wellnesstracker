@@ -16,6 +16,7 @@ import { MealSeg, SectionLabel } from './ui';
 import { useFoodRevision } from './use-food-revision';
 import { useFoodWeightUnit } from './weight';
 import { enAmt, enLabel, enNum, useEnergyUnit } from './energy';
+const proteinNum = (g: number | null) => g == null ? '–' : num(g);
 
 type Tab = 'recent' | 'saved' | 'mine' | 'results';
 const savedKey = (c: Combo) => `meal:${c.name}`;
@@ -58,7 +59,7 @@ export function LogSheet({ repo, meal: asked }: { repo: Repository; meal?: strin
   else if (tab === 'saved') body = <><SectionLabel title={t('foodSavedMeals')} /><List>
     {saved.slice(0, 5).map((c, i) => {
       const kcal = comboKcal(c), on = inCart(savedKey(c)), foods = plural(c.foods.length, t('foodFood'), t('foodFoods'));
-      return <FoodRow key={c.name} first={i === 0} title={c.name} sub={`${foods} · ${num(comboProtein(c))} g ${t('foodProteinLower')}`} kcal={kcal} on={on}
+      return <FoodRow key={c.name} first={i === 0} title={c.name} sub={`${foods} · ${proteinNum(comboProtein(c))} g ${t('foodProteinLower')}`} kcal={kcal} on={on}
         openLabel={`${c.name}, ${foods}, ${enAmt(kcal, u)}`} onOpen={() => foodRoutes.saved(meal, c.name)} onAdd={() => toggleSaved(c)} />;
     })}
     <LinkRow first={!saved.length} icon="bookmark" title={fill(t('foodAllSaved'), { n: saved.length })} onPress={() => foodRoutes.saved(meal)} />

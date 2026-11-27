@@ -23,6 +23,8 @@ const tx = (key: Parameters<typeof t>[0], v: Record<string, string | number> = {
 /* Energy is counted in kcal and shown in the unit chosen in Settings. */
 const EN = (d: Data, kcal: number | null) => enNum(kcal, d.eu);
 const EL = (d: Data) => enLabel(d.eu);
+/** "24 g protein", or "– g protein" when no food gives it. */
+const gramsOrDash = (g: number | null) => g == null ? tx('foodGProtein', { g: '–' }) : tx('foodGProtein', { g: Math.round(g) });
 const txe = (d: Data, key: Parameters<typeof t>[0], v: Record<string, string | number> = {}) => fill(enText(t(key), d.eu), v);
 const WD1 = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const DAYN = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -531,7 +533,7 @@ const Quick: TileBody = ({ p, repo, d }) => {
     return <View style={col}><View style={{ marginTop: 'auto' }}>{list.map((c, i) => <View key={c.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: rh, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
       <Tappable dim="row" accessibilityRole="button" accessibilityLabel={`${c.name}, ${plural(c.foods.length, t('foodFood'), t('foodFoods'))}, ${EN(d, comboKcal(c))} ${EL(d)}`} onPress={() => foodRoutes.saved(d.next)} style={{ flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center' }}>
         <Title size={p.size === 'S' ? 13 : 14}>{c.name}</Title>
-        <Sub size={11.5}>{p.size === 'S' ? `${EN(d, comboKcal(c))} ${EL(d)}` : `${plural(c.foods.length, t('foodFood'), t('foodFoods'))} · ${EN(d, comboKcal(c))} ${EL(d)} · ${tx('foodGProtein', { g: Math.round(comboProtein(c)) })}`}</Sub>
+        <Sub size={11.5}>{p.size === 'S' ? `${EN(d, comboKcal(c))} ${EL(d)}` : `${plural(c.foods.length, t('foodFood'), t('foodFoods'))} · ${EN(d, comboKcal(c))} ${EL(d)} · ${gramsOrDash(comboProtein(c))}`}</Sub>
       </Tappable>
       <Plus label={tx('foodAddTo', { food: c.name, meal: mn })} onPress={() => addSaved(repo, d.today, d.next, c)} />
     </View>)}</View></View>;
@@ -613,23 +615,25 @@ const Fits: TileBody = ({ p, repo, d }) => {
   // With the day's energy unknown, what fits can't be worked out, so say so rather than count it as nothing eaten.
   if (left == null) return <View style={[col, { justifyContent: 'center' }]}>
     <Title>{t('foodFitsUnknownTitle')}</Title><Sub lines={2} style={{ marginTop: 4 }}>{txe(d, 'foodEnergyUnknownFits')}</Sub></View>;
-  const list = combos(repo).map(c => ({ c, kcal: comboKcal(c), p: comboProtein(c) })).filter(x => x.kcal <= left)
-    .sort(p.options.by === 'p' ? (a, b) => b.p - a.p : (a, b) => b.kcal - a.kcal);
+  // A saved meal whose energy is unknown can't be weighed against what's left, so it isn't offered here.
+  const list = combos(repo).map(c => ({ c, kcal: comboKcal(c), p: comboProtein(c) }))
+    .filter((x): x is { c: typeof x.c; kcal: number; p: number | null } => x.kcal != null && x.kcal <= left)
+    .sort(p.options.by === 'p' ? (a, b) => (b.p ?? -1) - (a.p ?? -1) : (a, b) => b.kcal - a.kcal);
   if (left <= 0 || !list.length) return <View style={[col, { justifyContent: 'center' }]}>
     <Title>{left <= 0 ? t('foodReachedGoal') : t('foodNoneFits')}</Title>
     <Sub lines={2} style={{ marginTop: 4 }}>{left <= 0 ? tx('foodGoesOver', { v: EN(d, v.goal), u: EL(d) }) : tx('foodTryQuick', { v: EN(d, left), u: EL(d) })}</Sub>
   </View>;
   const row = (x: typeof list[number], h: number, i: number) => <View key={x.c.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, height: h, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
-    <Tappable dim="row" accessibilityRole="button" onPress={() => foodRoutes.saved(d.next)} accessibilityLabel={txe(d, 'foodFitsA11y', { name: x.c.name, kcal: EN(d, x.kcal), p: Math.round(x.p), left: EN(d, left - x.kcal) })}
+    <Tappable dim="row" accessibilityRole="button" onPress={() => foodRoutes.saved(d.next)} accessibilityLabel={txe(d, 'foodFitsA11y', { name: x.c.name, kcal: EN(d, x.kcal), p: x.p == null ? '–' : Math.round(x.p), left: EN(d, left - x.kcal) })}
       style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' }}>
-      <View style={{ flex: 1, minWidth: 0 }}><Title size={14}>{x.c.name}</Title><Sub size={11.5}>{EN(d, x.kcal)} {EL(d)} · {tx('foodGProtein', { g: Math.round(x.p) })}</Sub></View>
+      <View style={{ flex: 1, minWidth: 0 }}><Title size={14}>{x.c.name}</Title><Sub size={11.5}>{EN(d, x.kcal)} {EL(d)} · {gramsOrDash(x.p)}</Sub></View>
       <View style={{ alignItems: 'flex-end' }}><Sub size={11}>{t('foodLeaves')}</Sub><KitText weight={700} size={13.5} numeric>{EN(d, left - x.kcal)}<TextGap pt={2} /><KitText weight={600} tracking={0} size={10} color="text-muted">{EL(d)}</KitText></KitText></View>
     </Tappable>
     <Plus label={tx('foodAddTo', { food: x.c.name, meal: mn })} onPress={() => addSaved(repo, d.today, d.next, x.c)} />
   </View>;
   if (p.size === 'S') { const b = list[0];
     return <View style={col}><Kick>{t('foodBestFit')}</Kick><KitText weight={700} size={16} lineHeight={1.2} numberOfLines={2} style={{ marginTop: 8 }}>{b.c.name}</KitText>
-      <Sub style={{ marginTop: 3 }}>{EN(d, b.kcal)} {EL(d)} · {Math.round(b.p)} g</Sub>
+      <Sub style={{ marginTop: 3 }}>{EN(d, b.kcal)} {EL(d)} · {b.p == null ? '–' : Math.round(b.p)} g</Sub>
       <View style={{ marginTop: 'auto' }}><TileButton sm full icon="plus" label={tx('foodAddToMeal', { meal: mn })} onPress={() => addSaved(repo, d.today, d.next, b.c)} /></View></View>; }
   if (p.size === 'M') return <View style={col}><Sub><B>{EN(d, left)} {EL(d)}</B> {t('foodAnd')} <B>{tx('foodGProtein', { g: pg })}</B> {t('foodLeftToday')}</Sub>
     <View style={{ marginTop: 'auto' }}>{list.slice(0, 2).map((x, i) => row(x, 44, i))}</View></View>;

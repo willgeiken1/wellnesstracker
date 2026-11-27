@@ -23,10 +23,22 @@ const FOLDER = PROFILE_PHOTO_FOLDER;
 
 function storedUri(repo: Repository | null | undefined): string | null {
   if (!repo) return null;
-  try { const uri = repo.localGet<string | null>(KEY); return typeof uri === 'string' && uri ? uri : null; } catch { return null; }
+  try { return storedUriStrict(repo); } catch { return null; }
 }
+/** For a change: the kept address, or null when there is none. A record that can't be read throws, so a change never
+ * writes over an address it couldn't see (the file it names would be forgotten on the phone). */
+function storedUriStrict(repo: Repository): string | null {
+  const v = repo.localGet<unknown>(KEY);
+  if (v == null || v === '') return null;
+  if (typeof v !== 'string') throw new Error('The profile photo record could not be read');
+  return v;
+}
+/** For a change: the addresses waiting to be deleted. A list that can't be read throws rather than count as empty. */
 function leftovers(repo: Repository): string[] {
-  try { const v = repo.localGet<unknown>(PROFILE_PHOTO_LEFTOVERS_KEY); return Array.isArray(v) ? v.filter((u): u is string => typeof u === 'string' && !!u) : []; } catch { return []; }
+  const v = repo.localGet<unknown>(PROFILE_PHOTO_LEFTOVERS_KEY);
+  if (v == null) return [];
+  if (!Array.isArray(v)) throw new Error('The profile photo leftovers could not be read');
+  return v.filter((u): u is string => typeof u === 'string' && !!u);
 }
 /** Notes an old photo's address as waiting to be deleted, before its own address is cleared or replaced, so the file is
  * never forgotten while it is still on the phone. Returns every address waiting. */
@@ -59,29 +71,37 @@ export async function saveProfilePhoto(repo: Repository, pickedUri: string): Pro
   keepForDeleting(repo, dest.uri);
   try {
     await new File(pickedUri).move(dest);
-    const before = storedUri(repo);
+    const before = storedUriStrict(repo);
     keepForDeleting(repo, before && before !== dest.uri ? before : null);
     repo.localSave(KEY, dest.uri);
   } catch (error) {
     // Not kept: delete the new file now, and forget its address only once it is gone.
     // The photo still in place (noted above as about to be replaced) comes off the list too.
-    const kept = storedUri(repo), deleted = deleteProfilePhoto(dest.uri);
+    // A record that can't be read is left as it is: the list keeps naming the new file, and departure retries it.
+    let kept: string | null = null;
+    try { kept = storedUriStrict(repo); } catch { /* unknown; nothing comes off the list for it */ }
+    const deleted = deleteProfilePhoto(dest.uri);
     if (deleted || kept) {
-      const rest = leftovers(repo).filter(u => u !== kept && !(deleted && u === dest.uri));
-      try { repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, rest.length ? rest : null); } catch { /* the list still names it; it is gone */ }
+      try {
+        const rest = leftovers(repo).filter(u => u !== kept && !(deleted && u === dest.uri));
+        repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, rest.length ? rest : null);
+      } catch { /* the list still names it; it is gone */ }
     }
     throw error;
   }
   // It is the photo now: off the list, and the old ones on it are deleted (any still there stay listed).
-  const old = leftovers(repo).filter(u => u !== dest.uri), stuck = old.filter(u => !deleteProfilePhoto(u));
-  try { repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, stuck.length ? stuck : null); } catch { /* listed until the next change or departure */ }
+  try {
+    const old = leftovers(repo).filter(u => u !== dest.uri), stuck = old.filter(u => !deleteProfilePhoto(u));
+    repo.localSave(PROFILE_PHOTO_LEFTOVERS_KEY, stuck.length ? stuck : null);
+  } catch { /* an unreadable list stays as it is; listed until the next change or departure */ }
   return dest.uri;
 }
 
 /** Deletes the kept file and the address; the initial shows again. A file that can't be deleted yet keeps its address
  * among the leftovers, so the next change or departure deletes it. */
 export function removeProfilePhoto(repo: Repository) {
-  const waiting = keepForDeleting(repo, storedUri(repo));
+  // Throws, changing nothing, when the address or the list can't be read.
+  const waiting = keepForDeleting(repo, storedUriStrict(repo));
   repo.localSave(KEY, null);
   deleteWaiting(repo, waiting);
 }
@@ -131,7 +151,8 @@ export function AvatarCameraButton({ repo }: { repo: Repository }) {
   const open = () => actionSheet({ title: st('settingsPhotoTitle'), acts: [
     { label: st('settingsPhotoTake'), onPress: () => { void pick('camera'); } },
     { label: st('settingsPhotoChoose'), onPress: () => { void pick('library'); } },
-    ...(photo ? [{ label: st('settingsPhotoRemove'), destructive: true, onPress: () => { removeProfilePhoto(repo); showToast(st('settingsPhotoRemoved')); } }] : []),
+    ...(photo ? [{ label: st('settingsPhotoRemove'), destructive: true, onPress: () => {
+      try { removeProfilePhoto(repo); showToast(st('settingsPhotoRemoved')); } catch { showToast(st('settingsPhotoFailed'), { color: 'warning' }); } } }] : []),
   ] });
   const light = mode === 'light';
   return <Tappable testID="avatar-camera" accessibilityRole="button" accessibilityLabel={st('settingsPhotoChange')} onPress={open}

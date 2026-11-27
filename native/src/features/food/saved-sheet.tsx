@@ -14,6 +14,7 @@ import { MealSeg, SectionLabel } from './ui';
 import { showToast } from '../shell/toast';
 import { useFoodRevision } from './use-food-revision';
 import { enAmt, enLabel, enNum, useEnergyUnit } from './energy';
+const proteinNum = (g: number | null) => g == null ? '–' : num(g);
 
 const lower = (s: string) => s.toLowerCase();
 /** Saved meals whose name or foods hold the words. */
@@ -45,7 +46,7 @@ export function SavedSheet({ repo, meal: asked, open: opened }: { repo: Reposito
       {list.map((c, i) => {
         const kcal = comboKcal(c), foods = plural(c.foods.length, t('foodFood'), t('foodFoods'));
         return <Fragment key={c.name}>
-          <FoodRow first={i === 0} title={c.name} sub={`${foods} · ${num(comboProtein(c))} g ${t('foodProteinLower')}`} kcal={kcal} on={false}
+          <FoodRow first={i === 0} title={c.name} sub={`${foods} · ${proteinNum(comboProtein(c))} g ${t('foodProteinLower')}`} kcal={kcal} on={false}
             openLabel={`${c.name}, ${foods}, ${enAmt(kcal, u)}. ${open === c.name ? t('foodHideFoods') : t('foodShowFoods')}`}
             onOpen={() => setOpen(open === c.name ? null : c.name)} onAdd={() => add(c)} />
           {open === c.name ? <SavedFoods combo={c} /> : null}

@@ -139,3 +139,47 @@ test('a move that fails keeps the old photo and lists nothing new', async () => 
   expect(readProfilePhoto(r)).toBe(first);
   expect(r.localGet('profilePhotoLeftovers')).toBeNull();
 });
+
+test('a change stops, writing nothing, when the kept address or the leftover list cannot be read', async () => {
+  const store = new Map<string, unknown>();
+  const broken = new Set<string>();
+  const r = { localGet: (k: string) => { if (broken.has(k)) throw new Error('unreadable'); return store.get(k); },
+    localSave: jest.fn((k: string, v: unknown) => { store.set(k, v); }) } as unknown as Repository & { localSave: jest.Mock };
+  mockFiles.add('file:///caches/a.jpg');
+  const first = await saveProfilePhoto(r, 'file:///caches/a.jpg');
+  const saves = () => r.localSave.mock.calls.length;
+
+  // The address can't be read: removing it, or saving a new one over it, leaves the record as it was.
+  broken.add('profilePhoto');
+  let before = saves();
+  expect(() => removeProfilePhoto(r)).toThrow('unreadable');
+  expect(r.localSave.mock.calls.slice(before).some(([k]) => k === 'profilePhoto')).toBe(false);
+  mockFiles.add('file:///caches/b.jpg');
+  await expect(saveProfilePhoto(r, 'file:///caches/b.jpg')).rejects.toThrow('unreadable');
+  expect(store.get('profilePhoto')).toBe(first);
+  expect(mockFiles.has(first)).toBe(true);
+  broken.delete('profilePhoto');
+
+  // A stored address of the wrong shape counts as unreadable too.
+  store.set('profilePhoto', { uri: first });
+  expect(() => removeProfilePhoto(r)).toThrow();
+  expect(store.get('profilePhoto')).toEqual({ uri: first });
+  store.set('profilePhoto', first);
+
+  // The leftover list can't be read: nothing writes over it and the kept photo stays.
+  store.set('profilePhotoLeftovers', ['file:///docs/profile-photo/old.jpg']);
+  broken.add('profilePhotoLeftovers');
+  before = saves();
+  expect(() => removeProfilePhoto(r)).toThrow('unreadable');
+  mockFiles.add('file:///caches/c.jpg');
+  await expect(saveProfilePhoto(r, 'file:///caches/c.jpg')).rejects.toThrow('unreadable');
+  expect(saves()).toBe(before);
+  expect(store.get('profilePhoto')).toBe(first);
+  expect(store.get('profilePhotoLeftovers')).toEqual(['file:///docs/profile-photo/old.jpg']);
+  // A list of the wrong shape is not read as empty.
+  broken.delete('profilePhotoLeftovers');
+  store.set('profilePhotoLeftovers', 'file:///docs/profile-photo/old.jpg');
+  expect(() => removeProfilePhoto(r)).toThrow();
+  expect(store.get('profilePhotoLeftovers')).toBe('file:///docs/profile-photo/old.jpg');
+  expect(store.get('profilePhoto')).toBe(first);
+});

@@ -39,8 +39,10 @@ export function addMany(repo: Repository, day: string, meal: string, foods: { fo
   showToast(fill(t('foodAddedMany'), { count: foods.length, meal: mn }), {
     color: 'food', ms: 4200, action: { label: t('foodUndoBtn'), onAction: () => { undo(); showToast(fill(t('foodRemovedFrom'), { meal: mn }), { color: 'food' }); } } });
 }
-export const comboKcal = (c: Combo) => c.foods.reduce((a, f) => a + (kcalOf(f.energy_kj) ?? 0), 0);
-export const comboProtein = (c: Combo) => c.foods.reduce((a, f) => a + (typeof f.protein_g === 'number' ? f.protein_g : 0), 0);
+/** A saved meal's total from the foods that give it, or null when none does, so an unknown total is never shown as 0. */
+const comboSum = (vals: (number | null)[]) => { const k = vals.filter((v): v is number => typeof v === 'number' && Number.isFinite(v)); return k.length ? k.reduce((a, v) => a + v, 0) : null; };
+export const comboKcal = (c: Combo): number | null => comboSum(c.foods.map(f => kcalOf(f.energy_kj)));
+export const comboProtein = (c: Combo): number | null => comboSum(c.foods.map(f => (typeof f.protein_g === 'number' ? f.protein_g : null)));
 /** A saved meal into a meal: "Added overnight oats to breakfast · 380 kcal". */
 export function addSaved(repo: Repository, day: string, meal: string, combo: Combo) {
   const before = new Set(repo.list('food_entries').map(r => r.id));
