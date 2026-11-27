@@ -18,6 +18,7 @@ import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
 import { ageOn } from '../features/onboarding/model';
 import { assertDemoTransferSafe, promoteDemo } from '../features/onboarding/demo-transfer';
+import { loadSettingsPrefs } from '../features/settings/prefs';
 // Clear the hint for every resumed departure phase, before recovery can wipe/remove its marker.
 const bootSignOutStorage: typeof signOutStorage={
   async read(){const marker=await signOutStorage.read();if(marker)await lastOwnerStorage.clear();return marker;},
@@ -145,7 +146,11 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   // Never expose the previous owner's repository during the render before effect cleanup.
   const currentRepo=repository?.owner===owner?repository:null;
   const userId=session?.user.id;
-  const engine=useMemo(()=>!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[currentRepo,client,userId,departurePending]);
+  // Settings, Sync across devices. Off means no engine at all: no debounced push, no foreground or reconnect sync,
+  // no Sync now or pull, and turning it off closes the engine, which cancels its timer and any run in flight.
+  // Edits stay in the outbox, so turning it back on makes a new engine whose first sync uploads them.
+  const syncOn=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>!currentRepo||loadSettingsPrefs(currentRepo).sync.on);
+  const engine=useMemo(()=>syncOn&&!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[syncOn,currentRepo,client,userId,departurePending]);
   const pending=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.pending().length??0);
   const conflicts=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.conflicts().length??0);
   const initialPullComplete=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.initialPullComplete??false);
