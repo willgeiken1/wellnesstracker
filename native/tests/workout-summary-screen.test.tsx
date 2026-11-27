@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { WorkoutStore } from '../src/data/workout/store';
 import { TrainingData } from '../src/features/workout/training-data';
-import { sessionResult, fullDate } from '../src/features/workout/screens/model';
+import { exerciseHistory, sessionResult, fullDate } from '../src/features/workout/screens/model';
 import { WorkoutSummary } from '../src/features/workout/screens/summary';
 import { WorkoutDetail, templateFrom } from '../src/features/workout/screens/detail';
 import { showToast } from '../src/features/shell/toast';
@@ -51,6 +51,19 @@ describe('session result', () => {
     expect(res.muscles[0]).toEqual({ m: 'Quads', sets: 4 });
     expect(res.after - res.before).toBe(45);
     expect(fullDate('2026-11-22')).toBe('Sunday, November 22');
+  });
+  test('a one-side-at-a-time lift counts both sides in the volume, and keeps the weaker side for its sets', () => {
+    mockRepository = memoryRepository();
+    const repo = mockRepository;
+    const s = repo.save('sessions', { day: '2026-11-20', name: 'Synthetic legs', started_at: Date.now() - 3_600_000, finished_at: Date.now() });
+    const e = repo.save('entries', { session_id: s.id, exercise: 'Bulgarian Split Squat', position: 0 });
+    repo.save('sets', { entry_id: e.id, position: 0, weight_kg: 20, reps: 10, left_weight_kg: 20, left_reps: 10, right_weight_kg: 20, right_reps: 10 });
+    const data = new TrainingData(mockRepository), res = sessionResult(data, s.id)!;
+    const side = data.kg(20) * 10;
+    expect(res.exercises[0].sets).toEqual([{ w: data.kg(20), r: 10, pr: false }]);
+    expect(res.exercises[0].volume).toBe(side * 2);
+    expect(res.volume).toBe(side * 2);
+    expect(exerciseHistory(data, 'Bulgarian Split Squat').at(-1)!.volume).toBe(side * 2);
   });
   test('a first time doing a lift is not a record, and an unfinished workout has no result', () => {
     const { store } = sample();

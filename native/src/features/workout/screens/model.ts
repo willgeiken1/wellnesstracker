@@ -2,8 +2,10 @@ import type { Unit, WorkingSet } from '@/core/workout/rules';
 import type { Row } from '@/data/rows';
 import { exLabel } from '../logger/model';
 import { epley, liftNames, muscleGroup, type MuscleGroup, type TrainingData } from '../training-data';
+import { entryVolume } from '../volume';
 
 export interface ResultSet { w: number; r: number; pr: boolean }
+/** `volume` counts both sides of a one-sided lift, as the logger and Training history do; `sets` keep the weaker side for best-set comparisons. */
 export interface ResultExercise { name: string; sets: ResultSet[]; warm: number; top: { w: number; r: number }; volume: number }
 export interface ResultPr { name: string; w: number; r: number; was: { w: number; r: number } }
 /** One finished workout as the summary and the past workout screens show it. Weights are in the display unit. */
@@ -48,7 +50,7 @@ export function sessionResult(data: TrainingData, id: string): SessionResult | n
     if (!sets.length) continue;
     const top = best(sets)!, was = priorBestSet(data, name, s);
     if (was && epley(was.w, was.r) > 0 && epley(top.w, top.r) > epley(was.w, was.r) + 0.5) { top.pr = true; prs.push({ name: exLabel(name), w: top.w, r: top.r, was }); }
-    exercises.push({ name, sets, warm: all.filter(x => x.warmup).length, top: { w: top.w, r: top.r }, volume: sets.reduce((n, x) => n + x.w * x.r, 0) });
+    exercises.push({ name, sets, warm: all.filter(x => x.warmup).length, top: { w: top.w, r: top.r }, volume: entryVolume(w, e, kg => data.kg(kg)) });
     const ex = prefs.exercise(name), main = muscleGroup(ex.main);
     if (main) mus.set(main, (mus.get(main) ?? 0) + sets.length);
     for (const h of ex.helpers) { const g = muscleGroup(h); if (g) also.add(g); }
@@ -75,11 +77,11 @@ export interface LiftSession { id: string; day: string; sets: { w: number; r: nu
 export function exerciseHistory(data: TrainingData, name: string): LiftSession[] {
   const names = liftNames(name), out: LiftSession[] = [];
   for (const s of data.history().slice().reverse()) {
-    const sets = data.workout.entries(s.id).filter(e => names.includes(String(e.data.exercise).toLowerCase()))
-      .flatMap(e => doneWorking(data.workout.working(e))).map(x => ({ w: data.kg(x.weight), r: x.reps }));
+    const entries = data.workout.entries(s.id).filter(e => names.includes(String(e.data.exercise).toLowerCase()));
+    const sets = entries.flatMap(e => doneWorking(data.workout.working(e))).map(x => ({ w: data.kg(x.weight), r: x.reps }));
     if (!sets.length) continue;
     const top = sets.reduce((p, x) => x.w > p.w || (x.w === p.w && x.r > p.r) ? x : p), b = best(sets)!;
-    out.push({ id: s.id, day: String(s.data.day), sets, top, best: b, est: epley(b.w, b.r), volume: sets.reduce((n, x) => n + x.w * x.r, 0) });
+    out.push({ id: s.id, day: String(s.data.day), sets, top, best: b, est: epley(b.w, b.r), volume: entries.reduce((n, e) => n + entryVolume(data.workout, e, kg => data.kg(kg)), 0) });
   }
   return out;
 }
