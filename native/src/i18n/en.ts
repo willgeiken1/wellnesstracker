@@ -1551,7 +1551,7 @@ export const en = {
   settingsReconnectOura: 'Reconnect Oura', settingsReconnectOuraSub: 'If new days stop coming in', settingsReconnectOuraQ: 'Reconnect Oura?',
   settingsReconnectOuraMsg: 'You approve on Oura’s own page. If it ends on the Insight website, close it to come back here.', settingsContinueOura: 'Continue to Oura',
   settingsDisconnectOura: 'Disconnect Oura', settingsDisconnectOuraQ: 'Disconnect Oura?',
-  settingsDisconnectOuraMsg: 'This removes the Oura sign-in and your stored Oura days from your Insight account. You can connect again later.', settingsOuraDisconnected: 'Oura disconnected',
+  settingsDisconnectOuraMsg: 'This removes the Oura sign-in and your stored Oura days from your Insight account. You can connect again later.', settingsOuraDisconnected: 'Oura disconnected', settingsOuraDisconnectFailed: 'Oura is still connected. Check your connection and try again.', settingsTryAgain: 'Try again',
   settingsConnectOura: 'Connect Oura', settingsConnectOuraSub: 'You approve on Oura’s own page', settingsOuraNeedsAccount: 'Needs an Insight account',
   settingsComingLater: 'Coming later', settingsComingLaterLower: 'coming later', settingsLaterOn: 'We will let you know when it is ready',
   settingsLaterOnA11y: 'You will be told when it is ready', settingsLaterOffA11y: 'Tap to be told when it is ready', settingsOnTheList: 'On the list', settingsTellMe: 'Tell me',

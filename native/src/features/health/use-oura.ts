@@ -7,7 +7,9 @@ import { OURA_RETURN, syncNow, type OuraSource, type OuraStatus } from './oura';
 
 const stateOf = (status: OuraStatus | null): OuraState['state'] => !status ? 'unavailable' : !status.connected ? 'off' : status.expired ? 'expired' : 'on';
 
-export type OuraState = { state: 'unavailable' | 'unreachable' | 'off' | 'on' | 'expired'; busy: boolean; failed: boolean; connect: () => void; refresh: () => void; disconnect: () => void };
+export type OuraState = { state: 'unavailable' | 'unreachable' | 'off' | 'on' | 'expired'; busy: boolean; failed: boolean; connect: () => void; refresh: () => void;
+  /** Resolves true once the account reads as no longer connected; false when it failed, is still connected or was already busy. */
+  disconnect: () => Promise<boolean> };
 
 /** The Oura connection for the signed-in account: whether it is on, and connecting, refreshing and disconnecting it.
  * It holds no Oura values; those are read where they are shown. */
@@ -29,10 +31,10 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     return () => { mine = false; };
   }, [source]);
   // Runs one action at a time. It is only ever called from a press, never while drawing.
-  const run = (work: (source: OuraSource) => Promise<void>) => {
-    if (working.current || !source) return;
+  const run = (work: (source: OuraSource) => Promise<void>): Promise<boolean> => {
+    if (working.current || !source) return Promise.resolve(false);
     working.current = true; setBusy(true); setFailed(false);
-    work(source).catch(() => { if (live.current) setFailed(true); }).finally(() => { working.current = false; if (live.current) setBusy(false); });
+    return work(source).then(() => true, () => { if (live.current) setFailed(true); return false; }).finally(() => { working.current = false; if (live.current) setBusy(false); });
   };
   /** Reads the connection again and shows it. The status, or null when nobody is signed in. */
   const check = async (from: OuraSource) => {
@@ -40,7 +42,7 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     if (live.current) setState(stateOf(status));
     return status;
   };
-  const connect = () => run(async from => {
+  const connect = () => { void run(async from => {
     // Oura's own page opens in a sign-in sheet. Once the person approves (or cancels), the server sends the sheet
     // to insight://oura, which closes it and comes back here; closing it by hand does the same. Either way the
     // account is checked again, so what the sheet returns is never trusted on its own.
@@ -51,17 +53,18 @@ export function useOura(storage: TileStorage | null | undefined, injected?: Oura
     // Connecting puts the Steps and Sleep tiles on Home. They can be removed again from Home's Edit.
     if (live.current) addHealthTiles(storage, Platform.OS === 'ios' ? HEALTH_TILES : RING_TILES);
     await syncNow(from, status);
-  });
+  }); };
   // Check again also tries a refused sign-in: a brief outage at Oura looks the same, and a refresh that works clears it.
   // A sync that fails may have just found Oura's login expired, so the card is read again either way; the
   // failure still shows. `check` draws nothing once the page has closed.
-  const refresh = () => run(async from => {
+  const refresh = () => { void run(async from => {
     const status = await check(from);
     if (!status?.connected) return;
     try { await syncNow(from, status); }
     catch (cause) { await check(from).catch(() => undefined); throw cause; }
     if (status.expired) await check(from);
-  });
-  const disconnect = () => run(async from => { await from.disconnect(); await check(from); });
+  }); };
+  // Done only once the account reads as not connected: a request that failed, or a connection still there, is a failure.
+  const disconnect = () => run(async from => { await from.disconnect(); const status = await check(from); if (status?.connected) throw new Error('Oura is still connected.'); });
   return { state: source ? state : 'unavailable', busy, failed, connect, refresh, disconnect };
 }

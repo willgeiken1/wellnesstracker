@@ -197,6 +197,23 @@ test('Check again refreshes; Disconnect asks first, and only the destructive ans
   alert.mockRestore();
 });
 
+test('a disconnect that leaves Oura connected reads as failed', async () => {
+  const onResult = jest.fn();
+  const source = { status: jest.fn(async () => ({ connected: true, expired: false, lastSync: null })), connectUrl: async () => URL, sync: async () => {}, days: async () => [],
+    disconnect: jest.fn(async () => {}) } satisfies OuraSource;
+  function Probe() {
+    const o = useOura(null, source);
+    return <Text testID="probe" onPress={() => { void o.disconnect().then(onResult); }}>{o.failed ? 'failed' : 'fine'}</Text>;
+  }
+  await render(<Probe />, { wrapper });
+  await settle();
+  await fireEvent.press(screen.getByTestId('probe'));
+  await settle();
+  expect(source.disconnect).toHaveBeenCalledTimes(1);
+  expect(onResult).toHaveBeenCalledWith(false);
+  expect(screen.getByText('failed')).toBeTruthy();
+});
+
 describe('Home reads both sources', () => {
   function Probe({ apple, ring }: { apple: HealthSource | null; ring: OuraSource | null }) {
     const read = useHealthDays(true, apple, 1, ring);

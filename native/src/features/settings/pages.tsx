@@ -66,6 +66,12 @@ function SegRow<T extends string>({ title, sub, value, options, onChange }: { ti
 /** The "opens outside the app" mark at a row's end; it sits where a chevron would (`.chev`: 4 pt out each side). */
 const Ext = () => { const k = useKit(); return <View style={{ marginHorizontal: -4 }}><Icon name="ext" size={16} color={k.c.ghost} /></View>; };
 
+/** Disconnects Oura and says so only once it is gone; otherwise says it is still connected, with a way to try again. */
+export async function disconnectOura(ring: { disconnect: () => Promise<boolean> }): Promise<void> {
+  if (await ring.disconnect()) { showToast(st('settingsOuraDisconnected'), { color: 'warning' }); return; }
+  showToast(st('settingsOuraDisconnectFailed'), { color: 'warning', ms: 6000, action: { label: st('settingsTryAgain'), onAction: () => { void disconnectOura(ring); } } });
+}
+
 /* ---------- Goals and targets ---------- */
 /** How far a weight goal is, in its own direction: losing when the goal is under where you started (or under today's weight
  * with no start), gaining when it is over. `left` is what remains (0 once you reach or pass it), `done` is how far you have
@@ -203,7 +209,7 @@ export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
         <ListRow title={st('settingsReconnectOura')} sub={st('settingsReconnectOuraSub')} onPress={() => actionSheet({ title: st('settingsReconnectOuraQ'), message: st('settingsReconnectOuraMsg'),
           acts: [{ label: st('settingsContinueOura'), onPress: () => ring.connect() }] })} />
         <ListRow title={st('settingsDisconnectOura')} danger chevron={false} onPress={() => actionSheet({ title: st('settingsDisconnectOuraQ'), message: st('settingsDisconnectOuraMsg'),
-          acts: [{ label: st('settingsDisconnectOura'), destructive: true, onPress: () => { ring.disconnect(); showToast(st('settingsOuraDisconnected'), { color: 'warning' }); } }] })} />
+          acts: [{ label: st('settingsDisconnectOura'), destructive: true, onPress: () => { void disconnectOura(ring); } }] })} />
       </> : ouraOffered ? <ListRow title={st('settingsConnectOura')} sub={st('settingsConnectOuraSub')} onPress={() => ring.connect()} />
         /* Not offered (no account to keep Oura days in): the row is dimmed like the design's disabled rows and has no chevron. */
         : <View style={{ opacity: 0.45 }}><ListRow title={st('settingsConnectOura')} sub={st('settingsOuraNeedsAccount')} chevron={false} disabled onPress={() => {}} /></View>}</Cl>
