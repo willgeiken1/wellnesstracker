@@ -81,6 +81,8 @@ export interface TileDef {
   open?: (options: TileOptionValues) => void;
   /** A cover over the tile's figures (Hide numbers): while covered, a tap shows them instead of opening the tile. */
   cover?: TileCover;
+  /** More of the tile's own controls under its sizes in the customize sheet (the Split tile's Change split). */
+  editExtra?: (props: { close: () => void }) => ReactNode;
 }
 
 /** An outside store that says when a tile's figures are covered, what VoiceOver says then, and how a tap shows them. */

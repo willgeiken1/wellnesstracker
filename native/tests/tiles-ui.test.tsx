@@ -66,7 +66,7 @@ describe('tile grid screens', () => {
     const storage = fakeStorage();
     await wrap(<TileTraySheet page="training" storage={storage} />);
     expect(screen.getByText('Training tiles')).toBeTruthy();
-    expect(screen.getByText(/2 of 11 tiles are not on Training yet\./)).toBeTruthy();
+    expect(screen.getByText(/2 of 12 tiles are not on Training yet\./)).toBeTruthy();
     expect(screen.getByText('Reset Training tiles')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Add Plan days, Medium'));
     await act(async () => { jest.advanceTimersByTime(600); });
@@ -103,8 +103,9 @@ describe('tile grid screens', () => {
   });
 
   it('customize without a tile says so', async () => {
+    // an unknown id falls back to the page's first tile, which is the split tile now
     await wrap(<TileCustomizeSheet page="training" id="none" storage={fakeStorage()} />);
-    expect(screen.getByText('Workout in progress')).toBeTruthy();
+    expect(screen.getByLabelText('Split tile')).toBeTruthy();
     await wrap(<TileCustomizeSheet page={undefined} id="none" storage={fakeStorage()} />);
     expect(screen.getByText('No tile here')).toBeTruthy();
   });

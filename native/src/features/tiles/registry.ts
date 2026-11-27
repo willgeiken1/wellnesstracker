@@ -26,6 +26,7 @@ export interface TileImplementation {
   open?: (options: TileOptionValues) => void;
   label?: string;
   cover?: TileCover;
+  editExtra?: TileDef['editExtra'];
   /** For a tile with styles: the renderer and meta of each style by key. */
   styles?: Record<string, { render: TileRender; meta?: (props: TileRenderProps) => string }>;
 }
@@ -40,7 +41,7 @@ export function implementTile(page: TilePageId, id: string, impl: TileImplementa
   const versions = def.versions?.map(v => impl.styles?.[v.key] ? { ...v, ...impl.styles[v.key] } : v);
   const next: TileDef = { ...def, ...(impl.render ? { render: impl.render } : null), ...(impl.meta ? { meta: impl.meta } : null),
     ...(impl.open ? { open: impl.open } : null), ...(impl.label ? { label: impl.label } : null),
-    ...(impl.cover ? { cover: impl.cover } : null), ...(versions ? { versions } : null) };
+    ...(impl.cover ? { cover: impl.cover } : null), ...(impl.editExtra ? { editExtra: impl.editExtra } : null), ...(versions ? { versions } : null) };
   const tiles = cfg.tiles.slice(); tiles[at] = next;
   pages.set(page, { ...cfg, tiles });
 }

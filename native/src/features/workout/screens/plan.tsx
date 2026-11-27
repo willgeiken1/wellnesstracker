@@ -161,7 +161,7 @@ function DayCard({ store, id, index, open, next, weekday, onToggle, onStart }: {
   </Card>;
 }
 
-function ExerciseRow({ row, onChange, onRemove }: { row: TemplateExercise; onChange: (p: Partial<TemplateExercise>) => void; onRemove: () => void }) {
+export function ExerciseRow({ row, onChange, onRemove }: { row: TemplateExercise; onChange: (p: Partial<TemplateExercise>) => void; onRemove: () => void }) {
   const k = useKit(), label = exLabel(row.exercise);
   const lo = row.rep_min ?? row.target_reps, hi = row.rep_max ?? row.target_reps;
   const commit = (which: 'lo' | 'hi', text: string) => {

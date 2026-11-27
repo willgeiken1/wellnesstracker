@@ -55,6 +55,7 @@ function CustomizeBody({ page, id, storage, close }: { page: TilePageId; id: str
         onStyle={key => apply({ style: key, size: pickStyle(def, entry, key, home) })}
         onSize={z => { if (sizesOf(def, entry.style).includes(z) && z !== entry.size) apply({ size: z }); }}
         onOption={(oid, v) => apply({ options: { ...entry.options, [oid]: v } })} />
+      {def.editExtra ? <View style={s.extra}>{def.editExtra({ close })}</View> : null}
       <Pressable accessibilityRole="button" onPress={remove}
         style={({ pressed }) => [s.rm, sheetCard(colors, mode), pressed && { opacity: 0.75 }]}>
         <TileIcon name="x" size={15} color={colors.danger} />
@@ -68,6 +69,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   pad: { paddingHorizontal: 16 },
   ed: { paddingTop: 6 },
+  extra: { marginTop: 16, marginBottom: 16 },
   rm: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', minHeight: 50, borderRadius: 16 },
   rmText: { fontFamily: tokens.font.bodyStrong, fontSize: 15 },
 });

@@ -4,6 +4,7 @@ import type { Row } from '../../data/rows';
 import { WorkoutOptions } from '../../data/workout/options';
 import { WorkoutStore, type Draft } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
+import { SplitStore } from '../splits/store';
 
 /** The ten muscle groups the Training tab counts, and the library muscles each one gathers. */
 export const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'] as const;
@@ -170,7 +171,10 @@ export class TrainingData {
       const p = this.plans.read(), live = this.live(), liveRow = live ? this.workout.active() : undefined;
       const templates = this.workout.templates();
       const ids = p.days.length ? p.days.map(d => d.routineId) : templates.map(r => r.id);
-      const nextIndex = p.days.length ? this.plans.nextIndex() : 0;
+      // A chosen split decides what is next (a skipped or swapped day included), so every tile names the same day.
+      const split = p.days.length ? new SplitStore(this.repo).view(new Date(this.now)) : null;
+      const splitNext = split ? split.days[split.now.kind === 'live' ? split.now.then[0] ?? -1 : split.now.focus]?.routineId : undefined;
+      const nextIndex = splitNext && ids.includes(splitNext) ? ids.indexOf(splitNext) : p.days.length ? this.plans.nextIndex() : 0;
       const days: PlanDayView[] = ids.map((routineId, index) => {
         const r = this.repo.get('routines', routineId);
         const ex = this.workout.templateExercises(routineId).map(e => {

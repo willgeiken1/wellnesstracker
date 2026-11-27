@@ -20,6 +20,7 @@ import { trainingRoutes } from '../nav';
 import { dayRows, writeDay } from '../screens/plan';
 
 export type PickerMode = 'add' | 'replace' | 'routine' | 'browse';
+const EQUIPMENT_KINDS = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight', 'Other'] as const;
 const groupsOf = (e: Exercise) => [e.main, ...e.helpers].map(m => muscleGroup(m)).filter(Boolean) as MuscleGroup[];
 
 /** The exercise picker sheet (`exercise-picker`): search, muscle chips, Recent and every exercise; tick several to add.
@@ -28,6 +29,7 @@ const groupsOf = (e: Exercise) => [e.main, ...e.helpers].map(m => muscleGroup(m)
 export function ExercisePickerSheet({ mode = 'add', entry, routine, session }: { mode?: PickerMode; entry?: string; routine?: string; session?: string }) {
   const k = useKit(), { store } = useWorkout();
   const [q, setQ] = useState(''), [muscle, setMuscle] = useState<MuscleGroup | 'All'>('All'), [sel, setSel] = useState<string[]>([]);
+  const [equip, setEquip] = useState<string | null>(null);
   const single = mode === 'replace' || mode === 'browse';
   const library = useMemo(() => store?.preferences().library() ?? [], [store]);
   const named = session ? store?.repo.get('sessions', session) : undefined;
@@ -37,9 +39,9 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine, session }: {
   const recentNames = [...new Set(store?.preferences().recent() ?? [])].slice(0, 6);
   const byName = new Map(library.map(e => [e.name.toLowerCase(), e]));
   const recent = recentNames.map(n => byName.get(n.toLowerCase()) ?? { name: n, helpers: [], equipment: 'other' as const });
-  const names = filterExercises(library, q, '', '').filter(e => muscle === 'All' || groupsOf(e).includes(muscle))
+  const names = filterExercises(library, q, '', '').filter(e => (muscle === 'All' || groupsOf(e).includes(muscle)) && (!equip || equipmentName(e.equipment) === equip))
     .sort((a, b) => exLabel(a.name).localeCompare(exLabel(b.name)));
-  const filtered = !!q.trim() || muscle !== 'All';
+  const filtered = !!q.trim() || muscle !== 'All' || !!equip;
   const title = tr(mode === 'replace' ? 'trainingReplace' : mode === 'browse' ? 'trainingExercises' : 'trainingAddExercise');
 
   const commit = (picked: string[]) => {
@@ -99,9 +101,14 @@ export function ExercisePickerSheet({ mode = 'add', entry, routine, session }: {
         accessibilityLabel={tr('trainingFilterMuscle')}>
         {(['All', ...MUSCLE_GROUPS] as const).map(m => <Chip key={m} label={m === 'All' ? tr('trainingAll') : m} selected={muscle === m} color="training" onPress={() => setMuscle(m)} />)}
       </ScrollView>
+      {/* The bank's equipment (Insight Mockup v21): any, or one kind. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 8 }}
+        accessibilityLabel={tr('splitFilterEquipment')} testID="exercise-picker-equipment">
+        {[null, ...EQUIPMENT_KINDS].map(m => <Chip key={m ?? 'any'} label={m ?? tr('splitAllEquipment')} selected={equip === m} onPress={() => setEquip(m)} />)}
+      </ScrollView>
       <View style={{ paddingHorizontal: 16 }}>
         {!filtered && recent.length > 0 && <>{group(tr('trainingRecent'))}{list(recent, 'r')}</>}
-        {group(filtered ? tr(names.length === 1 ? 'trainingResults_one' : 'trainingResults_other', { n: names.length }) : tr('trainingAllExercises'))}
+        {group(filtered ? tr(names.length === 1 ? 'trainingResults_one' : 'trainingResults_other', { n: names.length }) : tr('splitAllExercises', { n: names.length.toLocaleString('en-US') }))}
         {names.length ? list(names, 'a') : custom ? <View style={{ borderRadius: 20, overflow: 'hidden', backgroundColor: cardBg, boxShadow: k.cardEdge }}>
           <Tappable dim="row" accessibilityRole="button" accessibilityLabel={tr('trainingCreate', { name: custom })} onPress={() => commit([custom])}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, paddingHorizontal: 16 }}>

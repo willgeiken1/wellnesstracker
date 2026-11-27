@@ -5,11 +5,14 @@ import { trainingNav } from '../nav';
 import { CardioTile, E1rmTile, MusclesTile, RecentTile, RecordsTile, StreakTile, liftShort } from './more';
 import { GoalTile, SessionTile } from './today';
 import { NextTile, PlanTile, WeekTile, weekMeta } from './week';
+import { SplitEditExtra } from '../../splits/edit-extra';
+import { SplitTile, openSplit } from '../../splits/tile';
 
 /* The Training tab's tiles. Each body is a component so it can read the live data and tick its own clock. */
 const S = (p: TileRenderProps) => p.size === 'S';
 /** The goal, muscles and streak tiles open the training trend, as in the design. */
 const toTrend = () => router.push('/progress/trend?metric=training');
+implementTile('training', 'split', { render: p => <SplitTile {...p} />, open: () => openSplit(), editExtra: props => <SplitEditExtra {...props} /> });
 implementTile('training', 'session', { render: p => <SessionTile {...p} />, open: () => trainingNav.logger() });
 implementTile('training', 'goal', { render: p => <GoalTile {...p} />, meta: p => S(p) ? '' : t('trainingToday'), open: toTrend });
 implementTile('training', 'week', { render: p => <WeekTile {...p} />, meta: () => weekMeta(), open: () => trainingNav.plan() });
