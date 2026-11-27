@@ -991,6 +991,7 @@ export const en = {
   homeEmptyToday: 'Nothing recorded yet today.',
   homeEmptyNight: 'Nothing recorded for last night.',
   homeEmptyTargets: 'Set your food targets in Food to see this.',
+  homeEmptyFoodUnknown: 'The foods logged today don\'t list this, so it isn\'t counted yet.',
   homeEmptyNext: 'Set your food targets in Food, or start a workout.',
   homeEmptyScore: 'Your score starts once you have logged for a week.',
   homeEmptyWeigh: 'Weigh in to see your trend.',

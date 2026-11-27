@@ -60,6 +60,34 @@ describe('which tiles have a reading to draw', () => {
     expect(d.next.sub).toBe('1,364 of 2,200 kcal so far');
     expect(tileReady(input({ active: { name: 'Legs A', startedAt: new Date(NOW.getTime() - 1450_000), setsDone: 8, setsTotal: 18 } })).next).toBe(true);
   });
+  test('food logged today that gives no energy or protein reads as unknown, not as 0 eaten with the whole goal left', () => {
+    const at = new Date(2026, 10, 22, 12, 30);
+    // A calorie-only Quick add and a scanned bar with no energy: made-up foods.
+    const quick = { ...emptyDay, kcal: 600, protein: null, goalKcal: 2200, goalProtein: 165, meals: [{ id: 'l', name: 'Lunch', kcal: 600, protein: null, count: 1, loggedAt: at }] };
+    const bar = { ...emptyDay, kcal: null, protein: 8, carbs: 30, fat: 4, goalKcal: 2200, goalProtein: 165, meals: [{ id: 'l', name: 'Lunch', kcal: null, protein: 8, count: 1, loggedAt: at }] };
+    const withDay = (d: HomeInput['food'][number]) => input({ food: [...days.slice(1).map(() => emptyDay), d], nextMeal: { id: 'd', name: 'Dinner' } });
+
+    const q = buildState(withDay(quick), DEFAULT_UNITS, () => {});
+    expect(q.ready.calories).toBe(true);
+    expect(tileView(q, 'protein', 'A', 'S', {})).toEqual({ empty: 'foodUnknown' });
+    expect(tileView(q, 'calories', 'C', 'M', {})).toEqual({ empty: 'foodUnknown' });
+    expect(tileView(q, 'logMeal', 'A', 'S', { value: 'p' })).toEqual({ empty: 'foodUnknown' });
+    expect(tileView(q, 'logMeal', 'A', 'S', { value: 'kcal' })).toEqual({ options: { value: 'kcal' } });
+    expect(q.data.protein.byMeal).toEqual([null]);
+
+    const b = buildState(withDay(bar), DEFAULT_UNITS, () => {});
+    expect(tileView(b, 'calories', 'A', 'M', {})).toEqual({ empty: 'foodUnknown' });
+    expect(tileView(b, 'logMeal', 'A', 'S', {})).toEqual({ empty: 'foodUnknown' });
+    expect(b.ready.protein).toBe(true);
+    expect(b.data.calories.meals).toEqual([{ name: 'Lunch', kcal: null, time: '12:30 PM' }]);
+    expect(b.data.next.sub).toBe('– of 2,200 kcal so far');
+    // Drawn where it still can be, an unknown meal reads as a dash, never 0 or null.
+    const html = drawTile({ id: 'protein', style: 'D', size: 'M', options: {}, colors: createTheme('dark'), mode: 'dark', data: q.data, uid: 'pd' }) ?? '';
+    expect(html).not.toMatch(/NaN|null| 0 g/);
+    expect(html).toContain('Lunch – g');
+    // Nothing logged yet is still a real 0 eaten.
+    expect(tileReady(withDay({ ...quick, kcal: null, protein: null, meals: [] })).calories).toBe(true);
+  });
   test('weight is drawn from weigh-ins in the window, in pounds, with no goal line when there is no goal', () => {
     const i = input({ weighIns: [{ day: days[DAYS - 3], kg: 82.6, at: null }, { day: days[DAYS - 1], kg: 82.3, at: new Date(2026, 10, 22, 6, 52) }] });
     const d = buildTileData(i), s = buildState(i, DEFAULT_UNITS, () => {});

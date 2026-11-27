@@ -8,7 +8,7 @@ import type { EmptyReason } from './state';
 const COPY: Record<EmptyReason, MessageKey> = {
   connect: 'homeEmptyConnect', today: 'homeEmptyToday', night: 'homeEmptyNight', targets: 'homeEmptyTargets', next: 'homeEmptyNext',
   score: 'homeEmptyScore', weigh: 'homeEmptyWeigh', bodyFat: 'homeEmptyBodyFat', routines: 'homeEmptyRoutines', detail: 'homeEmptyDetail',
-  goalWeight: 'homeEmptyGoalWeight', sleepStages: 'homeEmptySleepStages', noStages: 'homeEmptyNoStages',
+  goalWeight: 'homeEmptyGoalWeight', sleepStages: 'homeEmptySleepStages', noStages: 'homeEmptyNoStages', foodUnknown: 'homeEmptyFoodUnknown',
 };
 export const emptyCopy = (why: EmptyReason) => t(COPY[why]);
 

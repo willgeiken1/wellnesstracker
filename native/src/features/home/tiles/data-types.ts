@@ -3,13 +3,14 @@
  * today (or last night). Energy in kcal, weight in lb, water in litres, volume in lb, clock times as "h:mm AM"; the tiles
  * convert for display. Built from the app's own data in ./data.ts. Held in memory only.
  */
-export interface MealTime { name: string; kcal: number; time: string | null }
+/** A meal's energy is null when none of its foods gives it: drawn as nothing and labelled with a dash, never 0. */
+export interface MealTime { name: string; kcal: number | null; time: string | null }
 export interface HomeTileData {
   now: Date;
   days: Date[];
   dayLabels: string[];
   calories: { unit: 'kcal'; goal: number; today: number; series: number[]; meals: MealTime[]; macros: { protein: number; carbs: number; fat: number } };
-  protein: { unit: 'g'; goal: number; today: number; series: number[]; byMeal: number[] };
+  protein: { unit: 'g'; goal: number; today: number; series: number[]; byMeal: (number | null)[] };
   water: {
     unit: string; goal: number; today: number; series: number[]; hourly: number[];
     log?: { t: string; oz: number }[] | null; containers?: { id: string; name: string; oz: number; icon?: string; quick?: boolean }[] | null;
@@ -41,7 +42,7 @@ export interface HomeTileData {
   };
   mealLog?: {
     goal: number; eaten: number; pGoal: number; pEaten: number; next: string;
-    meals: { id: string; name: string; time: string | null; kcal: number; p: number; n: number }[];
+    meals: { id: string; name: string; time: string | null; kcal: number | null; p: number | null; n: number }[];
     recent?: { n: string; q: string; kcal: number; p: number }[];
     saved?: { id: string; n: string; q: string; kcal: number; p: number }[];
   };

@@ -111,11 +111,24 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 const lb = (kg: number) => kg / KG_PER_LB;
 
 /** Says, for each tile, whether today's own reading is there to draw. */
+/**
+ * Today's food totals that no logged food gives. With nothing logged, today is simply 0 eaten; once something is logged, a
+ * total none of it gives is unknown, and a tile that leads with it says so rather than show 0 eaten and the whole goal left.
+ */
+export function foodUnknown(input: HomeInput): { kcal: boolean; protein: boolean; macros: boolean } {
+  const today = last(input.food), logged = !!today && today.meals.some(m => m.count > 0);
+  return {
+    kcal: logged && !finite(today.kcal), protein: logged && !finite(today.protein),
+    macros: logged && !(finite(today.protein) && finite(today.carbs) && finite(today.fat)),
+  };
+}
+
 export function tileReady(input: HomeInput): TileReady {
   const today = last(input.food), h = input.health, s = last(input.score ?? []);
   const has = (list: readonly (number | null)[] | null | undefined) => finite(last(list ?? []));
   const foodGoal = !!today && finite(today.goalKcal) && today.goalKcal > 0;
   const proteinGoal = !!today && finite(today.goalProtein) && today.goalProtein > 0;
+  const unknown = foodUnknown(input);
   return {
     score: !!s && finite(s.value),
     week: !!input.score && input.score.slice(-7).some(d => finite(d.value)),
@@ -125,9 +138,9 @@ export function tileReady(input: HomeInput): TileReady {
     exercise: has(h?.exerciseMinutes),
     active: has(h?.activeKcal),
     steps: has(h?.steps),
-    calories: foodGoal,
+    calories: foodGoal && !unknown.kcal,
     logMeal: foodGoal && !!input.nextMeal,
-    protein: proteinGoal,
+    protein: proteinGoal && !unknown.protein,
     // Water is logged in the app, so the tile always has today's total (0 before the first drink).
     water: true,
     weight: input.weighIns.some(w => input.days.includes(w.day)),
@@ -191,10 +204,10 @@ export function buildTileData(input: HomeInput): HomeTileData {
     now, days: dates, dayLabels: dates.map(d => WEEKDAYS[d.getDay()]),
     calories: {
       unit: 'kcal', goal: goalKcal, today: eaten, series: series(kcal) as number[],
-      meals: meals.map(m => ({ name: m.name, kcal: Math.round(m.kcal ?? 0), time: m.loggedAt ? clock12(m.loggedAt) : null })),
+      meals: meals.map(m => ({ name: m.name, kcal: finite(m.kcal) ? Math.round(m.kcal) : null, time: m.loggedAt ? clock12(m.loggedAt) : null })),
       macros: { protein: Math.round(today?.protein ?? 0), carbs: Math.round(today?.carbs ?? 0), fat: Math.round(today?.fat ?? 0) },
     },
-    protein: { unit: 'g', goal: goalProtein, today: Math.round(today?.protein ?? 0), series: series(protein) as number[], byMeal: meals.map(m => Math.round(m.protein ?? 0)) },
+    protein: { unit: 'g', goal: goalProtein, today: Math.round(today?.protein ?? 0), series: series(protein) as number[], byMeal: meals.map(m => (finite(m.protein) ? Math.round(m.protein) : null)) },
     water: {
       unit: water.unit, goal: water.goal, today: last(waterL) ?? 0, series: waterL, hourly: waterHourly,
       log: water.drinks.map(d => ({ t: clock12(d.at), oz: d.oz })),
@@ -231,14 +244,14 @@ export function buildTileData(input: HomeInput): HomeTileData {
     next: {
       mode: aw ? 'workout' : 'food',
       title: nextMeal ? `Log ${nextMeal.name.toLowerCase()}` : 'Log a meal',
-      sub: `${commas(eaten)} of ${commas(goalKcal)} kcal so far`,
+      sub: `${finite(today?.kcal) || !meals.length ? commas(eaten) : '–'} of ${commas(goalKcal)} kcal so far`,
       workoutTomorrow: input.upNext ?? '',
       activeWorkout: aw ? { name: aw.name, elapsed: elapsedText, setsDone: aw.setsDone, setsTotal: Math.max(aw.setsTotal, aw.setsDone, 1) } : null,
     },
     nextup: { routine: '', window: '', item: '', amount: '', due: '', doneToday: 0, totalToday: 0, routineDone: 0, routineTotal: 0, upcoming: [] },
     mealLog: {
       goal: goalKcal, eaten, pGoal: goalProtein, pEaten: Math.round(today?.protein ?? 0), next: nextMeal?.id ?? '',
-      meals: (today?.meals ?? []).map(m => ({ id: m.id, name: m.name, time: m.loggedAt ? clock12(m.loggedAt) : null, kcal: Math.round(m.kcal ?? 0), p: Math.round(m.protein ?? 0), n: m.count })),
+      meals: (today?.meals ?? []).map(m => ({ id: m.id, name: m.name, time: m.loggedAt ? clock12(m.loggedAt) : null, kcal: finite(m.kcal) ? Math.round(m.kcal) : m.count ? null : 0, p: finite(m.protein) ? Math.round(m.protein) : m.count ? null : 0, n: m.count })),
       recent: input.recentFoods.slice(0, 6).map(f => ({ n: f.name, q: f.serving, kcal: Math.round(f.kcal), p: Math.round(f.protein) })),
       saved: [],
     },
