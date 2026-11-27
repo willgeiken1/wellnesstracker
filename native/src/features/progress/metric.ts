@@ -23,7 +23,17 @@ function weightSrc(d: ProgressData) {
   return from === 'both' ? t('progressSrcAppleAndInsight') : from === 'app' ? t('progressSrcInsight') : t('progressSrcApple');
 }
 
-export function metricView(d: ProgressData, key: MetricKey): MetricView {
+/** Where the steps shown came from: Apple Health, Oura, or both, over the range when one is given. */
+function stepsSrc(d: ProgressData, range?: Range) {
+  const from = d.stepsFrom, v = d.days.steps;
+  if (!from || from.length !== v.length) return t('progressSrcApple');
+  const n = range === 'week' ? 7 : range === 'month' ? 30 : v.length;
+  const shown = new Set(from.slice(-n).filter((f, i) => f && v[v.length - Math.min(n, v.length) + i] != null));
+  return shown.has('Oura') && shown.has('Apple Health') ? t('progressSrcAppleAndOura') : shown.has('Oura') ? t('progressSrcOura') : t('progressSrcApple');
+}
+
+/** How a metric reads. `range` narrows where the readings came from to the days shown. */
+export function metricView(d: ProgressData, key: MetricKey, range?: Range): MetricView {
   const name = metricName(key), short = key === 'rhr' ? t('progressRhrShort') : name;
   const ouraOrApple = d.sources.oura || d.demo ? t('progressSrcOura') : t('progressSrcApple');
   // HRV and resting heart rate name the source their readings came from, not just whether Oura is connected.
@@ -36,7 +46,7 @@ export function metricView(d: ProgressData, key: MetricKey): MetricView {
     case 'sleep': return { key, name, short, unit: '', goal: d.sleepGoalMin / 60, goalL: fill(t('progressGoalIs'), { v: hmShort(d.sleepGoalMin) }), band: null, tick: v => `${Math.round(v)}h`, about: t('progressAboutSleep'), src: ouraOrApple };
     case 'hrv': return { key, name, short, unit: 'ms', goal: null, goalL: null, band: d.hrvBand, about: heartOura ? t('progressAboutHrv') : t('progressAboutHrvApple'), src: heartSrc };
     case 'rhr': return { key, name, short, unit: 'bpm', goal: null, goalL: null, band: d.rhrBand, about: t('progressAboutRhr'), src: heartSrc };
-    case 'steps': return { key, name, short, unit: 'steps', goal: d.stepGoal, goalL: fill(t('progressGoalIs'), { v: fmt(d.stepGoal) }), band: null, tick: v => v ? `${Math.round(v / 1000)}k` : '0', about: fill(t('progressAboutSteps'), { goal: fmt(d.stepGoal) }), src: t('progressSrcApple') };
+    case 'steps': return { key, name, short, unit: 'steps', goal: d.stepGoal, goalL: fill(t('progressGoalIs'), { v: fmt(d.stepGoal) }), band: null, tick: v => v ? `${Math.round(v / 1000)}k` : '0', about: fill(t('progressAboutSteps'), { goal: fmt(d.stepGoal) }), src: stepsSrc(d, range) };
     case 'kcal': {
       const g = d.food.goalKcal;
       return { key, name, short, unit: 'kcal', goal: g, goalL: g == null ? null : fill(t('progressGoalIs'), { v: fmt(g) }), band: null, tick: v => v ? `${(v / 1000).toFixed(1)}k` : '0', about: t('progressAboutKcal'), src: t('progressSrcInsight') };

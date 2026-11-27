@@ -119,11 +119,14 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
   /* health: steps and sleep from Apple Health and Oura (merged per day), HRV and resting heart rate from one source only */
   d.days.steps = tail(health?.steps);
   d.days.sleep = tail(health?.sleepHours);
-  if (health?.sleepFrom && health.sleepHours && health.sleepFrom.length === health.sleepHours.length) {
-    const n = Math.min(health.sleepFrom.length, HISTORY), out: ('Oura' | 'Apple Health' | null)[] = Array(HISTORY).fill(null);
-    for (let i = 0; i < n; i++) { const f = health.sleepFrom[health.sleepFrom.length - n + i]; out[HISTORY - n + i] = f === 'oura' ? 'Oura' : f === 'apple' ? 'Apple Health' : null; }
-    d.sleepFrom = out;
-  }
+  const fromOf = (from: ('oura' | 'apple' | null)[] | undefined, v: unknown[] | null | undefined) => {
+    if (!from || !v || from.length !== v.length) return undefined;
+    const n = Math.min(from.length, HISTORY), out: ('Oura' | 'Apple Health' | null)[] = Array(HISTORY).fill(null);
+    for (let i = 0; i < n; i++) { const f = from[from.length - n + i]; out[HISTORY - n + i] = f === 'oura' ? 'Oura' : f === 'apple' ? 'Apple Health' : null; }
+    return out;
+  };
+  { const s = fromOf(health?.sleepFrom, health?.sleepHours); if (s) d.sleepFrom = s; }
+  { const s = fromOf(health?.stepsFrom, health?.steps); if (s) d.stepsFrom = s; }
   const ouraHeart = !!ring && [...ring.hrv, ...ring.restingHeartRate].some(finite);
   d.days.hrv = tail(ouraHeart ? ring!.hrv : recovery?.hrv);
   d.days.rhr = tail(ouraHeart ? ring!.restingHeartRate : recovery?.restingHeartRate);

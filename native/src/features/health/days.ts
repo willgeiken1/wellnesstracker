@@ -11,6 +11,8 @@ export type HealthDays = {
   waterMl: DaySeries | null; mindfulMinutes: DaySeries | null;
   /** Where each day's sleep came from, beside `sleepHours`, once Apple Health and Oura are merged a day at a time. */
   sleepFrom?: ('oura' | 'apple' | null)[];
+  /** Where each day's steps came from, beside `steps`, when Oura's are among them. */
+  stepsFrom?: ('oura' | 'apple' | null)[];
   /** Body-fat readings from the last 90 days, oldest first, as percentages to one decimal. Null when unread. */
   bodyFat: number[] | null;
   /** When the newest body-fat reading was taken, so an old one is shown with its date. Null with no reading. */

@@ -1266,7 +1266,7 @@ export const en = {
   progressLast30: 'Last 30 days', progressLast12: 'Last 12 months', progressIn30: 'in 30 days', progressIn12: 'in 12 months', progressNoChangeIn: 'Not enough weigh-ins {range} to compare',
   progressMWeight: 'Weight', progressMSleep: 'Sleep', progressMRhr: 'Resting heart rate', progressMSteps: 'Steps', progressMKcal: 'Calories', progressMTraining: 'Training', progressMScore: 'Day score',
   progressRhrShort: 'Resting HR', progressGoalIs: 'Goal {v}', progressGoalLower: 'goal {v}', progressGoal: 'Goal', progressGoalMet: 'Goal met',
-  progressSrcOura: 'Oura', progressSrcApple: 'Apple Health', progressSrcInsight: 'Logged in Insight', progressSrcAppleAndInsight: 'Apple Health and Insight',
+  progressSrcOura: 'Oura', progressSrcApple: 'Apple Health', progressSrcInsight: 'Logged in Insight', progressSrcAppleAndInsight: 'Apple Health and Insight', progressSrcAppleAndOura: 'Apple Health and Oura',
   progressAboutWeight: 'Weigh-ins from your scale arrive through Apple Health, or you can log one here. The line marks the goal you set.',
   progressAboutSleep: 'Time in bed each night, from your ring or Apple Health. Your goal is 8 hours.',
   progressAboutHrv: 'Heart rate variability while you sleep, from Oura. Higher than your usual often means you have recovered well. The shaded band is your usual range.',

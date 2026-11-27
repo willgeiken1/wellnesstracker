@@ -56,7 +56,7 @@ export function whenWord(key: MetricKey, r: string) {
   return t(r === 'year' ? 'progressThisMonth' : key === 'steps' || key === 'kcal' || key === 'training' ? 'progressTodaySoFar' : key === 'sleep' ? 'progressLastNight' : key === 'weight' ? 'today' : 'progressThisMorning');
 }
 function TrendTile({ size, options, body }: TileRenderProps) {
-  const d = useProgressData(), k = useKit(), key = (options.metric ?? 'steps') as MetricKey, m = METRICS[key], mv = metricView(d, key), r = rangeOf(options, usePageRange());
+  const d = useProgressData(), k = useKit(), key = (options.metric ?? 'steps') as MetricKey, m = METRICS[key], r = rangeOf(options, usePageRange()), mv = metricView(d, key, r);
   const se = series(d, key, r), li = lastIndex(se.v), now = se.v[li], S0 = stats(se.v), col = k.tok(m.color);
   // An older reading, when today (or this month) has none yet, is labelled with its own date, never as today's.
   const when = finite(now) && li !== se.v.length - 1 ? se.labels[li] : whenWord(key, r), vt = (x: number | null) => vText(d, key, x);
