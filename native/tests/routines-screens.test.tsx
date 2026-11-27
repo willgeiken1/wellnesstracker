@@ -22,6 +22,8 @@ jest.mock('react-native-reanimated', () => require('./progress-mocks').reanimate
 jest.mock('react-native-gesture-handler', () => require('./progress-mocks').gestureMock());
 jest.mock('../src/features/tiles/tile-surface', () => ({ TileSurface: () => null }));
 jest.mock('../src/features/shell/toast', () => ({ showToast: jest.fn() }));
+// The build-without-notifications cases: requiring expo-notifications fails, as it would in a build without it.
+jest.mock('expo-notifications', () => { throw new Error('expo-notifications is not in this build'); });
 
 /* The Routines screens and sheets, drawn against the sample routines at 4:12 PM on Sunday, November 22. */
 

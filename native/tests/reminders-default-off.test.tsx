@@ -28,6 +28,9 @@ jest.mock('expo-router', () => {
 jest.mock('../src/auth/client', () => ({ getAuthClient: () => null }));
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 jest.mock('../src/features/shell/toast', () => ({ showToast: jest.fn() }));
+// The no-module case below is a build without expo-notifications: requiring it fails, as it would there. The adapter
+// tests further down stand in their own copy.
+jest.mock('expo-notifications', () => { throw new Error('expo-notifications is not in this build'); });
 
 /** A stand-in for the phone's notifications: iOS answers `answer` when asked. */
 function fakeNotifier(start: NotifyPermission, answer: NotifyPermission = 'granted') {

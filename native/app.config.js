@@ -43,7 +43,7 @@ function build({ config }) {
       .map(plugin => base.plugins.find(p => (Array.isArray(p) ? p[0] : p) === (Array.isArray(plugin) ? plugin[0] : plugin)))
       .map(plugin => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-dev-client'
         ? ['expo-dev-client', { launchMode: 'most-recent', embeddedBundle: true }] : (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-sharing' ? ['expo-sharing', { ios: { enabled: false }, android: { enabled: true, singleShareMimeTypes: ['application/json', 'text/json', 'text/plain'] } }] : plugin),
-      './plugins/withPhoneOnlyBundle'],
+      './plugins/withPhoneOnlyBundle', './plugins/withNoPushEntitlement'],
     extra: { appVariant: 'freeiphone', phoneOnly: true, capabilities: { health: false, widgets: false, push: false } },
     updates: { enabled: false },
   };

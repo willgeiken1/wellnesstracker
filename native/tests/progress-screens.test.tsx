@@ -28,6 +28,8 @@ jest.mock('expo-camera', () => ({ CameraView: () => null, useCameraPermissions: 
 jest.mock('expo-file-system', () => ({ Directory: jest.fn(), File: jest.fn(), Paths: {} }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'id' }));
+// The build-without-notifications cases: requiring expo-notifications fails, as it would in a build without it.
+jest.mock('expo-notifications', () => { throw new Error('expo-notifications is not in this build'); });
 
 const SCREENS: [string, () => React.ReactElement][] = [
   ['day score', () => <DayScoreScreen />], ['trend', () => <TrendScreen metric="weight" range="month" />], ['training trend', () => <TrendScreen metric="training" />],
