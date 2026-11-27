@@ -207,6 +207,20 @@ describe('logger screen', () => {
       expect(sheet.mock.calls.at(-1)![0].options).not.toContain('Log left and right separately');
     } finally { sheet.mockRestore(); }
   });
+  test('an exercise’s own bar and step setup opens from its options and is saved for later workouts', async () => {
+    const { store } = sample();
+    const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementationOnce((o, cb) => cb(o.options.indexOf('Bar and step setup')));
+    try {
+      await render(<TrainingLogger />, { wrapper });
+      await act(async () => {});
+      await fireEvent.press(screen.getByRole('button', { name: 'Exercise options for Squat' }));
+      await fireEvent.changeText(screen.getByLabelText('Bar weight (lb)'), '35');
+      await fireEvent.press(screen.getByRole('button', { name: 'Save setup' }));
+      expect(store.preferences().machine('Squat').bar_weight).toBe(35);
+      expect(barFor(store, 'Squat', 'lb')).toBe(35);
+      expect(screen.queryByLabelText('Bar weight (lb)')).toBeNull();
+    } finally { sheet.mockRestore(); }
+  });
   test('two exercises can be made a superset from the exercise options, shown on the open card, and unlinked', async () => {
     const { store, squat, lunge } = sample();
     const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions');

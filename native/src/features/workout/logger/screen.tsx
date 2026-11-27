@@ -16,6 +16,7 @@ import { useSettingsPrefs } from '@/features/settings/prefs';
 import { ShellToast, showToast } from '@/features/shell/toast';
 import { actionSheet } from '../action-sheet';
 import { FinishSheet } from '../finish';
+import { SetupEditor, setupLabel } from '../machine-setup';
 import { tick } from '../haptics';
 import { trainingNav } from '../nav';
 import { SheetHost } from '../primitives';
@@ -77,6 +78,7 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
   const [openSet, setOpenSet] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [focus, setFocus] = useState(false), [reorder, setReorder] = useState(false), [finishSheet, setFinishSheet] = useState(false);
+  const [setup, setSetup] = useState<{ name: string; title: string } | null>(null);
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null), cardY = useRef<Record<string, number>>({});
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   // The header's height: the status bar, the 44 pt bar and its 6 pt below, and the 38 pt jump strip when it shows.
@@ -159,6 +161,8 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
     { label: e.note == null ? tr('trainingAddNote') : tr('trainingRemoveNote'), run: () => e.note == null ? store.repo.localSave(noteOpenKey(e.entry.id), true) : saveNote(e, null) },
     ...(past ? [] : [{ label: tr('trainingRestFor'), run: () => trainingNav.rest(e.entry.id) }]),
     { label: tr('trainingReplace'), run: () => trainingNav.picker({ mode: 'replace', entry: e.entry.id }) },
+    // Its own bar, plate step, unit and notes, kept for every workout with this exercise.
+    { label: setupLabel(store.preferences().exercise(e.name).equipment), run: () => setSetup({ name: e.name, title: setupLabel(store.preferences().exercise(e.name).equipment) }) },
     // Each side on its own row is set before any set is saved, as before, so a saved set never changes shape.
     ...(store.sets(e.entry.id).length ? [] : [{ label: tr(e.unilateral ? 'bilateral' : 'unilateral'), run: () => run(() => store.setUnilateral(e.entry.id, !e.unilateral)) }]),
     ...(store.supersetGroup(e.entry) ? [{ label: tr('trainingSupersetUnlink'), run: () => run(() => store.unlinkSuperset(e.entry.id)) }] : []),
@@ -264,6 +268,9 @@ function Logger({ store, session }: { store: WorkoutStore; session: Row }) {
       onClose={() => { setFocus(false); setXo(null); }} onFinish={() => { setFocus(false); finish(); }}
       onField={(e, s, f, v) => field(e, s, f, v)} onTag={tag} onRpe={rpe} onLog={(e, s) => check(e, s)} />}
     <ShellToast bottom={Math.max(0, insets.bottom - 8)} />
+    <SheetHost visible={!!setup} onClose={() => setSetup(null)}>
+      {setup && <SetupEditor store={store} name={setup.name} title={setup.title} onClose={() => setSetup(null)} />}
+    </SheetHost>
     <SheetHost visible={finishSheet} onClose={() => setFinishSheet(false)}>
       {finishSheet && <FinishSheet store={store} session={session} onClose={() => setFinishSheet(false)} />}
     </SheetHost>

@@ -8,7 +8,7 @@ import { t } from '@/i18n/en';
 import { Chip, Sheet, layout } from './primitives';
 import { Field, Pick, Primary, Trouble, semibold } from './parts';
 /** The same editor serves every lift; only machines and cables call it "Machine setup". */
-function setupLabel(equipment?: Equipment) { return t(!equipment || equipment === 'machine' || equipment === 'cable' ? 'machineSetup' : 'barStepSetup'); }
+export function setupLabel(equipment?: Equipment) { return t(!equipment || equipment === 'machine' || equipment === 'cable' ? 'machineSetup' : 'barStepSetup'); }
 export function MachineSetup({ store, name, equipment, compact }: { store: WorkoutStore; name: string; equipment?: Equipment; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const note = store.preferences().machine(name);
@@ -16,7 +16,8 @@ export function MachineSetup({ store, name, equipment, compact }: { store: Worko
     {compact ? <Chip label={setupLabel(equipment)} onPress={() => setOpen(true)} /> : <View style={{ alignSelf: 'flex-start' }}><Pick onSurface text={setupLabel(equipment)} onPress={() => setOpen(true)} /></View>}
     {open && <SetupEditor store={store} name={name} title={setupLabel(equipment)} onClose={() => setOpen(false)} />}</>;
 }
-function SetupEditor({ store, name, title, onClose }: { store: WorkoutStore; name: string; title: string; onClose: () => void }) {
+/** The setup editor on its own, for a screen that opens it from a menu. */
+export function SetupEditor({ store, name, title, onClose }: { store: WorkoutStore; name: string; title: string; onClose: () => void }) {
   const note = store.preferences().machine(name);
   const [text, setText] = useState(note.text), [step, setStep] = useState(note.step === undefined ? '' : String(note.step)),
     [bar, setBar] = useState(note.bar_weight === undefined ? '' : String(note.bar_weight)),
