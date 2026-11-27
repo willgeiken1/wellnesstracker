@@ -130,7 +130,8 @@ export function readAppData(store: WorkoutStore, now: Date, health: HealthDays |
   const weighIns = dailyWeights(store.repo.list('weigh_ins')).map(w => ({ day: w.day, kg: w.kg, at: null }));
   const recent = recentFoods(store.repo).slice(0, 6).map(f => ({
     name: String(f.name ?? ''), serving: num(f.amount_g) ? `${Math.round(num(f.amount_g)!)} g` : '',
-    kcal: (num(f.energy_kj) ?? 0) / KJ, protein: num(f.protein_g) ?? 0,
+    // A value the food doesn't give stays unknown, shown as a dash, never 0.
+    kcal: num(f.energy_kj) == null ? null : num(f.energy_kj)! / KJ, protein: num(f.protein_g) ?? null,
   })).filter(f => f.name);
   return {
     days, food, nextMeal, recentFoods: recent, weighIns, water: readWaterIn(store.repo, days, now),

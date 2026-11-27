@@ -88,6 +88,17 @@ describe('which tiles have a reading to draw', () => {
     // Nothing logged yet is still a real 0 eaten.
     expect(tileReady(withDay({ ...quick, kcal: null, protein: null, meals: [] })).calories).toBe(true);
   });
+  test('a recent food that gives no protein or energy reads as a dash in Quick add, not as 0', () => {
+    const fed = { ...emptyDay, kcal: 600, protein: 20, goalKcal: 2200, goalProtein: 165, meals: [{ id: 'l', name: 'Lunch', kcal: 600, protein: 20, count: 1, loggedAt: new Date(2026, 10, 22, 12, 30) }] };
+    // Made-up foods: a calorie-only Quick add and a scanned bar with no energy.
+    const d = buildTileData(input({ food: [...days.slice(1).map(() => emptyDay), fed], nextMeal: { id: 'd', name: 'Dinner' },
+      recentFoods: [{ name: 'Synthetic quick lunch', serving: '', kcal: 450, protein: null }, { name: 'Synthetic bar', serving: '40 g', kcal: null, protein: 8 }] }));
+    expect(d.mealLog?.recent).toEqual([{ n: 'Synthetic quick lunch', q: '', kcal: 450, p: null }, { n: 'Synthetic bar', q: '40 g', kcal: null, p: 8 }]);
+    const draw = (value: string) => drawTile({ id: 'logMeal', style: 'B', size: 'M', options: { value, list: 'recent' }, colors: createTheme('dark'), mode: 'dark', data: d, uid: 'mb' }) ?? '';
+    expect(draw('p')).toContain('Synthetic quick lunch to lunch, – grams of protein');
+    expect(draw('kcal')).toContain('Synthetic bar to lunch, – kcal');
+    for (const v of ['p', 'kcal']) expect(draw(v)).not.toMatch(/NaN|null| 0 g protein|>0</);
+  });
   test('weight is drawn from weigh-ins in the window, in pounds, with no goal line when there is no goal', () => {
     const i = input({ weighIns: [{ day: days[DAYS - 3], kg: 82.6, at: null }, { day: days[DAYS - 1], kg: 82.3, at: new Date(2026, 10, 22, 6, 52) }] });
     const d = buildTileData(i), s = buildState(i, DEFAULT_UNITS, () => {});

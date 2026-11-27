@@ -269,8 +269,10 @@ describe('logging from inside a tile', () => {
     expect(repo.list('food_entries')).toHaveLength(0);
     expect(showToast).toHaveBeenLastCalledWith('That food could not be added. Try again.', { color: 'warning' });
   });
-  test('a meal slot opens the food log', () => {
-    homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal', meal: 'x' });
+  test('a meal slot opens the food log on that meal, not the one due next', () => {
+    homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal', meal: 'b' });
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: '/food/log', params: { meal: 'b' } });
+    homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal' });
     expect(router.push).toHaveBeenLastCalledWith('/food/log');
   });
 });

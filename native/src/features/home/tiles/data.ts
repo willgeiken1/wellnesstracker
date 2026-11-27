@@ -56,7 +56,7 @@ export interface HomeInput {
   food: FoodDayIn[];
   /** The meal Home offers to log next, and quick picks for it. */
   nextMeal: { id: string; name: string } | null;
-  recentFoods: { name: string; serving: string; kcal: number; protein: number }[];
+  recentFoods: { name: string; serving: string; kcal: number | null; protein: number | null }[];
   /** Daily weigh-ins, oldest first. */
   weighIns: { day: string; kg: number; at: Date | null }[];
   weightGoalKg: number | null;
@@ -252,7 +252,7 @@ export function buildTileData(input: HomeInput): HomeTileData {
     mealLog: {
       goal: goalKcal, eaten, pGoal: goalProtein, pEaten: Math.round(today?.protein ?? 0), next: nextMeal?.id ?? '',
       meals: (today?.meals ?? []).map(m => ({ id: m.id, name: m.name, time: m.loggedAt ? clock12(m.loggedAt) : null, kcal: finite(m.kcal) ? Math.round(m.kcal) : m.count ? null : 0, p: finite(m.protein) ? Math.round(m.protein) : m.count ? null : 0, n: m.count })),
-      recent: input.recentFoods.slice(0, 6).map(f => ({ n: f.name, q: f.serving, kcal: Math.round(f.kcal), p: Math.round(f.protein) })),
+      recent: input.recentFoods.slice(0, 6).map(f => ({ n: f.name, q: f.serving, kcal: finite(f.kcal) ? Math.round(f.kcal) : null, p: finite(f.protein) ? Math.round(f.protein) : null })),
       saved: [],
     },
   };

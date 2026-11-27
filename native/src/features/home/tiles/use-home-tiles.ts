@@ -67,6 +67,8 @@ export function homeTileAction(repo: Repository | null, nextMeal: HomeInput['nex
     else router.push('/food/water' as unknown as Href);
     return;
   }
+  // A meal slot opens the log on that meal, not the one due next (breakfast tapped after breakfast is still breakfast).
+  if (data.ql === 'meal' && data.meal) { router.push({ pathname: '/food/log', params: { meal: String(data.meal) } } as unknown as Href); return; }
   if (data.ql === 'meal' || !repo || !nextMeal) { router.push('/food/log' as unknown as Href); return; }
   if (data.ql !== 'food') return;
   const wanted = String(data.food ?? '').trim().toLowerCase();

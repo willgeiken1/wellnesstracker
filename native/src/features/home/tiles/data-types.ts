@@ -43,7 +43,7 @@ export interface HomeTileData {
   mealLog?: {
     goal: number; eaten: number; pGoal: number; pEaten: number; next: string;
     meals: { id: string; name: string; time: string | null; kcal: number | null; p: number | null; n: number }[];
-    recent?: { n: string; q: string; kcal: number; p: number }[];
+    recent?: { n: string; q: string; kcal: number | null; p: number | null }[];
     saved?: { id: string; n: string; q: string; kcal: number; p: number }[];
   };
 }
