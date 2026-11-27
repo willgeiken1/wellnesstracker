@@ -22,7 +22,7 @@ export function useLatest<T>(value: T): () => T {
 /** Native form sheet options: a large sheet stops just short of the top; Quick add and Copy a day are medium sheets at
  * their own heights from the design, as their only detent. */
 export function sheetOptions(size: 'large' | 'quick-cal' | 'copy-day'): NativeStackNavigationOptions {
-  return { ...(size === 'large' ? largeSheet : mediumSheet(size)), contentStyle: { flex: 1 } };
+  return size === 'large' ? largeSheet : mediumSheet(size);
 }
 /** Everything inside reads its colours as on a sheet, so cards and fields step up from the sheet in dark mode. */
 export function SheetSurface({ children }: { children: ReactNode }) {

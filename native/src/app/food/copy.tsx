@@ -9,7 +9,7 @@ export default function FoodSheetRoute() {
   const { repository } = useAuth();
   const { meals } = useLocalSearchParams<{ meals?: string }>();
   return <SheetSurface>
-    <Stack.Screen options={{ ...copyDaySheet(meals), contentStyle: { flex: 1 } }} />
+    <Stack.Screen options={copyDaySheet(meals)} />
     {repository ? <CopySheet key={repository.owner} repo={repository} /> : <NoFood />}
   </SheetSurface>;
 }

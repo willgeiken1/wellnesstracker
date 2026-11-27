@@ -1,12 +1,14 @@
 // How every screen opens, checked against the design: tabs stay full screen, its pushed screens push (in from the right,
 // back with the edge swipe), its sheets are native form sheets with a grabber that close with a swipe down. Large sheets
 // use the system's large detent; medium sheets sit at the height measured from the design, as their only detent.
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
+import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 import type { NativeStackNavigationOptions } from 'expo-router';
 import { NavigationShell } from '../src/app/_layout';
 import SettingsLayout from '../src/app/settings/_layout';
+import AuthLayout from '../src/app/auth/_layout';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { LARGE_SHARE, copyDaySheet, detentOf, largeSheet, mediumSheet, routeOptions, tileEditSheet } from '../src/features/navigation/presentation';
 import { tileSheetOptions } from '../src/features/tiles/nav';
@@ -58,6 +60,14 @@ const SETTINGS_SHEETS: [string, string][] = [
 
 const resolve = (o: unknown, params?: Record<string, unknown>) =>
   (typeof o === 'function' ? o({ route: { params } }) : o) as NativeStackNavigationOptions;
+/** react-native-screens lays an iOS form sheet's content out with this style (ScreenStackItem's getPositioningStyle),
+ * then the screen's contentStyle over it. Without a bottom edge, content that fills with flex: 1 gets no height, and the
+ * sheet shows its header over a blank body: Continue with email, Log food and Saved meals on a release build. */
+const IOS_SHEET_CONTENT = { position: 'absolute', top: 0, start: 0, end: 0 } as const;
+function fillsSheet(o: NativeStackNavigationOptions) {
+  const style = StyleSheet.flatten([IOS_SHEET_CONTENT, o.contentStyle]) as { top?: number; bottom?: number; height?: number };
+  return style.top === 0 && style.bottom === 0 && style.height == null;
+}
 function expectOpens(o: NativeStackNavigationOptions, want: Want) {
   expect(o.gestureEnabled).not.toBe(false);
   if (want === 'push') {
@@ -68,6 +78,7 @@ function expectOpens(o: NativeStackNavigationOptions, want: Want) {
   expect(o.presentation).toBe('formSheet');
   expect(o.sheetGrabberVisible).toBe(true);
   expect(o.sheetCornerRadius).toBe(24);
+  expect(fillsSheet(o)).toBe(want !== 'fit');
   if (want === 'large') expect(o.sheetAllowedDetents).toEqual([1]);
   else if (want === 'fit') expect(o.sheetAllowedDetents).toBe('fitToContents');
   else {
@@ -111,6 +122,23 @@ test.each(SETTINGS_SHEETS)('Settings opens %s as a large sheet over the page tha
   expectOpens(resolve(mockScreens.find(s => s.name === '[section]')!.options), 'push');
 });
 
+test('Welcome\'s Continue with email and Skip for now open as medium sheets whose content fills them', async () => {
+  mockScreens.length = 0;
+  await render(<AuthLayout />);
+  expectOpens(resolve(mockScreens.find(s => s.name === 'email')!.options), 0.501);
+  expectOpens(resolve(mockScreens.find(s => s.name === 'skip')!.options), 0.485);
+});
+
+test('no screen replaces a sheet\'s content style, which would take its bottom edge away and blank it again', () => {
+  // Each sheet route once set contentStyle: { flex: 1 } over the sheet options, which does nothing for content that is
+  // positioned absolutely and dropped the fill. Only the layouts' screen defaults (a page colour) may set it.
+  const files: string[] = [];
+  const walk = (dir: string) => { for (const f of readdirSync(dir)) { const p = join(dir, f); if (statSync(p).isDirectory()) walk(p); else if (/\.tsx?$/.test(f)) files.push(p); } };
+  walk(join(__dirname, '../src'));
+  const setters = files.filter(f => /contentStyle\s*:/.test(readFileSync(f, 'utf8'))).map(f => f.slice(f.indexOf('src/')));
+  expect(setters.sort()).toEqual(['src/app/_layout.tsx', 'src/app/settings/_layout.tsx', 'src/features/navigation/presentation.ts']);
+});
+
 test('each area\'s own sheet options agree with the root stack, so a route never changes its height once open', () => {
   expect(tileSheetOptions.tray).toEqual(largeSheet);
   expect(tileSheetOptions.section).toEqual(mediumSheet('page-section'));
@@ -121,6 +149,7 @@ test('each area\'s own sheet options agree with the root stack, so a route never
   expect(foodSheet('quick-cal').sheetAllowedDetents).toEqual(mediumSheet('quick-cal').sheetAllowedDetents);
   expect(foodSheet('copy-day').sheetAllowedDetents).toEqual(mediumSheet('copy-day').sheetAllowedDetents);
   expect(routinesSheet.sheetAllowedDetents).toEqual([1]);
+  for (const o of [foodSheet('large'), foodSheet('quick-cal'), foodSheet('copy-day'), routinesSheet, copyDaySheet(5)]) expect(fillsSheet(o)).toBe(true);
 });
 
 // A tap on a tile opens what the design's tile opens (its LINK table and each page's tile `link`).

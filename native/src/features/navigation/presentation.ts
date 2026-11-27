@@ -32,13 +32,22 @@ export type MediumSheet = keyof typeof MEDIUM_SHARE;
 export const detentOf = (screenShare: number) => Math.round((screenShare / LARGE_SHARE) * 1000) / 1000;
 
 const sheet = { headerShown: false, presentation: 'formSheet', sheetGrabberVisible: true, sheetCornerRadius: SHEET_RADIUS } as const;
+/**
+ * A sheet that rests at a fixed height has its content pinned to the sheet's top and bottom. On iOS react-native-screens
+ * lays a form sheet's content out from the top with no bottom edge (so a sheet that is dragged between heights doesn't
+ * flicker), which leaves content that fills its screen with `flex: 1` (every Sheet here) with no height at all: the
+ * sheet showed its header over a blank body in release builds. A sheet with one fixed height never changes height, so
+ * pinning the bottom costs nothing. Not for `fitToContents`, which takes its height from its content.
+ */
+export const SHEET_CONTENT = { bottom: 0 } as const;
+const fixedSheet = { ...sheet, contentStyle: SHEET_CONTENT } as const;
 
 /** A large sheet: one detent at the top, the page behind becomes a card. */
-export const largeSheet: NativeStackNavigationOptions = { ...sheet, sheetAllowedDetents: [1] };
+export const largeSheet: NativeStackNavigationOptions = { ...fixedSheet, sheetAllowedDetents: [1] };
 
 /** A medium sheet at the design's height, as its only detent, so it cannot be dragged up to full height. */
 export function mediumSheet(id: MediumSheet): NativeStackNavigationOptions {
-  return { ...sheet, sheetAllowedDetents: [detentOf(MEDIUM_SHARE[id])], sheetExpandsWhenScrolledToEdge: false };
+  return { ...fixedSheet, sheetAllowedDetents: [detentOf(MEDIUM_SHARE[id])], sheetExpandsWhenScrolledToEdge: false };
 }
 
 /**
@@ -49,7 +58,7 @@ export function mediumSheet(id: MediumSheet): NativeStackNavigationOptions {
 export function copyDaySheet(meals?: unknown): NativeStackNavigationOptions {
   const n = Math.max(1, Math.round(Number(meals)) || 3);
   const pt = Math.min(0.72 * 852, MEDIUM_SHARE['copy-day'] * 852 + (n - 3) * 69);
-  return { ...sheet, sheetAllowedDetents: [detentOf(pt / 852)], sheetExpandsWhenScrolledToEdge: false };
+  return { ...fixedSheet, sheetAllowedDetents: [detentOf(pt / 852)], sheetExpandsWhenScrolledToEdge: false };
 }
 
 /** A medium sheet as tall as what it holds (the Tab bar sheet), which never needs to scroll. */
