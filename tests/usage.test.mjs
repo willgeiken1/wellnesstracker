@@ -58,6 +58,10 @@ test("PostHog drops dose sentinels from events and person properties", () => {
     bacWaterMl: 887669,
     reconstitution: 887670,
     dailyRoutines: 887671,
+    site: 887672,
+    lastSite: 887673,
+    injectionSite: 887674,
+    siteId: 887675,
   };
   const event = sanitizePosthogEvent({
     event: "tab_viewed",
@@ -486,9 +490,9 @@ test("local development never loads PostHog", async () => {
 test("the shell caches the usage modules with the v50 release", () => {
   const sw = readFileSync(new URL("../logger/sw.js", import.meta.url), "utf8");
   const sentry = readFileSync(new URL("../logger/js/sentry.js", import.meta.url), "utf8");
-  assert.match(sw, /insight-shell-v81/);
+  assert.match(sw, /insight-shell-v90/);
   assert.match(sw, /\.\/js\/usage\.js/);
   assert.match(sw, /\.\/js\/usage-events\.js/);
   assert.match(sw, /\.\/js\/usage-pref\.js/);
-  assert.match(sentry, /insight-shell-v81/);
+  assert.match(sentry, /insight-shell-v90/);
 });

@@ -4,8 +4,9 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
 /* Synthetic routines only. The flag stays false in source.
-   The day key is app.today(). The clock face is app.routineNow().
-   A UTC instant on the next calendar day must not move the local day. */
+   The clock face is app.routineNow(). The routine day follows that local
+   clock and the rollover hour. Boundary and time-zone cases live in
+   daily-routines-rollover.test.mjs. Do not read the day from toISOString(). */
 
 function el() {
   return {
@@ -47,6 +48,7 @@ const {
   routineStreak,
   shiftRoutineDay,
   skipRoutineItem,
+  toggleRoutineCollapsed,
   toggleRoutineFocus,
   toggleRoutineReveal,
   undoRoutineLog,
@@ -148,20 +150,22 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(routineStreak(logs, "2026-11-19"), 2);
   });
 
-  test("a rest log keeps the streak and is not a dose", () => {
+  test("a rest log pauses the streak and is not a dose", () => {
     const logs = [
       logRow("2026-11-18", "done", { id: "d18" }),
       logRow("2026-11-19", "done", { id: "rest", itemId: null, rest: true, amount: 80 }),
     ];
-    assert.equal(routineStreak(logs, "2026-11-19"), 2);
+    assert.equal(routineStreak(logs, "2026-11-19"), 1);
+    assert.notEqual(routineStreak(logs, "2026-11-19"), 2);
+    assert.notEqual(routineStreak(logs, "2026-11-19"), 0);
     assert.equal(loggedTodayCount(logs, "2026-11-19"), 0);
   });
 
-  test("day rollover follows the pinned local day, not the UTC instant", () => {
+  test("a late local evening stays on that local day", () => {
     signIn("2026-11-19");
     const morning = blockId("Morning routine");
     assert.equal(addDose(morning), true);
-    pin("2026-11-19", "2026-11-20T04:30:00.000Z");
+    app.routineNow = () => new Date(2026, 10, 19, 23, 30);
     assert.equal(logRoutineItem(app.state, app.state.dailyRoutines.items[0].id), true);
     const log = app.state.dailyRoutines.logs.find((row) => row.itemId === app.state.dailyRoutines.items[0].id);
     assert.equal(log.day, "2026-11-19");
@@ -171,22 +175,25 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-20"), 0);
     const html = dailyRoutinesHTML();
     assert.match(html, /data-logged="1"/);
-    assert.match(html, /<b>1<\/b> logged today/);
+    assert.match(html, /data-due="1"/);
+    assert.match(html, /<b>1<\/b> of 1 today/);
     assert.doesNotMatch(html, /<b>250<\/b>/);
     assert.match(html, /data-streak="1"/);
 
-    pin("2026-11-20", "2026-11-21T03:00:00.000Z");
+    app.today = () => "2026-11-20";
+    app.routineNow = () => new Date(2026, 10, 20, 12, 0);
     const nextDay = dailyRoutinesHTML();
     assert.match(nextDay, /data-logged="0"/);
     assert.match(nextDay, /data-streak="1"/);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, "2026-11-20"), 1);
 
-    pin("2026-11-21", "2026-11-21T18:00:00.000Z");
+    app.today = () => "2026-11-21";
+    app.routineNow = () => new Date(2026, 10, 21, 12, 0);
     const missed = dailyRoutinesHTML();
     assert.match(missed, /data-logged="0"/);
     assert.match(missed, /data-streak="0"/);
     assert.equal(routineStreak(app.state.dailyRoutines.logs, "2026-11-21"), 0);
-    assert.doesNotMatch(missed, /yesterday|missed|overdue/i);
+    assert.doesNotMatch(missed, /yesterday|missed/i);
   });
 
   test("tap to log collapses the row, reveal shows undo, and undo drops the dose", () => {
@@ -209,14 +216,19 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(live.deletedAt, null);
     html = dailyRoutinesHTML();
     assert.match(html, /data-logged="1"/);
+    assert.match(html, /data-due="1"/);
+    assert.match(html, /<b>1<\/b> of 1 today/);
     assert.match(html, /data-streak="1"/);
     assert.match(html, /dr-streak-mark/);
-    assert.match(html, /All done/);
-    assert.match(html, /Show 1 completed/);
+    assert.match(html, /All done today ✓/);
+    assert.match(html, /data-all-done="true"/);
+    assert.match(html, /data-collapsed="true"/);
+    assert.doesNotMatch(html, /Show 1 completed/);
     assert.doesNotMatch(html, /data-action="routines-log"/);
     assert.doesNotMatch(html, /data-action="routines-undo"/);
     assert.doesNotMatch(html, /yesterday|missed|overdue/i);
 
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     assert.equal(toggleRoutineReveal(app.state, morning), true);
     html = dailyRoutinesHTML();
     assert.match(html, /aria-expanded="true"/);
@@ -409,8 +421,8 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(routineStreak(app.state.dailyRoutines.logs, "2026-11-19"), 3);
     toggleRoutineReveal(app.state, morning);
     const html = dailyRoutinesHTML();
-    assert.match(html, /All skipped/);
-    assert.doesNotMatch(html, /All done/);
+    assert.doesNotMatch(html, /data-all-done/);
+    assert.match(html, /Nothing left to log/);
     assert.match(html, /data-state="skipped"/);
     assert.match(html, /Skipped/);
     assert.match(html, /data-streak="3"/);
@@ -431,6 +443,7 @@ describe("routine check-off", { concurrency: false }, () => {
     log.unit = "mcg";
     const compound = app.state.dailyRoutines.compounds.find((row) => row.id === item.compoundId);
     compound.amount = 250;
+    toggleRoutineCollapsed(app.state, morning);
     toggleRoutineReveal(app.state, morning);
     const html = dailyRoutinesHTML();
     assert.match(html, /data-state="partial"/);
@@ -458,6 +471,7 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(log.amount, 0.25);
     assert.equal(typeof log.amount, "number");
     assert.equal(loggedTodayCount(app.state.dailyRoutines.logs, "2026-11-19"), 1);
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     toggleRoutineReveal(app.state, morning);
     const html = dailyRoutinesHTML();
     assert.match(html, /0\.25 mcg/);
@@ -477,8 +491,13 @@ describe("routine check-off", { concurrency: false }, () => {
     assert.equal(putDailyRoutines(app.state, next), true);
     assert.equal(logRoutineItem(app.state, item.id), true);
     const html = dailyRoutinesHTML();
-    assert.equal(html.match(/Show 1 completed/g).length, 2);
+    assert.match(html, /data-all-done="true"/);
     assert.doesNotMatch(html, /data-action="routines-log"/);
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
+    assert.equal(toggleRoutineCollapsed(app.state, night), true);
+    const opened = dailyRoutinesHTML();
+    assert.equal(opened.match(/Show 1 completed/g).length, 2);
+    assert.doesNotMatch(opened, /data-action="routines-log"/);
   });
 
   test("a preference toggle keeps a newer store stamp, and the next check-off beats the tombstone", () => {
@@ -628,10 +647,10 @@ describe("routine check-off", { concurrency: false }, () => {
     const morning = blockId("Morning routine");
     addDose(morning);
     const item = app.state.dailyRoutines.items[0];
-    const id = routineLogId(item.id, "2026-11-19");
     const future = Date.now() + 3 * 24 * 60 * 60 * 1000;
     app.routineNow = () => new Date(future);
     assert.equal(logRoutineItem(app.state, item.id), true);
+    const id = app.state.dailyRoutines.logs.find((row) => row.itemId === item.id).id;
     const checked = structuredClone(app.state.dailyRoutines);
     app.routineNow = () => new Date();
     app.state.dailyRoutines = structuredClone(checked);
@@ -740,7 +759,9 @@ describe("routine check-off", { concurrency: false }, () => {
     const html = dailyRoutinesHTML();
     assert.match(html, /Example Compound B/);
     assert.match(html, /data-action="routines-add-item"/);
-    assert.doesNotMatch(html, /Add the first item/);
+    assert.doesNotMatch(html, /data-routines-discover="empty"/);
+    assert.match(html, /data-routines-discover="entry"/);
+    assert.match(html, /Coming soon/);
     assert.doesNotMatch(readFileSync(new URL("../logger/js/pages/daily-routines.js", import.meta.url), "utf8"), /addExampleRoutineItem/);
     assert.doesNotMatch(readFileSync(new URL("../logger/js/shell/actions.js", import.meta.url), "utf8"), /addExampleRoutineItem/);
   });

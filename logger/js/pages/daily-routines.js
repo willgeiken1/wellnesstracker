@@ -11,13 +11,16 @@ import {
   markLogUndone,
   futureCarry,
   routineLogId,
+  routineSiteId,
   tombstoneLog,
   routinePlacementId,
   dedupePlacementPairs,
   seedDefaultBlocks,
   upsertEntity,
 } from "../shared/daily-routines-store.js";
-import { nextDoseCountdown, ROUTINE_BLOCK_START_MIN } from "../shared/routine-dose.js";
+import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, ROUTINE_BLOCK_START_MIN, routineDayKey, routineDayRolloverHour } from "../shared/routine-dose.js";
+import { routineSupplyView, supplyFromDraft } from "../shared/routine-supply.js";
+import { reconstitutionNoteText, reconstitutionResult } from "./reconstitution.js";
 import { addRoutinePart, applySetup, readSetup, routineParts, routineSetupShows, SETUP_BLOCK_IDS } from "../shared/routine-setup.js";
 
 /* Routines tab. The flag stays off in source. This module paints only when
@@ -30,8 +33,16 @@ import { addRoutinePart, applySetup, readSetup, routineParts, routineSetupShows,
    unit, and note and marks that log undone, on every live log for that item
    (or rest) and day. Restore writes those fields back.
 
-   The day key is app.today(). The clock face is app.routineNow(). Do not
-   derive the day from the clock's UTC instant. */
+   The day key is the local clock plus the rollover hour (4 AM unless the
+   user picked another hour). The clock face is app.routineNow(). Do not
+   derive the day from the clock's UTC instant, and do not use app.today(),
+   which rolls at midnight.
+
+   Log all writes one done log per open item in that block. A skip already
+   covers its item. A whole-day rest covers the day, so Log all writes
+   nothing on a rest day and does not rewrite a rest row. A log tap shows
+   "Logged · Undo" for 3 seconds. This file does not listen for the pointer,
+   so a long press stays available for rename and details. */
 
 const TILE_COLORS = new Set(["citrus", "lavender", "pink"]);
 export const ROUTINE_BLOCK_COLORS = Object.freeze(["citrus", "lavender", "pink"]);
@@ -40,6 +51,9 @@ const DOSE_UNIT_SET = new Set(ROUTINE_DOSE_UNITS);
 const DEFAULT_START = new Map(Object.entries(ROUTINE_BLOCK_START_MIN).map(([name, minutes]) => [name, minutes / 60]));
 const SLOT_LABEL = ["Morning", "Afternoon", "Night"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+export const ROUTINE_LOG_TOAST_MS = 3000;
+let logToast = null;
+let logToastTimer = 0;
 function esc(value) {
   if (typeof app.esc === "function") return app.esc(value);
   return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -53,15 +67,14 @@ function shellDate() {
   return new Date();
 }
 
+function rolloverHour(store) {
+  return routineDayRolloverHour(store && store.settings && store.settings.dayRolloverHour);
+}
+
 function todayKey(date) {
-  if (typeof app.today === "function") {
-    const day = app.today();
-    if (typeof day === "string" && day) return day;
-  }
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const clock = date instanceof Date && !Number.isNaN(date.getTime()) ? date : shellDate();
+  const store = app.state && app.state.dailyRoutines;
+  return routineDayKey(clock, rolloverHour(store));
 }
 
 export function routineClock() {
@@ -73,6 +86,11 @@ export function routineClock() {
     day: typeof day === "string" ? day : "",
     now: Number.isFinite(stamp) ? stamp : 0,
   };
+}
+
+function toastNow() {
+  const clock = routineClock();
+  return clock.now > 0 ? clock.now : Date.now();
 }
 
 function stampAfter(now, previous) {
@@ -265,6 +283,129 @@ function parseRoutineLogId(id) {
   return match ? { itemId: match[1], day: match[2] } : null;
 }
 
+/* One row per placed item. Two blocks that share an item are still one dose. */
+function placedItems(projected) {
+  const blocks = new Set((projected && projected.blocks ? projected.blocks : []).filter((block) => isLive(block)).map((block) => block.id));
+  const items = new Map((projected && projected.items ? projected.items : []).filter((item) => isLive(item)).map((item) => [item.id, item]));
+  const seen = new Set();
+  const out = [];
+  for (const place of projected && projected.placements ? projected.placements : []) {
+    if (!isLive(place) || !blocks.has(place.blockId) || !items.has(place.itemId) || seen.has(place.itemId)) continue;
+    seen.add(place.itemId);
+    out.push(items.get(place.itemId));
+  }
+  return out;
+}
+
+/* Logged doses out of doses due today. A skip is due and not logged.
+   The numbers are counts. They are never a sum of amounts. */
+export function routineDoseProgress(projected, day) {
+  const doses = placedItems(projected).filter((item) => item.kind === "dose");
+  let logged = 0;
+  for (const item of doses) {
+    const log = coveringLog(projected && projected.logs, item.id, day);
+    if (log && log.status !== "skipped") logged += 1;
+  }
+  return { logged, due: doses.length };
+}
+
+/* The day is done when every placed item is logged. A skip is handled and
+   still not logged, so it does not finish the day. No items is not done. */
+export function routineDayComplete(projected, day) {
+  const items = placedItems(projected);
+  if (!items.length || typeof day !== "string") return false;
+  return items.every((item) => {
+    const log = coveringLog(projected && projected.logs, item.id, day);
+    return !!(log && log.status !== "skipped");
+  });
+}
+
+function blockStartsFor(projected, item) {
+  const placed = new Set();
+  for (const place of projected && projected.placements ? projected.placements : []) {
+    if (isLive(place) && place.itemId === item.id && typeof place.blockId === "string") placed.add(place.blockId);
+  }
+  const starts = [];
+  for (const block of projected && projected.blocks ? projected.blocks : []) {
+    if (!isLive(block) || !placed.has(block.id)) continue;
+    const hour = DEFAULT_START.get(block.name);
+    if (typeof hour === "number") starts.push(hour * 60);
+  }
+  starts.sort((a, b) => a - b);
+  return starts;
+}
+
+/* Overdue means every start named on this item has passed today.
+   A later block the same day is still upcoming, so the row is not overdue.
+   A renamed block has no start, so it is not overdue and has no countdown. */
+function itemTiming(projected, item, date, day) {
+  if (!item || !(date instanceof Date) || Number.isNaN(date.getTime())) return { waitMin: null, overdue: false };
+  if (item.kind === "dose") {
+    const result = nextDoseCountdown({
+      item,
+      blocks: projected && projected.blocks,
+      placements: projected && projected.placements,
+      logs: [],
+      date,
+      day,
+    });
+    if (!result || typeof result.waitMin !== "number") return { waitMin: null, overdue: false };
+    return { waitMin: result.waitMin, overdue: result.tomorrow === true };
+  }
+  const starts = blockStartsFor(projected, item);
+  if (!starts.length) return { waitMin: null, overdue: false };
+  const nowMin = date.getHours() * 60 + date.getMinutes();
+  let target = null;
+  for (const start of starts) {
+    if (start >= nowMin) {
+      target = start;
+      break;
+    }
+  }
+  const overdue = target == null;
+  if (target == null) target = starts[0] + 24 * 60;
+  return { waitMin: target - nowMin, overdue };
+}
+
+function placementOrder(projected, itemId) {
+  let best = Number.POSITIVE_INFINITY;
+  for (const place of projected && projected.placements ? projected.placements : []) {
+    if (isLive(place) && place.itemId === itemId && typeof place.order === "number" && place.order < best) best = place.order;
+  }
+  return best;
+}
+
+/* The next line names an item, not a block. Upcoming items come before
+   overdue ones. The wait is the same block clock the row countdown uses. */
+export function routineNextItem(projected, date, day) {
+  if (!projected || !(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const open = placedItems(projected).filter((item) => !coveringLog(projected.logs, item.id, day));
+  if (!open.length) return null;
+  const ranked = open.map((item) => ({ item, ...itemTiming(projected, item, date, day), order: placementOrder(projected, item.id) }));
+  ranked.sort((a, b) => {
+    const group = (row) => (row.overdue ? 1 : row.waitMin == null ? 2 : 0);
+    const ag = group(a);
+    const bg = group(b);
+    if (ag !== bg) return ag - bg;
+    const aw = a.waitMin == null ? Number.POSITIVE_INFINITY : a.waitMin;
+    const bw = b.waitMin == null ? Number.POSITIVE_INFINITY : b.waitMin;
+    if (aw !== bw) return aw - bw;
+    if (a.order !== b.order) return a.order - b.order;
+    if (a.item.id === b.item.id) return 0;
+    return a.item.id < b.item.id ? -1 : 1;
+  });
+  return ranked[0];
+}
+
+export function lastDoseLabel(log) {
+  if (!log || log.rest === true || log.status === "skipped") return "";
+  if (log.status !== "done" && log.status !== "partial") return "";
+  if (typeof log.at !== "number" || !Number.isFinite(log.at) || log.at <= 0) return "";
+  const date = new Date(log.at);
+  if (Number.isNaN(date.getTime())) return "";
+  return `last: ${formatRoutineClock(date)}`;
+}
+
 /* Calendar steps stay on the year-month-day fields. The UTC date is only
    the calculator, so a US evening that is already the next UTC day does
    not skip a local day. */
@@ -277,33 +418,71 @@ export function shiftRoutineDay(day, delta) {
   return utc.toISOString().slice(0, 10);
 }
 
-function logTouchesDay(log) {
-  if (!isLive(log) || typeof log.day !== "string" || !DAY.test(log.day)) return false;
-  if (log.rest === true) return true;
+function countedLog(log) {
+  if (!isLive(log) || log.rest === true || typeof log.day !== "string" || !DAY.test(log.day)) return false;
   return log.status === "done" || log.status === "partial" || log.status === "skipped";
 }
 
-/* Consecutive days touched by a done, partial, skip, or rest log.
-   Today counts only once something is logged. A day with no log, after
-   the first touched day, is a full miss and stops the run. A skip touches
-   the day, so it does not stop the run. */
+/* The live rest for that day, if one exists. One rest covers the whole day.
+   A newer stamp wins. The same stamp keeps the smaller id. */
+export function routineRestLog(logs, day) {
+  if (typeof day !== "string" || !DAY.test(day)) return null;
+  let best = null;
+  for (const log of Array.isArray(logs) ? logs : []) {
+    if (!isLive(log) || log.rest !== true || log.day !== day) continue;
+    if (!best) {
+      best = log;
+      continue;
+    }
+    const at = log.updatedAt || 0;
+    const prev = best.updatedAt || 0;
+    if (at > prev || (at === prev && log.id < best.id)) best = log;
+  }
+  return best;
+}
+
+/* Done, partial, and skip days add one. A skip adds one, so it does not
+   stop the run. A rest day with no item log pauses: it does not add a day
+   and it does not stop the run. An item log on that same day still counts,
+   and the rest does not add a second day. Today adds one only when a
+   non-rest log is there. A day with no log, after the first counted or
+   paused day, is a full miss and stops the run. An open today does not
+   stop it. */
 export function routineStreak(logs, day) {
   if (typeof day !== "string" || !DAY.test(day)) return 0;
-  const touched = new Set();
+  const paused = new Set();
+  const counted = new Set();
   for (const log of Array.isArray(logs) ? logs : []) {
-    if (logTouchesDay(log)) touched.add(log.day);
+    if (!isLive(log) || typeof log.day !== "string" || !DAY.test(log.day)) continue;
+    if (log.rest === true) paused.add(log.day);
+    else if (countedLog(log)) counted.add(log.day);
   }
+  for (const key of counted) paused.delete(key);
   let earliest = "";
-  for (const key of touched) if (!earliest || key < earliest) earliest = key;
+  for (const key of paused) if (!earliest || key < earliest) earliest = key;
+  for (const key of counted) if (!earliest || key < earliest) earliest = key;
   if (!earliest) return 0;
-  let streak = touched.has(day) ? 1 : 0;
-  let cursor = shiftRoutineDay(day, -1);
+  let streak = 0;
+  let cursor = day;
   let guard = 0;
   while (cursor && cursor >= earliest && guard < 4000) {
-    if (!touched.has(cursor)) break;
-    streak += 1;
-    cursor = shiftRoutineDay(cursor, -1);
-    guard += 1;
+    if (paused.has(cursor)) {
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    if (counted.has(cursor)) {
+      streak += 1;
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    if (cursor === day) {
+      cursor = shiftRoutineDay(cursor, -1);
+      guard += 1;
+      continue;
+    }
+    break;
   }
   return streak;
 }
@@ -382,16 +561,46 @@ function amountMarkup(text) {
   return text ? `<span class="dr-dose"> · ${esc(text)}</span>` : "";
 }
 
-export function doseCountdownText(projected, item, date, day) {
-  if (!projected || !item) return "";
-  const result = nextDoseCountdown({
+/* The saved inputs are redrawn with the item's current dose, so a later
+   amount change does not leave the old U-100 units on the row. */
+function freshCalculatorNote(item, compound) {
+  if (!item || typeof item.calcVial !== "number" || typeof item.calcWater !== "number") return "";
+  if (!compound || typeof compound.amount !== "number" || typeof compound.unit !== "string" || !compound.unit) return "";
+  return reconstitutionNoteText(reconstitutionResult({
+    vialAmount: item.calcVial,
+    waterMl: item.calcWater,
+    doseAmount: compound.amount,
+    vialUnit: item.calcVialUnit,
+    doseUnit: compound.unit,
+  }));
+}
+
+/* Calculator note on the item. A per-dose log note stays off this row.
+   Once the calculator inputs are saved, a failed redraw shows nothing
+   rather than the previous units. */
+function itemNoteMarkup(item, compound) {
+  if (!item || item.kind !== "dose") return "";
+  const hasCalc = typeof item.calcVial === "number" && typeof item.calcWater === "number";
+  const note = hasCalc ? freshCalculatorNote(item, compound) : (typeof item.note === "string" ? item.note.trim() : "");
+  if (!note) return "";
+  return `<span class="dr-item-note">${esc(note)}</span>`;
+}
+
+function countdownQuery(projected, item, date, day) {
+  return {
     item,
     blocks: projected.blocks,
     placements: projected.placements,
     logs: projected.logs,
     date,
     day,
-  });
+    hour: projected.settings && projected.settings.dayRolloverHour,
+  };
+}
+
+export function doseCountdownText(projected, item, date, day) {
+  if (!projected || !item) return "";
+  const result = nextDoseCountdown(countdownQuery(projected, item, date, day));
   if (!result || typeof result.waitMin !== "number") return "";
   const wait = formatRoutineWait(result.waitMin);
   if (!wait) return "";
@@ -400,18 +609,57 @@ export function doseCountdownText(projected, item, date, day) {
 
 function countdownMarkup(projected, row, date, day) {
   if (!row.item || row.item.kind !== "dose") return "";
-  const result = nextDoseCountdown({
-    item: row.item,
-    blocks: projected.blocks,
-    placements: projected.placements,
-    logs: projected.logs,
-    date,
-    day,
-  });
+  const result = nextDoseCountdown(countdownQuery(projected, row.item, date, day));
   if (!result || typeof result.waitMin !== "number") return "";
   const text = doseCountdownText(projected, row.item, date, day);
   if (!text) return "";
   return `<span class="dr-next-dose" data-next-dose="${result.waitMin}">${esc(text)}</span>`;
+}
+
+const OVERDUE_ICON = `<svg class="dr-overdue-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5"/><path d="M12 16.2h.01"/></svg>`;
+const DONE_MARK = `<svg class="dr-all-done-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.2 16.7 19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function overdueMarkup() {
+  return `<span class="dr-overdue">${OVERDUE_ICON}<span class="dr-overdue-text">overdue</span></span>`;
+}
+
+function latestTakenLog(logs, itemId) {
+  const rows = (Array.isArray(logs) ? logs : []).filter((log) => {
+    if (!isLive(log) || log.itemId !== itemId || log.rest === true) return false;
+    if (log.status !== "done" && log.status !== "partial") return false;
+    return typeof log.at === "number" && log.at > 0;
+  });
+  rows.sort((a, b) => {
+    if (a.day !== b.day) return a.day < b.day ? 1 : -1;
+    if (a.at !== b.at) return b.at - a.at;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  return rows[0] || null;
+}
+
+/* An open row that is still upcoming shows the countdown. A taken row shows
+   the clock time stored on that log. Overdue replaces the countdown and
+   keeps a previous clock time when one exists. */
+function rowDetailMarkup(projected, row, date, day) {
+  const open = !!row.open;
+  const timing = open && row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
+  const state = open ? "open" : rowState(row.log);
+  const overdue = open && timing.overdue;
+  const countdown = !overdue && state !== "done" && state !== "partial" ? countdownMarkup(projected, row, date, day) : "";
+  const taken = state === "done" || state === "partial" ? row.log : (!countdown && row.item ? latestTakenLog(projected && projected.logs, row.item.id) : null);
+  const last = !countdown ? lastDoseLabel(taken) : "";
+  const lastHTML = last ? `<span class="dr-last">${esc(last)}</span>` : "";
+  const tag = overdue ? overdueMarkup() : "";
+  const supply = supplyMarkup(projected, row, day);
+  if (!tag && !countdown && !lastHTML && !supply) return "";
+  return `<span class="dr-meta">${tag}${countdown}${lastHTML}${supply}</span>`;
+}
+
+function supplyMarkup(projected, row, day) {
+  if (!row || !row.item) return "";
+  const supply = routineSupplyView({ item: row.item, logs: projected && projected.logs, today: day });
+  if (!supply.text) return "";
+  return `<span class="dr-supply" data-supply="${esc(supply.state)}">${esc(supply.text)}</span>`;
 }
 
 function rowState(log) {
@@ -598,6 +846,126 @@ export function restoreRoutineLog(state, logId) {
   });
 }
 
+/* One done log per open item in the block. Skipped and already logged items
+   are not open. A rest day covers every block, so nothing is written. A rest
+   row is not an item row. Edit mode does not log. */
+export function logAllRoutineBlock(state, blockId) {
+  if (layoutEditing()) return false;
+  if (typeof blockId !== "string" || !blockId) return false;
+  if (refuseWrite() || !state || typeof state !== "object") return false;
+  const clock = routineClock();
+  if (!DAY.test(clock.day)) return false;
+  const current = normalizeDailyRoutines(state.dailyRoutines);
+  if (!current) return false;
+  const view = projectDailyRoutines(current);
+  if (!view || !(view.blocks || []).some((block) => block.id === blockId)) return false;
+  if (routineRestLog(view.logs, clock.day)) return false;
+  const seen = new Set();
+  const rows = [];
+  for (const row of routineBlockRows(view, blockId, clock.day)) {
+    if (!row.open || !row.item || seen.has(row.item.id)) continue;
+    seen.add(row.item.id);
+    rows.push(row);
+  }
+  if (!rows.length) return false;
+  let next = current;
+  let at = stampAfter(clock.now, current.updatedAt);
+  const ids = [];
+  for (const row of rows) {
+    const id = checkOffId(next, row.item.id, clock.day);
+    if (!id) return false;
+    const dose = loggedDose(view, row.item);
+    ids.push(id);
+    const stamped = writeStamp(next, clock, id);
+    const atWrite = stamped > at ? stamped : at;
+    next = upsertEntity(next, "logs", carryFuture({
+      id,
+      itemId: row.item.id,
+      compoundId: dose.compoundId,
+      day: clock.day,
+      status: "done",
+      amount: dose.amount,
+      unit: dose.unit,
+      at: clock.now,
+      deletedAt: null,
+    }, next, id), atWrite);
+    at = atWrite;
+    const saved = (next.logs || []).find((log) => log.id === id);
+    if (!saved || saved.updatedAt !== atWrite || saved.deletedAt != null || saved.rest === true) return false;
+    at = atWrite + 1;
+  }
+  if (!putDailyRoutines(state, next)) return false;
+  return ids;
+}
+
+export function undoRoutineLogs(state, logIds) {
+  if (!Array.isArray(logIds) || !logIds.length) return false;
+  const seen = new Set();
+  let any = false;
+  for (const id of logIds) {
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    if (undoRoutineLog(state, id)) any = true;
+  }
+  return any;
+}
+
+export function clearRoutineLogToast() {
+  if (logToastTimer) clearTimeout(logToastTimer);
+  logToastTimer = 0;
+  logToast = null;
+}
+
+/* Visible while the pinned clock is still inside the 3 second window.
+   The timer hides it in the live app. Reduce Motion skips the fade only. */
+export function routineLogToast(now) {
+  if (!logToast) return null;
+  const at = typeof now === "number" && Number.isFinite(now) ? now : toastNow();
+  if (at >= logToast.until) return null;
+  return { ids: logToast.ids.slice(), until: logToast.until };
+}
+
+export function showRoutineLogToast(ids) {
+  const seen = new Set();
+  const list = [];
+  for (const id of Array.isArray(ids) ? ids : []) {
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    list.push(id);
+  }
+  clearRoutineLogToast();
+  if (!list.length) return false;
+  const token = {};
+  const now = toastNow();
+  logToast = { ids: list, until: now + ROUTINE_LOG_TOAST_MS, token };
+  const timer = setTimeout(() => {
+    if (!logToast || logToast.token !== token) return;
+    logToast = null;
+    logToastTimer = 0;
+    const node = typeof document !== "undefined" && document.querySelector ? document.querySelector("[data-log-toast]") : null;
+    if (node && typeof node.remove === "function") node.remove();
+  }, ROUTINE_LOG_TOAST_MS);
+  if (timer && typeof timer.unref === "function") timer.unref();
+  logToastTimer = timer;
+  return true;
+}
+
+export function undoRoutineLogToast(state) {
+  const toast = routineLogToast();
+  clearRoutineLogToast();
+  if (!toast) return false;
+  return undoRoutineLogs(state, toast.ids);
+}
+
+export function latestRoutineLogId(state, itemId) {
+  const store = state && state.dailyRoutines;
+  if (!store || typeof itemId !== "string" || !itemId) return "";
+  const day = routineClock().day;
+  const logs = (store.logs || []).filter((log) => isLive(log) && log.itemId === itemId && log.day === day && log.rest !== true && (log.status === "done" || log.status === "partial"));
+  logs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  return logs[0] ? logs[0].id : "";
+}
+
 function validCalendarDay(value) {
   if (typeof value !== "string" || !DAY.test(value)) return false;
   const time = Date.parse(`${value}T00:00:00Z`);
@@ -654,7 +1022,9 @@ function logHasSavedDose(log) {
    A day change writes the destination id and tombstones this one, so the
    other phone's fresh check-off of the old day stays. A time is applied
    only when that day is before today. A note is stored only when the draft
-   includes one. The compound row is
+   includes one. A site is stored only when the draft includes one. A blank
+   site removes it. A missing site key leaves the old site. An unknown site
+   is refused. A check cannot store a site. The compound row is
    left alone, so later edits to the item do not rewrite this log. */
 export function editRoutineLog(state, logId, draft) {
   if (typeof logId !== "string" || !logId) return false;
@@ -706,9 +1076,28 @@ export function editRoutineLog(state, logId, draft) {
     }
     payload = withDetailsFields(payload, draft, clockEdit.at);
     if (!payload) return null;
+    if (draft && Object.prototype.hasOwnProperty.call(draft, "site")) {
+      if (!doseItem) {
+        if (draft.site != null && draft.site !== "") return null;
+        delete payload.site;
+      } else {
+        if (draft.site != null && typeof draft.site !== "string") return null;
+        const raw = typeof draft.site === "string" ? draft.site.trim() : "";
+        const site = routineSiteId(raw);
+        if (raw && !site) return null;
+        if (site) payload.site = site;
+        else delete payload.site;
+      }
+    }
     let next = upsertEntity(store, "logs", carryFuture(payload, store, nextId), at);
     if (!wrote(next, "logs", nextId, at)) return null;
-    if (nextId !== log.id) next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
+    if (nextId !== log.id) {
+      next = tombstoneLog(next, log.id, stampAfter(at, log.updatedAt));
+      next = {
+        ...next,
+        logs: (next.logs || []).map((row) => (row && row.id === log.id ? { ...row, movedDay: day, movedAt: typeof log.at === "number" ? log.at : 0 } : row)),
+      };
+    }
     return next;
   });
 }
@@ -749,15 +1138,17 @@ export function routineLogDraft(state, logId) {
     maxDay: routineClock().day,
     time: routineClockTime(log.at),
     note: typeof log.note === "string" ? log.note : "",
+    site: routineSiteId(log.site),
     error: "",
   };
 }
 
+/* One rest for the day. It is not a per-item log and it is not a skip. */
 export function logRoutineRest(state) {
   return withStore(state, (store, clock) => {
     if (!DAY.test(clock.day)) return null;
     const view = projectDailyRoutines(store);
-    if ((view.logs || []).some((log) => log.rest === true && log.day === clock.day)) return null;
+    if (routineRestLog(view.logs, clock.day)) return null;
     const id = routineLogId(null, clock.day);
     const at = writeStamp(store, clock, id);
     const next = upsertEntity(store, "logs", carryFuture({
@@ -773,6 +1164,18 @@ export function logRoutineRest(state) {
       deletedAt: null,
     }, store, id), at);
     return wrote(next, "logs", id, at);
+  });
+}
+
+/* Changes which local clock hour starts the routine day. Logs keep the
+   day they were stored with. */
+export function setRoutineDayRollover(state, hour) {
+  if (typeof hour !== "number" || !Number.isInteger(hour) || hour < 0 || hour > MAX_DAY_ROLLOVER_HOUR) return false;
+  return withStore(state, (store, clock) => {
+    const at = stampAfter(clock.now, store.settings && store.settings.updatedAt);
+    store.settings = { ...store.settings, dayRolloverHour: hour, updatedAt: at };
+    store.updatedAt = at;
+    return store;
   });
 }
 
@@ -870,7 +1273,9 @@ function cleanName(name) {
 export function parseRoutineAmount(raw) {
   if (typeof raw === "number") return Number.isFinite(raw) && raw >= 0 ? raw : null;
   if (typeof raw !== "string") return null;
-  const text = raw.trim().replace(",", ".");
+  const trimmed = raw.trim();
+  if (/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(trimmed)) return null;
+  const text = trimmed.replace(",", ".");
   const glyphs = { "¼": 0.25, "½": 0.5, "¾": 0.75, "1¼": 1.25, "1½": 1.5, "1¾": 1.75 };
   if (Object.prototype.hasOwnProperty.call(glyphs, text)) return glyphs[text];
   const slash = text.match(/^(\d+)\s*\/\s*(\d+)$/);
@@ -933,6 +1338,15 @@ function collapsedIds(prefs) {
 /* A reorder records orderAt and does not move updatedAt. A tombstone from
    the other phone still beats the reorder. Rows whose order did not change
    are left alone. */
+/* Open blocks on an all-done day. A different day does not reuse the list,
+   so expanding today does not leave the block collapsed tomorrow. */
+function allDoneOpenIds(prefs, day) {
+  const raw = prefs && prefs.allDoneOpen;
+  if (!raw || typeof raw !== "object" || raw.day !== day || !Array.isArray(raw.ids)) return [];
+  return raw.ids.filter((id) => typeof id === "string" && id);
+}
+
+/* Plan edits change order, names, and placements. They never assign logs. */
 function applyOrders(store, collection, ids, at) {
   return ids.reduce((next, id, index) => {
     const row = (next[collection] || []).find((entity) => entity && entity.id === id);
@@ -1104,6 +1518,37 @@ export function reorderRoutinePlacements(state, blockId, orderedIds) {
   });
 }
 
+/* The calculator note is on the item. It does not add or rewrite a log. */
+export function saveRoutineItemNote(state, itemId, note, calc) {
+  if (typeof itemId !== "string" || !itemId || typeof note !== "string") return false;
+  return withStore(state, (store, clock) => {
+    const item = (store.items || []).find((row) => row && row.id === itemId && isLive(row));
+    if (!item || item.kind !== "dose") return null;
+    const at = stampAfter(clock.now, Math.max(store.updatedAt || 0, item.updatedAt || 0));
+    const logs = JSON.stringify(store.logs);
+    const patch = { note };
+    if (calc && typeof calc.vialAmount === "number" && typeof calc.waterMl === "number") {
+      patch.calcVial = calc.vialAmount;
+      patch.calcWater = calc.waterMl;
+      patch.calcVialUnit = calc.vialUnit;
+      patch.calcDoseUnit = calc.doseUnit;
+      patch.calcDose = calc.doseAmount;
+    } else {
+      patch.calcVial = null;
+      patch.calcWater = null;
+      patch.calcVialUnit = null;
+      patch.calcDoseUnit = null;
+      patch.calcDose = null;
+    }
+    const next = revisePlanEntity(store, "items", itemId, patch, at);
+    const row = (next.items || []).find((entry) => entry.id === itemId);
+    const expected = note.trim().slice(0, 500);
+    if (!row || (row.note || "") !== expected) return null;
+    if (JSON.stringify(next.logs) !== logs) return null;
+    return next;
+  });
+}
+
 export function renameRoutineItem(state, itemId, name) {
   const trimmed = cleanName(name);
   if (!trimmed || typeof itemId !== "string" || !itemId) return false;
@@ -1213,6 +1658,7 @@ function writeCompound(store, item, name, dose, clock, at) {
     amount: dose.amount,
     unit: dose.unit,
     startDate: existing && existing.startDate ? existing.startDate : clock.day,
+    chartLine: !!(existing && existing.chartLine === true),
     archivedAt: null,
     deletedAt: null,
   }, at);
@@ -1241,7 +1687,8 @@ function placeInBlock(store, blockId, itemId, at) {
 }
 
 /* Custom items only. Evidence from the draft is ignored. A dose stores the
-   amount and unit on its compound. Logs are not rewritten. */
+   amount and unit on its compound. Optional on-hand count and mixed-on date
+   live on the item. A blank value clears that field. Logs are not rewritten. */
 export function saveRoutineItem(state, draft) {
   const name = cleanName(draft && draft.name);
   const kind = draft && (draft.kind === "dose" || draft.kind === "check") ? draft.kind : "";
@@ -1265,12 +1712,18 @@ export function saveRoutineItem(state, draft) {
     }
     const kept = { ...(existing || {}) };
     delete kept.evidence;
+    const supply = supplyFromDraft(draft, kind, clock.day, existing);
+    if (!supply) return null;
     next = upsertEntity(next, "items", {
       ...kept,
+      ...supply,
       id: itemId,
       name,
       kind,
       compoundId: kind === "dose" ? compoundId : null,
+      /* A new check has no compound start day. Keep the day it was added
+         so a later miss is still a miss. Edits do not move that day. */
+      ...(existing ? {} : { startDate: clock.day }),
       deletedAt: null,
     }, at);
     if (!wrote(next, "items", itemId, at)) return null;
@@ -1308,6 +1761,8 @@ export function routineItemDraft(state, source) {
     kind,
     amount: kind === "dose" && compound && typeof compound.amount === "number" ? String(compound.amount) : "",
     unit: compound && DOSE_UNIT_SET.has(compound.unit) ? compound.unit : "mcg",
+    onHand: item && Number.isInteger(item.onHand) ? String(item.onHand) : "",
+    mixedOn: item && typeof item.mixedOn === "string" ? item.mixedOn : "",
     blockIds,
   };
 }
@@ -1325,9 +1780,17 @@ export function toggleRoutineCollapsed(state, blockId) {
   if (typeof blockId !== "string" || !blockId) return false;
   return withStore(state, (store, clock) => {
     if (!liveBlocks(store).some((block) => block.id === blockId)) return null;
+    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
+    const view = projectDailyRoutines(store);
+    if (view && routineDayComplete(view, clock.day) && !layoutEditing()) {
+      const current = allDoneOpenIds(store.prefs, clock.day);
+      const ids = current.includes(blockId) ? current.filter((id) => id !== blockId) : current.concat(blockId);
+      store.prefs = { ...store.prefs, allDoneOpen: { day: clock.day, ids }, updatedAt: at };
+      store.updatedAt = Math.max(store.updatedAt || 0, at);
+      return rememberBlock(store, blockId, at);
+    }
     const current = collapsedIds(store.prefs);
     const collapsedBlocks = current.includes(blockId) ? current.filter((id) => id !== blockId) : current.concat(blockId);
-    const at = stampAfter(clock.now, store.prefs && store.prefs.updatedAt);
     store.prefs = { ...store.prefs, collapsedBlocks, updatedAt: at };
     store.updatedAt = Math.max(store.updatedAt || 0, at);
     return rememberBlock(store, blockId, at);
@@ -1366,6 +1829,10 @@ function gearButton() {
   return `<button type="button" class="icon-btn dr-gear" data-action="routines-settings" aria-label="Routines settings">${GEAR}</button>`;
 }
 
+function pullHintHTML() {
+  return `<p class="dr-pull" data-pull="idle" role="status" hidden>Pull to refresh</p>`;
+}
+
 function signInHTML() {
   return `<div class="dr-page" data-routines-shell="signed-out">
     ${pageHeader("Routines", "Sign in required")}
@@ -1392,31 +1859,48 @@ function focusSwitch(on) {
 
 function restHTML(log) {
   if (!log) {
-    return `<div class="dr-rest"><button type="button" class="dr-rest-btn" data-action="routines-rest">Log rest</button></div>`;
+    return `<div class="dr-rest" data-rest-day="false"><button type="button" class="dr-rest-btn" data-action="routines-rest">Log rest</button></div>`;
   }
-  return `<div class="dr-rest"><span>Rest logged</span><button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(log.id)}">Undo <span class="dr-vh">rest</span></button></div>`;
+  return `<div class="dr-rest" data-rest-day="true"><span>Rest logged</span><button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(log.id)}">Undo <span class="dr-vh">rest</span></button></div>`;
 }
 
 function nowFooter(projected, date) {
   const day = todayKey(date);
-  const count = loggedTodayCount(projected.logs, day);
+  const progress = routineDoseProgress(projected, day);
   const streak = routineStreak(projected.logs, day);
   const focusOn = !!(projected.prefs && projected.prefs.focusMode === true);
-  const rest = (projected.logs || []).find((log) => log.rest === true && log.day === day) || null;
+  const rest = routineRestLog(projected.logs, day);
   return `<div class="dr-pills">
-      <p class="dr-count" data-logged="${count}"><b>${count}</b> logged today</p>
+      <p class="dr-count" data-logged="${progress.logged}" data-due="${progress.due}"><span class="dr-vh">Doses </span><b>${progress.logged}</b> of ${progress.due} today</p>
       ${streakHTML(streak)}
     </div>
     ${focusSwitch(focusOn)}
     ${rest || routineShows("rest", projected) ? restHTML(rest) : ""}`;
 }
 
+function nextItemHTML(projected, date, day) {
+  const next = routineNextItem(projected, date, day);
+  if (!next) {
+    const waiting = placedItems(projected).length > 0 ? "Nothing left to log" : "Nothing to log yet";
+    return `<p class="dr-next">${waiting}</p>`;
+  }
+  const wait = next.overdue ? "overdue" : formatRoutineWait(next.waitMin);
+  const tail = wait ? `<span class="dr-wait">${esc(wait)}</span>` : "";
+  return `<p class="dr-next">Next: ${esc(next.item.name)}${tail}</p>`;
+}
+
 export function routineNowHTML(projected, date) {
+  const day = todayKey(date);
+  const footer = nowFooter(projected, date);
+  if (routineDayComplete(projected, day)) {
+    return `<section class="dr-all-done" data-all-done="true" aria-labelledby="dr-now-title">
+      <h2 class="dr-now-title" id="dr-now-title">${DONE_MARK}All done today ✓</h2>
+      ${footer}
+    </section>`;
+  }
   const moment = routineNowNext(projected.blocks, date);
   const clock = formatRoutineClock(date);
   const slot = SLOT_LABEL[moment.slot] || "Today";
-  const day = todayKey(date);
-  const footer = nowFooter(projected, date);
   if (!moment.nowBlock) {
     return `<section class="dr-now" data-color="lavender" aria-labelledby="dr-now-title">
       <p class="dr-k">Now · ${esc(clock)}</p>
@@ -1425,22 +1909,11 @@ export function routineNowHTML(projected, date) {
       ${footer}
     </section>`;
   }
-  const wait = formatRoutineWait(moment.waitMin);
-  const next = moment.nextBlock
-    ? `Next · ${esc(moment.nextBlock.name)}${wait ? `<span class="dr-wait">${esc(wait)}</span>` : ""}`
-    : "Nothing else today";
-  const rows = routineBlockRows(projected, moment.nowBlock.id, day);
-  const open = rows.filter((row) => row.open).length;
-  const logged = rows.filter((row) => !row.open && rowState(row.log) !== "skipped").length;
-  const skipped = rows.filter((row) => !row.open && rowState(row.log) === "skipped").length;
-  const statusText = rows.length && !open ? tileMeta(open, logged, skipped) : "";
-  const status = statusText ? `<p class="dr-status">${esc(statusText)}</p>` : "";
   const color = tileColor(moment.nowBlock.color);
   return `<section class="dr-now" data-color="${color}" aria-labelledby="dr-now-title">
     <p class="dr-k">Now · ${esc(slot)} · ${esc(clock)}</p>
     <h2 class="dr-now-title" id="dr-now-title">${esc(moment.nowBlock.name)}</h2>
-    <p class="dr-next">${next}</p>
-    ${status}
+    ${nextItemHTML(projected, date, day)}
     ${footer}
   </section>`;
 }
@@ -1495,11 +1968,16 @@ function editLogButton(row) {
 
 function openRowHTML(row, projected, date, day) {
   const doseHTML = amountMarkup(doseText(row));
-  const next = countdownMarkup(projected, row, date, day);
-  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open">
+  const timing = row.item ? itemTiming(projected, row.item, date, day) : { overdue: false };
+  const detail = rowDetailMarkup(projected, row, date, day);
+  const supply = supplyMarkup(projected, row, day);
+  const overdue = timing.overdue ? ` data-overdue="true"` : "";
+  /* Skip, history, and rename keep their own actions. The log button is the
+     one the click handler uses, so a long press still reaches the details page. */
+  return `<li class="dr-row" ${rowAttrs(row)} data-details="row" data-state="open"${overdue} data-action="routines-log">
     <button type="button" class="dr-log" data-action="routines-log" data-item-id="${esc(row.item.id)}">
       <span class="dr-mark" aria-hidden="true"></span>
-      <span class="dr-copy"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}${next}</span>
+      <span class="dr-copy"><span class="dr-line"><span class="dr-vh">Log </span><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item, row.compound)}${supply}</span>
     </button>
     <button type="button" class="dr-rename dr-rename-quiet" data-action="routines-rename-item" data-item-id="${esc(row.item.id)}" aria-label="Rename ${esc(row.item.name)}">Rename</button>
     ${historyButton(row)}
@@ -1507,15 +1985,17 @@ function openRowHTML(row, projected, date, day) {
   </li>`;
 }
 
-function editRowHTML(row) {
+function editRowHTML(row, projected, day) {
   const dose = doseText(row);
   const doseHTML = dose ? `<span class="dr-dose"> · ${esc(dose)}</span>` : "";
+  const supply = supplyMarkup(projected, row, day);
   const id = placementId(row);
   const state = row.open ? "open" : rowState(row.log);
   return `<li class="dr-row" ${rowAttrs(row)} data-state="${state}">
     <button type="button" class="dr-handle" data-reorder="item" data-id="${esc(id)}" data-block-id="${esc(row.placement.blockId)}" aria-label="Reorder ${esc(row.item.name)}" aria-keyshortcuts="ArrowUp ArrowDown"><span class="dr-grip" aria-hidden="true"></span></button>
     <button type="button" class="dr-edit-name" data-action="routines-edit-item" data-item-id="${esc(row.item.id)}" data-block-id="${esc(row.placement.blockId)}">
-      <span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}
+      <span class="dr-line"><span class="dr-name" data-rename="item" data-item-id="${esc(row.item.id)}">${esc(row.item.name)}</span>${doseHTML}</span>${itemNoteMarkup(row.item, row.compound)}
+      ${supply}
     </button>
     <button type="button" class="dr-minus" data-action="routines-delete-item" data-item-id="${esc(row.item.id)}" aria-label="Remove ${esc(row.item.name)} from all routines"><span aria-hidden="true">−</span></button>
   </li>`;
@@ -1527,10 +2007,10 @@ function doneRowHTML(row, projected, date, day) {
   const markClass = state === "skipped" ? "dr-mark dr-mark-skip" : "dr-mark dr-mark-on";
   const mark = state === "skipped" ? "–" : "✓";
   const doseHTML = amountMarkup(loggedAmountText(row.log));
-  const next = countdownMarkup(projected, row, date, day);
+  const detail = rowDetailMarkup(projected, row, date, day);
   return `<li class="dr-row dr-row-done" data-details="row" data-item-id="${esc(row.item.id)}" data-log-id="${esc(row.log.id)}" data-state="${state}">
     <span class="${markClass}" aria-hidden="true">${mark}</span>
-    <span class="dr-copy"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}${next}<span class="dr-state">${label}</span></span>
+    <span class="dr-copy"><span class="dr-line"><span class="dr-name">${esc(row.item.name)}</span>${doseHTML}</span>${detail}${itemNoteMarkup(row.item, row.compound)}<span class="dr-state">${label}</span></span>
     <span class="dr-done-actions">${historyButton(row)}${editLogButton(row)}<button type="button" class="dr-undo" data-action="routines-undo" data-log-id="${esc(row.log.id)}">Undo <span class="dr-vh">${esc(row.item.name)}</span></button></span>
   </li>`;
 }
@@ -1551,7 +2031,11 @@ export function routineBlockTileHTML(block, projected, view) {
   const color = tileColor(block.color);
   const shown = editing ? rows : open;
   const list = !collapsed && shown.length
-    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row) : openRowHTML(row, projected, date, day)).join("")}</ul>`
+    ? `<ul class="dr-rows"${editing ? ` data-routine-list="items" data-block-id="${esc(block.id)}"` : ""}>${shown.map((row) => editing ? editRowHTML(row, projected, day) : openRowHTML(row, projected, date, day)).join("")}</ul>`
+    : "";
+  const resting = !editing && routineRestLog(projected && projected.logs, day);
+  const logAll = !editing && !collapsed && !resting && open.length
+    ? `<button type="button" class="dr-log-all" data-action="routines-log-all" data-block-id="${esc(block.id)}">Log all <span class="dr-vh">in ${esc(block.name)}</span></button>`
     : "";
   const reveal = !editing && !collapsed && done.length
     ? `<button type="button" class="dr-reveal" data-action="routines-reveal" data-block-id="${esc(block.id)}" aria-expanded="${revealed ? "true" : "false"}">${revealed ? "Hide" : "Show"} ${done.length === 1 ? "1 completed" : `${done.length} completed`}</button>`
@@ -1579,6 +2063,7 @@ export function routineBlockTileHTML(block, projected, view) {
     </button>
     <p class="dr-tile-meta">${esc(tileMeta(open.length, logged, skipped))}</p>
     ${list}
+    ${logAll}
     ${reveal}
     ${doneList}
     ${add}
@@ -1591,7 +2076,9 @@ export function routineBlockTilesHTML(projected, date) {
   const moment = routineNowNext(projected.blocks, clock);
   const focus = !!(projected.prefs && projected.prefs.focusMode === true);
   const revealed = new Set(Array.isArray(projected.prefs && projected.prefs.revealBlocks) ? projected.prefs.revealBlocks.filter((id) => typeof id === "string") : []);
-  const collapsed = new Set(collapsedIds(projected.prefs));
+  const collapsedSet = new Set(collapsedIds(projected.prefs));
+  const complete = !layoutEditing() && routineDayComplete(projected, day);
+  const opened = new Set(complete ? allDoneOpenIds(projected.prefs, day) : []);
   const lastId = projected.prefs && typeof projected.prefs.lastBlockId === "string" ? projected.prefs.lastBlockId : "";
   const currentId = moment.nowBlock ? moment.nowBlock.id : "";
   const hiding = focus && !layoutEditing();
@@ -1602,7 +2089,7 @@ export function routineBlockTilesHTML(projected, date) {
     date: clock,
     current: block.id === currentId,
     revealed: revealed.has(block.id),
-    collapsed: collapsed.has(block.id),
+    collapsed: complete ? !opened.has(block.id) : collapsedSet.has(block.id),
     last: block.id === lastId,
   })).join("");
   const rest = hiding && !focusId
@@ -1629,10 +2116,19 @@ export function routineFocusBlockId(projected, date) {
   return "";
 }
 
+/* Discover stays closed. The top button and the empty state both open the
+   coming-soon sheet. There is no library, no seed row, and no recommendation. */
+function discoverEntryHTML() {
+  return `<button type="button" class="dr-discover" data-action="routines-discover" data-routines-discover="entry">
+    <span class="dr-discover-name">Discover</span>
+    <span class="dr-discover-soon">Coming soon</span>
+  </button>`;
+}
+
 function emptyDiscoverHTML() {
-  return `<section class="dr-empty">
-    <h2>Add the first item</h2>
-    <p>Discover will list entries from real studies. Nothing is added until you choose it.</p>
+  return `<section class="dr-empty" data-routines-discover="empty">
+    <h2>Coming soon</h2>
+    <p>Discover stays closed until cited entries are ready. Nothing is listed here.</p>
     <button type="button" class="btn primary block" data-action="routines-discover">Discover</button>
   </section>`;
 }
@@ -1642,6 +2138,7 @@ function waitingHTML(date) {
     ? app.fmtDate(todayKey(date), { weekday: "long", month: "long", day: "numeric" })
     : todayKey(date);
   return `<div class="dr-page" data-routines-shell="syncing">
+    ${pullHintHTML()}
     ${pageHeader("Routines", sub, gearButton())}
     <section class="dr-signin" aria-labelledby="dr-sync-title">
       <h2 id="dr-sync-title">Syncing your account</h2>
@@ -1671,6 +2168,11 @@ function deletedHTML() {
     ${blocks.length ? `<ul class="dr-deleted-list">${blockRows}</ul>` : ""}
     ${items.length ? `<ul class="dr-deleted-list">${itemRows}</ul>` : ""}
   </section>`;
+}
+
+function logToastHTML() {
+  if (!routineLogToast()) return "";
+  return `<div class="dr-log-toast" data-log-toast="true" role="status"><span class="dr-log-toast-line">Logged · <button type="button" data-action="routines-toast-undo">Undo</button></span></div>`;
 }
 
 function setupLaterHTML(view) {
@@ -1704,7 +2206,9 @@ function paintShell(view, date) {
   const editing = layoutEditing();
   const announce = app.ui && app.ui.routineAnnounce ? app.ui.routineAnnounce : "";
   return `<div class="dr-page" data-routines-shell="signed-in" data-routines-edit="${editing ? "on" : "off"}">
+    ${pullHintHTML()}
     ${pageHeader("Routines", sub, headerTools())}
+    ${discoverEntryHTML()}
     <p class="dr-live" role="status" aria-live="polite">${esc(announce)}</p>
     ${setupLaterHTML(view)}
     ${tipsHTML(view)}
@@ -1712,8 +2216,10 @@ function paintShell(view, date) {
     ${routineBlockTilesHTML(view, date)}
     <button type="button" class="dr-add dr-add-block" data-action="routines-add-block">Add routine</button>
     ${routineShows("calculator", view) ? `<button type="button" class="dr-calc-open" data-action="routines-calc">Reconstitution calculator</button>` : ""}
+    <button type="button" class="dr-history-open" data-action="routines-history-open">History <span class="dr-vh">calendar and graph</span></button>
     ${deletedHTML()}
     ${hasItems ? "" : emptyDiscoverHTML()}
+    ${logToastHTML()}
   </div>`;
 }
 
@@ -1797,6 +2303,45 @@ export function syncRoutineNowRefresh() {
   }, msUntilNextMinute(date));
 }
 
+const ROUTINE_FAQ = [
+  ["What is Routines?", "A list of items you check off each day. It does not replace Workouts, Food, sleep, or water."],
+  ["Who can use it?", "Sign in with your Insight account. Routines are saved with that account."],
+  ["How do I log an item?", "Tap the row. Skip marks it handled and does not count it as taken. Undo is on a finished row."],
+  ["What does the number at the top count?", "How many items you logged today. It does not add amounts together, and a skip is left out."],
+  ["When does a streak reset?", "Only when a whole day is missed. A skip does not reset it."],
+  ["Can I change a logged amount or day?", "Use Edit on a finished row. You can enter a quarter or a partial amount, or move the log to an earlier day."],
+  ["What does the calculator show?", "The arithmetic of the vial amount, water, and amount you type. The screen repeats what you entered. It is not a recommendation, and it does not save a log."],
+  ["Does Routines send reminders?", "No. Nothing is scheduled, and Routines does not ask to alert you. A countdown on a row stays on this page."],
+  ["How do I refresh?", "Pull down from the top of Routines. Opening the app also loads the latest copy from your account."],
+  ["Where is Discover?", "Study-backed entries are not in the app yet. That button does not add an item and does not suggest an amount."],
+];
+
+export function routinesFaqHTML() {
+  const rows = ROUTINE_FAQ.map(([question, answer]) => `<div><dt>${esc(question)}</dt><dd>${esc(answer)}</dd></div>`).join("");
+  return `<section class="dr-faq" aria-labelledby="dr-faq-title"><h4 class="dr-faq-title" id="dr-faq-title">FAQ</h4><dl>${rows}</dl></section>`;
+}
+
+function rolloverHourLabel(hour) {
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const face = hour % 12 || 12;
+  return `${face}:00 ${suffix}`;
+}
+
+/* PR 8 owns the settings sheet. Keep this control in that sheet. The hour
+   is dailyRoutines.settings.dayRolloverHour, read through the store. */
+export function routineDayRolloverControlHTML(hour) {
+  const selected = routineDayRolloverHour(hour);
+  const options = [];
+  for (let value = 0; value <= MAX_DAY_ROLLOVER_HOUR; value += 1) {
+    options.push(`<option value="${value}"${value === selected ? " selected" : ""}>${rolloverHourLabel(value)}</option>`);
+  }
+  return `<div class="dr-set-row">
+      <label id="dr-rollover-label" for="dr-rollover-hour">New day starts</label>
+      <select id="dr-rollover-hour" class="text-in" aria-labelledby="dr-rollover-label">${options.join("")}</select>
+    </div>
+    <p class="sub">A log before this hour counts for the previous day. The default is 4:00 AM.</p>`;
+}
+
 /* Everything Routines can show that this page does not have yet, each with
    Add. Adding never removes anything. */
 function addListHTML() {
@@ -1820,9 +2365,11 @@ function retakeHTML() {
 }
 
 export function routinesSettingsSheetHTML() {
-  const prefs = app.state && app.state.dailyRoutines && app.state.dailyRoutines.prefs;
+  const store = app.state && app.state.dailyRoutines;
+  const prefs = store && store.prefs;
   const on = !!(prefs && prefs.focusMode === true);
-  const calc = routineShows("calculator", app.state && app.state.dailyRoutines)
+  const hour = store && store.settings ? store.settings.dayRolloverHour : undefined;
+  const calc = routineShows("calculator", store)
     ? `<button type="button" class="btn block" data-action="routines-calc">Reconstitution calculator</button>
     <p class="sub">The calculator shows the arithmetic of what you entered. It does not suggest an amount.</p>`
     : "";
@@ -1831,16 +2378,18 @@ export function routinesSettingsSheetHTML() {
       <span id="dr-set-focus">Focus mode</span>
       <button type="button" class="switch" role="switch" aria-checked="${on ? "true" : "false"}" aria-labelledby="dr-set-focus" data-action="routines-focus"><i></i></button>
     </div>
-    <p class="sub">Focus mode shows only the routine for this time of day. When it is done, the next one shows. Reminders and the FAQ come later. Notifications stay off.</p>
+    <p class="sub">Focus mode shows only the routine for this time of day. When it is done, the next one shows. Countdowns stay on the row. Routines does not send reminders.</p>
+    ${routineDayRolloverControlHTML(hour)}
     ${calc}
+    ${routinesFaqHTML()}
     ${addListHTML()}
     <button type="button" class="btn block" data-action="sheet-close">Done</button>
     ${retakeHTML()}`;
 }
 
 export function routinesDiscoverSheetHTML() {
-  return `<h3>Discover</h3>
-    <p class="sub">Study-backed entries are not in the app yet. This does not add an item, and it does not suggest a dose.</p>
+  return `<h3>Coming soon</h3>
+    <p class="sub">Discover is not open yet. There is no library here. This does not add an item, and it does not suggest a dose.</p>
     <button type="button" class="btn primary block" data-action="sheet-close">Close</button>`;
 }
 
@@ -1848,9 +2397,21 @@ app.ensureRoutineShell = ensureRoutineShell;
 app.routineNowNext = routineNowNext;
 app.routineClock = routineClock;
 app.loggedTodayCount = loggedTodayCount;
+app.routineDoseProgress = routineDoseProgress;
+app.routineDayComplete = routineDayComplete;
+app.routineNextItem = routineNextItem;
+app.lastDoseLabel = lastDoseLabel;
 app.routineStreak = routineStreak;
+app.routineRestLog = routineRestLog;
 app.shiftRoutineDay = shiftRoutineDay;
 app.logRoutineItem = logRoutineItem;
+app.logAllRoutineBlock = logAllRoutineBlock;
+app.undoRoutineLogs = undoRoutineLogs;
+app.showRoutineLogToast = showRoutineLogToast;
+app.routineLogToast = routineLogToast;
+app.clearRoutineLogToast = clearRoutineLogToast;
+app.undoRoutineLogToast = undoRoutineLogToast;
+app.latestRoutineLogId = latestRoutineLogId;
 app.editRoutineLog = editRoutineLog;
 app.compoundDoseHistory = compoundDoseHistory;
 app.routineLogDraft = routineLogDraft;
@@ -1860,6 +2421,8 @@ app.skipRoutineItem = skipRoutineItem;
 app.undoRoutineLog = undoRoutineLog;
 app.restoreRoutineLog = restoreRoutineLog;
 app.logRoutineRest = logRoutineRest;
+app.setRoutineDayRollover = setRoutineDayRollover;
+app.routineDayRolloverControlHTML = routineDayRolloverControlHTML;
 app.toggleRoutineFocus = toggleRoutineFocus;
 app.saveRoutineSetup = saveRoutineSetup;
 app.hideRoutineTips = hideRoutineTips;
@@ -1874,6 +2437,7 @@ app.restoreRoutineBlock = restoreRoutineBlock;
 app.duplicateRoutineBlock = duplicateRoutineBlock;
 app.reorderRoutineBlocks = reorderRoutineBlocks;
 app.reorderRoutinePlacements = reorderRoutinePlacements;
+app.saveRoutineItemNote = saveRoutineItemNote;
 app.renameRoutineItem = renameRoutineItem;
 app.deleteRoutineItem = deleteRoutineItem;
 app.restoreRoutineItem = restoreRoutineItem;
@@ -1893,4 +2457,139 @@ app.routineNowHTML = routineNowHTML;
 app.routineBlockTileHTML = routineBlockTileHTML;
 app.routineBlockTilesHTML = routineBlockTilesHTML;
 app.routinesSettingsSheetHTML = routinesSettingsSheetHTML;
+app.routinesFaqHTML = routinesFaqHTML;
 app.routinesDiscoverSheetHTML = routinesDiscoverSheetHTML;
+
+/* Pull down on this tab only. The account copy reloads through cloudPull.
+   A sideways move stays with the pager. Nothing here asks to alert the user. */
+export const ROUTINE_PULL_PX = 64;
+const PULL_ARM_PX = 12;
+let routinePull = null;
+let routineRefreshing = false;
+
+function routinePane() {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return null;
+  return document.querySelector('[data-pane="daily-routines"]');
+}
+
+function routinePullElement() {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return null;
+  return document.querySelector(".dr-pull");
+}
+
+function pullBlocked() {
+  if (app.ROUTINES_ENABLED !== true) return true;
+  if (!app.ui || app.ui.tab !== "daily-routines") return true;
+  if (app.ui.sheet || app.ui.dailyRoutineEdit === true) return true;
+  if (app.ui.workoutOpen || app.ui.cardioOpen) return true;
+  if (!app.session || !app.session.user || !app.sb) return true;
+  return false;
+}
+
+function scrollAtTop() {
+  const pane = routinePane();
+  if (!pane) return false;
+  return (Number(pane.scrollTop) || 0) <= 0;
+}
+
+function blockedPullTarget(target) {
+  if (!target || typeof target.closest !== "function") return true;
+  if (target.closest("#sheet, #dialog, #tabs, button, a, input, textarea, select, .switch")) return true;
+  return !target.closest('[data-pane="daily-routines"]');
+}
+
+function pullPoint(ev) {
+  if (!ev || (ev.touches && ev.touches.length !== 1)) return null;
+  const touch = ev.touches ? ev.touches[0] : ev;
+  if (!touch || typeof touch.clientY !== "number") return null;
+  return { x: Number(touch.clientX) || 0, y: touch.clientY, target: ev.target || null };
+}
+
+function paintPull(phase, label) {
+  const el = routinePullElement();
+  if (!el) return;
+  const idle = phase === "idle";
+  el.hidden = idle;
+  if (typeof el.setAttribute === "function") el.setAttribute("data-pull", phase);
+  if (idle && typeof el.setAttribute === "function") el.setAttribute("hidden", "");
+  else if (!idle && typeof el.removeAttribute === "function") el.removeAttribute("hidden");
+  el.textContent = label;
+}
+
+export function onRoutinePullStart(ev) {
+  routinePull = null;
+  if (routineRefreshing || pullBlocked()) return;
+  const point = pullPoint(ev);
+  if (!point || blockedPullTarget(point.target) || !scrollAtTop()) return;
+  routinePull = { x: point.x, y: point.y, dy: 0, phase: "wait" };
+}
+
+export function onRoutinePullMove(ev) {
+  if (!routinePull || routineRefreshing) return;
+  const point = pullPoint(ev);
+  if (!point) return;
+  const dy = point.y - routinePull.y;
+  const dx = point.x - routinePull.x;
+  if (routinePull.phase === "wait") {
+    if (Math.abs(dy) < PULL_ARM_PX && Math.abs(dx) < PULL_ARM_PX) return;
+    if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || pullBlocked() || !scrollAtTop()) {
+      routinePull = null;
+      paintPull("idle", "Pull to refresh");
+      return;
+    }
+    routinePull.phase = "pulling";
+  }
+  routinePull.dy = Math.max(0, dy);
+  const ready = routinePull.dy >= ROUTINE_PULL_PX;
+  paintPull(ready ? "ready" : "pulling", ready ? "Release to refresh" : "Pull to refresh");
+  if (ev && ev.cancelable && typeof ev.preventDefault === "function") ev.preventDefault();
+}
+
+async function finishRoutinePull() {
+  if (routineRefreshing || typeof app.cloudPull !== "function" || pullBlocked()) {
+    paintPull("idle", "Pull to refresh");
+    return false;
+  }
+  routineRefreshing = true;
+  paintPull("refreshing", "Refreshing");
+  try {
+    await app.cloudPull();
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    routineRefreshing = false;
+    paintPull("idle", "Pull to refresh");
+  }
+}
+
+export function onRoutinePullEnd() {
+  if (!routinePull) return Promise.resolve(false);
+  const fire = routinePull.phase === "pulling" && routinePull.dy >= ROUTINE_PULL_PX;
+  routinePull = null;
+  if (!fire) {
+    paintPull("idle", "Pull to refresh");
+    return Promise.resolve(false);
+  }
+  return finishRoutinePull();
+}
+
+export function onRoutinePullCancel() {
+  routinePull = null;
+  if (!routineRefreshing) paintPull("idle", "Pull to refresh");
+}
+
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+  document.addEventListener("touchstart", onRoutinePullStart, { passive: true });
+  document.addEventListener("touchmove", onRoutinePullMove, { passive: false });
+  document.addEventListener("touchend", onRoutinePullEnd, { passive: true });
+  document.addEventListener("touchcancel", onRoutinePullCancel, { passive: true });
+  document.addEventListener("change", (ev) => {
+    const el = ev.target;
+    if (!el || el.id !== "dr-rollover-hour" || app.ROUTINES_ENABLED !== true) return;
+    const hour = Number(el.value);
+    if (!setRoutineDayRollover(app.state, hour)) return;
+    if (typeof app.save === "function") app.save();
+    if (typeof app.render === "function") app.render();
+  });
+}

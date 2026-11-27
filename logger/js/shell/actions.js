@@ -1,4 +1,5 @@
 import { app } from "../runtime.js";
+import "../shared/routine-chart-lines.js";
 
 /* Clicks, typing, and the rest of the event wiring. */
 /* ================= Actions ================= */
@@ -404,6 +405,9 @@ document.addEventListener("change", (ev) => {
   if (ev.target.id === "ph-file") app.onPhotoFile(ev.target.files[0]);
   if (ev.target.id === "food-file" && ev.target.files[0]) { if (!app.ui.sd || !app.ui.sd.meal) app.ui.sd = { meal: app.autoMeal() }; app.ui.sd.image = null; app.ui.sd.hint = app.ui.sheet === "food-photo" ? app.ui.sd.hint : ""; app.analyzeFoodPhoto(ev.target.files[0]); }
   if (ev.target.id === "food-fav") app.ui.sd.fav = ev.target.checked;
+  if ((ev.target.id === "dr-item-on-hand" || ev.target.id === "dr-item-mixed-on") && app.ui && app.ui.sheet === "routines-item" && typeof app.rememberRoutineItemFields === "function") {
+    app.rememberRoutineItemFields();
+  }
 });
 
 document.addEventListener("beforeinput", (ev) => { app.guardSetFieldBeforeInput(ev); });
@@ -454,12 +458,15 @@ document.addEventListener("input", (ev) => {
   }
   if (el.id === "ms-q") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#ms-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "home-q" && app.ui.sheet === "home-gallery") { app.ui.sd.q = el.value; const pos = el.selectionStart; app.renderSheet(); const n = app.$("#home-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
+  if (el.id === "rt-q" && app.ui && app.ui.homeEdit) { app.ui.routineTrayQuery = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#rt-q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   // Replacing the sheet refocuses the field. On an iPhone home-screen app that scrolls the viewport and the list blinks.
   if (el.id === "pick-q") { app.noteBankQuery(el.value); return; }
   if (el.id === "food-rq") { app.ui.rq = el.value; const pos = el.selectionStart; app.render(); const n = app.$("#food-rq"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (el.id === "food-hint") { app.ui.sd.hint = el.value; return; }
-  if (el.id === "dr-item-name" && app.ui && app.ui.sheet === "routines-item") { app.ui.sd.name = el.value; return; }
-  if (el.id === "dr-item-amount" && app.ui && app.ui.sheet === "routines-item") { app.ui.sd.amount = el.value; return; }
+  if ((el.id === "dr-item-name" || el.id === "dr-item-amount" || el.id === "dr-item-on-hand" || el.id === "dr-item-mixed-on") && app.ui && app.ui.sheet === "routines-item") {
+    if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
+    return;
+  }
   if (el.id === "dr-log-amount" && app.ui && app.ui.sheet === "routines-log") { app.ui.sd.amount = el.value; app.ui.sd.error = ""; return; }
   if (el.id === "dr-log-day" && app.ui && app.ui.sheet === "routines-log") { app.ui.sd.day = el.value; app.ui.sd.error = ""; return; }
   if ((el.id === "dr-calc-vial" || el.id === "dr-calc-water" || el.id === "dr-calc-dose") && app.ui && app.ui.sheet === "routines-calc" && typeof app.noteReconstitutionField === "function") {
@@ -1093,6 +1100,7 @@ document.addEventListener("click", async (ev) => {
       app.ui.homeEdit = false;
       app.ui.homeDraft = null;
       app.ui.sheet = null;
+      if (typeof app.forgetRoutineTrayQuery === "function") app.forgetRoutineTrayQuery();
       if (!same) {
         app.save();
         app.toast("Home saved.");
@@ -1115,6 +1123,27 @@ document.addEventListener("click", async (ev) => {
     case "home-gal-back": app.ui.sd = { q: (app.ui.sd && app.ui.sd.q) || "" }; app.renderSheet(); break;
     case "home-add": app.homeAddItem(b.dataset.id, b.dataset.size); break;
     case "home-remove": app.homeRemoveItem(b.dataset.id); break;
+    case "routine-tray-add": {
+      if (app.ROUTINES_ENABLED !== true || typeof app.homeAddRoutineTile !== "function") break;
+      const row = b.closest ? b.closest("[data-tray-id]") : null;
+      const startEl = row ? row.querySelector("[data-gate='start']") : null;
+      const endEl = row ? row.querySelector("[data-gate='end']") : null;
+      app.homeAddRoutineTile(b.dataset.tileId, b.dataset.size, { start: startEl ? startEl.value : "", end: endEl ? endEl.value : "" });
+      break;
+    }
+    case "routine-tray-compact":
+      if (app.ROUTINES_ENABLED !== true || !app.ui) break;
+      app.ui.routineTrayCompact = app.ui.routineTrayCompact === false;
+      app.render();
+      break;
+    case "routine-tile-open":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineTile !== "function") break;
+      app.openRoutineTile(b.dataset.tileId);
+      break;
+    case "routine-tile-hide":
+      if (app.ROUTINES_ENABLED !== true || typeof app.hideRoutineHomeTile !== "function") break;
+      app.hideRoutineHomeTile();
+      break;
     case "w-add-one": app.showWidget(app.ui.edit, b.dataset.w); app.ui.sheet = null; app.render(); app.toast(`${app.WIDGETS[app.ui.edit][b.dataset.w]} added.`); break;
     case "ms-list": app.ui.sheet = "ms-list"; app.ui.sd = { q: "" }; app.renderSheet(); break;
     case "ms-edit": { const back = app.ui.sheet === "ms-list"; app.ui.sheet = "ms-edit"; app.ui.sd = { name: b.dataset.name, back }; app.renderSheet(); setTimeout(() => { const t = app.$("#ms-text"); if (t) t.focus(); }, 60); break; }
@@ -1245,20 +1274,33 @@ document.addEventListener("click", async (ev) => {
       app.renderSheet();
       break;
     case "routines-log":
+    case "routines-log-all":
     case "routines-skip":
     case "routines-undo":
     case "routines-reveal":
     case "routines-focus":
     case "routines-collapse":
-    case "routines-rest": {
+    case "routines-rest":
+    case "routines-toast-undo": {
       if (app.ROUTINES_ENABLED !== true) break;
-      const ran = a === "routines-log" ? app.logRoutineItem(app.state, b.dataset.itemId)
+      if (app.ui && app.ui.dailyRoutineEdit === true && (a === "routines-log" || a === "routines-log-all")) break;
+      const batch = a === "routines-log-all" && typeof app.logAllRoutineBlock === "function"
+        ? app.logAllRoutineBlock(app.state, b.dataset.blockId)
+        : null;
+      const ran = a === "routines-log-all" ? Array.isArray(batch) && batch.length > 0
+        : a === "routines-log" ? app.logRoutineItem(app.state, b.dataset.itemId)
         : a === "routines-skip" ? app.skipRoutineItem(app.state, b.dataset.itemId)
         : a === "routines-undo" ? app.undoRoutineLog(app.state, b.dataset.logId)
         : a === "routines-reveal" ? app.toggleRoutineReveal(app.state, b.dataset.blockId)
         : a === "routines-focus" ? app.toggleRoutineFocus(app.state)
         : a === "routines-collapse" ? app.toggleRoutineCollapsed(app.state, b.dataset.blockId)
+        : a === "routines-toast-undo" ? typeof app.undoRoutineLogToast === "function" && app.undoRoutineLogToast(app.state)
         : app.logRoutineRest(app.state);
+      if (ran && a === "routines-log" && typeof app.latestRoutineLogId === "function" && typeof app.showRoutineLogToast === "function") {
+        const id = app.latestRoutineLogId(app.state, b.dataset.itemId);
+        if (id) app.showRoutineLogToast([id]);
+      }
+      if (ran && a === "routines-log-all" && typeof app.showRoutineLogToast === "function") app.showRoutineLogToast(batch);
       if (ran && typeof app.save === "function") app.save();
       if (ran && typeof app.render === "function") app.render();
       break;
@@ -1360,16 +1402,19 @@ document.addEventListener("click", async (ev) => {
       break;
     case "routines-item-kind":
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.kind = b.dataset.kind === "dose" ? "dose" : "check";
       app.renderSheet();
       break;
     case "routines-item-unit":
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.unit = b.dataset.unit;
       app.renderSheet();
       break;
     case "routines-item-quarter":
       if (app.ROUTINES_ENABLED !== true || !app.ui || !app.ui.sd) break;
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.kind = "dose";
       app.ui.sd.amount = b.dataset.amount;
       app.renderSheet();
@@ -1382,6 +1427,7 @@ document.addEventListener("click", async (ev) => {
         if (typeof app.toast === "function") app.toast("An item stays in at least one routine.");
         break;
       }
+      if (typeof app.rememberRoutineItemFields === "function") app.rememberRoutineItemFields();
       app.ui.sd.blockIds = ids.includes(id) ? ids.filter((row) => row !== id) : ids.concat(id);
       app.renderSheet();
       break;
@@ -1393,6 +1439,24 @@ document.addEventListener("click", async (ev) => {
     case "routines-history":
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineHistory !== "function") break;
       app.openRoutineHistory(b.dataset.compoundId, b.dataset.itemId);
+      break;
+    case "routines-history-open":
+      if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineDayHistory !== "function") break;
+      app.openRoutineDayHistory();
+      break;
+    case "routines-history-tab":
+      if (app.ROUTINES_ENABLED !== true || typeof app.rememberRoutineGraphTab !== "function") break;
+      if (!app.rememberRoutineGraphTab(app.state, b.dataset.tab)) break;
+      if (typeof app.save === "function") app.save();
+      if (typeof app.render === "function") app.render();
+      break;
+    case "routines-history-day":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineHistoryCursor !== "function") break;
+      app.setRoutineHistoryCursor({ day: b.dataset.day });
+      break;
+    case "routines-history-month":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineHistoryCursor !== "function") break;
+      app.setRoutineHistoryCursor({ monthDelta: Number(b.dataset.delta) });
       break;
     case "routines-log-edit":
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineLogEditor !== "function") break;
@@ -1410,6 +1474,14 @@ document.addEventListener("click", async (ev) => {
       if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineDetailsQuarter !== "function") break;
       app.setRoutineDetailsQuarter(b.dataset.amount);
       break;
+    case "routines-details-site":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setRoutineDetailsSite !== "function") break;
+      app.setRoutineDetailsSite(b.dataset.site || "");
+      break;
+    case "routines-details-site-dismiss":
+      if (app.ROUTINES_ENABLED !== true || typeof app.dismissRoutineSiteWarning !== "function") break;
+      app.dismissRoutineSiteWarning();
+      break;
     case "routines-checkin":
       if (app.ROUTINES_ENABLED !== true || typeof app.openRoutineCheckin !== "function") break;
       app.openRoutineCheckin();
@@ -1424,7 +1496,11 @@ document.addEventListener("click", async (ev) => {
       break;
     case "routines-calc":
       if (app.ROUTINES_ENABLED !== true || typeof app.openReconstitution !== "function") break;
-      app.openReconstitution();
+      app.openReconstitution(b.dataset.itemId);
+      break;
+    case "routines-calc-save":
+      if (app.ROUTINES_ENABLED !== true || typeof app.saveReconstitutionNote !== "function") break;
+      app.saveReconstitutionNote();
       break;
     case "routines-calc-vial-unit":
       if (app.ROUTINES_ENABLED !== true || typeof app.setReconstitutionUnit !== "function") break;
@@ -1433,6 +1509,12 @@ document.addEventListener("click", async (ev) => {
     case "routines-calc-dose-unit":
       if (app.ROUTINES_ENABLED !== true || typeof app.setReconstitutionUnit !== "function") break;
       app.setReconstitutionUnit("dose", b.dataset.unit);
+      break;
+    case "routines-chart-line":
+      if (app.ROUTINES_ENABLED !== true || typeof app.setCompoundChartLine !== "function") break;
+      if (!app.setCompoundChartLine(app.state, b.dataset.compoundId, b.dataset.on === "1")) break;
+      if (typeof app.save === "function") app.save();
+      if (typeof app.render === "function") app.render();
       break;
     case "export": app.exportData(); break;
     case "import": app.$("#importFile").click(); break;

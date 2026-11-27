@@ -279,6 +279,8 @@ describe("routine editing", { concurrency: false }, () => {
     assert.equal(app.state.dailyRoutines.compounds.find((row) => row.id === items[0].compoundId).amount, 1);
     assert.equal(app.state.dailyRoutines.compounds.find((row) => row.id === items[0].compoundId).unit, "mg");
     assert.deepEqual(logsSnapshot(), logged);
+    assert.equal(toggleRoutineCollapsed(app.state, night), true);
+    assert.equal(toggleRoutineCollapsed(app.state, morning), true);
     const html = dailyRoutinesHTML();
     assert.equal(html.match(/Show 1 completed/g).length, 2);
     assert.equal(app.state.dailyRoutines.prefs.lastBlockId, morning);
@@ -703,8 +705,8 @@ describe("routine editing", { concurrency: false }, () => {
     const edit = readFileSync(new URL("../logger/js/pages/daily-routines-edit.js", import.meta.url), "utf8");
     const css = readFileSync(new URL("../logger/css/routines.css", import.meta.url), "utf8");
     assert.match(flag, /ROUTINES_ENABLED = true/);
-    assert.match(sw, /const CACHE = "insight-shell-v81"/);
-    assert.match(sentry, /insight-shell-v81/);
+    assert.match(sw, /const CACHE = "insight-shell-v90"/);
+    assert.match(sentry, /insight-shell-v90/);
     assert.match(sw, /js\/pages\/daily-routines-edit\.js/);
     assert.match(main, /import "\.\/pages\/daily-routines-edit\.js";/);
     assert.equal(main.match(/routines-flag/g).length, 1);

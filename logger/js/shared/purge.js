@@ -497,7 +497,7 @@ export function stripRange(data, from, to, opts = {}) {
   }
 
   if (stripCheckins(data, from, to, before, now)) changed = true;
-  if (purgeDailyRoutineRange(data, from, to, before, now)) changed = true;
+  if (purgeDailyRoutineRange(data, from, to, before, now, opts.early)) changed = true;
   if (changed && !opts.quiet) data.updatedAt = Date.now();
   return changed;
 }
@@ -510,33 +510,82 @@ function rawAhead(p, now) {
   return Math.max(timeMs(p && p.deletedAt) || 0, timeMs(p && p.at) || 0) > now + CLOCK_SKEW_MS;
 }
 
+function earlyPair(p) {
+  if (!p || typeof p.routineEarlyFrom !== "number" || typeof p.routineEarlyTo !== "number") return null;
+  if (!Number.isFinite(p.routineEarlyFrom) || !Number.isFinite(p.routineEarlyTo)) return null;
+  if (p.routineEarlyTo < p.routineEarlyFrom) return null;
+  return { earlyFrom: p.routineEarlyFrom, earlyTo: p.routineEarlyTo };
+}
+
+function writeEarly(row, early) {
+  const pair = earlyPair(early);
+  if (!pair) return;
+  row.routineEarlyFrom = pair.earlyFrom;
+  row.routineEarlyTo = pair.earlyTo;
+}
+
 export function unionPurges(a, b, now = Date.now()) {
   const map = new Map();
   for (const p of [...(a || []), ...(b || [])]) {
     if (!p || !validDay(p.from) || !validDay(p.to) || p.from > p.to) continue;
     const k = p.from + "\0" + p.to;
     const cur = map.get(k);
-    const usable = Math.max(usableCutoff(p, now), cur ? cur.usable : 0);
+    const incomingUsable = usableCutoff(p, now);
+    const usable = Math.max(incomingUsable, cur ? cur.usable : 0);
     const ahead = rawAhead(p, now) || !!(cur && cur.ahead);
     const stamp = usable || (ahead ? (now > 0 ? now - 1 : now) : 0);
-    map.set(k, { from: p.from, to: p.to, at: stamp, deletedAt: stamp, synced: !!((cur && cur.synced) || p.synced), usable, ahead });
+    const incomingEarly = earlyPair(p);
+    const curEarly = cur && cur.earlyFrom != null ? { earlyFrom: cur.earlyFrom, earlyTo: cur.earlyTo } : null;
+    /* The window belongs to the cutoff that wins. A copy with the same cutoff,
+       including a sync acknowledgment, does not replace it. */
+    let early = incomingEarly;
+    if (cur) {
+      if (incomingUsable > cur.usable) early = incomingEarly;
+      else if (incomingUsable < cur.usable) early = curEarly;
+      else early = curEarly || incomingEarly;
+    }
+    map.set(k, {
+      from: p.from,
+      to: p.to,
+      at: stamp,
+      deletedAt: stamp,
+      synced: !!((cur && cur.synced) || p.synced),
+      usable,
+      ahead,
+      earlyFrom: early ? early.earlyFrom : null,
+      earlyTo: early ? early.earlyTo : null,
+    });
   }
-  return [...map.values()].map(({ usable, ahead, ...rest }) => rest);
+  return [...map.values()].map(({ usable, ahead, earlyFrom, earlyTo, ...rest }) => {
+    if (typeof earlyFrom === "number" && typeof earlyTo === "number") {
+      return { ...rest, routineEarlyFrom: earlyFrom, routineEarlyTo: earlyTo };
+    }
+    return rest;
+  });
 }
 
 /* Record a range delete. A repeat delete moves deletedAt. Marking the same
    delete synced does not, or logs made in between would be wiped on the next sync. */
-export function notePurge(list, from, to, synced, now = Date.now()) {
+export function notePurge(list, from, to, synced, now = Date.now(), early = null) {
   const purges = Array.isArray(list) ? list : [];
   if (!validDay(from) || !validDay(to) || from > to) return purges;
   const hit = purges.find((p) => p && p.from === from && p.to === to);
   if (hit) {
-    if (!synced) { hit.at = now; hit.deletedAt = now; }
-    else if (purgeCutoff(hit) == null) { hit.at = now; hit.deletedAt = now; }
+    if (!synced) {
+      hit.at = now;
+      hit.deletedAt = now;
+      writeEarly(hit, early);
+    } else if (purgeCutoff(hit) == null) {
+      hit.at = now;
+      hit.deletedAt = now;
+      writeEarly(hit, early);
+    }
     hit.synced = !!synced;
     return purges;
   }
-  purges.push({ from, to, at: now, deletedAt: now, synced: !!synced });
+  const row = { from, to, at: now, deletedAt: now, synced: !!synced };
+  writeEarly(row, early);
+  purges.push(row);
   return purges;
 }
 
@@ -552,7 +601,7 @@ export function applyPurges(data, now = Date.now()) {
     if (!p) continue;
     const before = neutralCutoff(p, now);
     if (before != null) { p.at = before; p.deletedAt = before; }
-    stripRange(data, p.from, p.to, { quiet: true, before, now });
+    stripRange(data, p.from, p.to, { quiet: true, before, now, early: p });
   }
   if (data) stripProfileClockFields(data.profile);
   data.purges = purges;

@@ -1,5 +1,12 @@
 import { app } from "../runtime.js";
-import { canMutateRoutines, projectDailyRoutines } from "../shared/daily-routines-store.js";
+import {
+  canMutateRoutines,
+  lastRoutineSite,
+  projectDailyRoutines,
+  ROUTINE_SITES,
+  routineSiteId,
+  routineSiteLabel,
+} from "../shared/daily-routines-store.js";
 import {
   compoundDoseHistory,
   editRoutineLog,
@@ -7,11 +14,16 @@ import {
   routineClock,
   routineLogDraft,
 } from "./daily-routines.js";
+import { routineSupplyView } from "../shared/routine-supply.js";
 
 /* Long-press details for one routine row. A tap still logs.
    The page stays open after the finger lifts. The X in the top right
    closes it. Amount and day reuse editRoutineLog. Time is editable only
    when the day is before today. A note is optional and lives on the log.
+   An injection site is optional and is chosen here after a dose is logged.
+   The choices are left and right belly, thigh, arm, and glute. There is
+   no body map. The last site is shown. Picking that site again shows a
+   warning that can be dismissed, and the log can still be saved.
    How you felt opens the existing check-in and writes nothing here.
    Edit mode does not use this gesture. A rest log is never opened. */
 
@@ -97,6 +109,10 @@ function readDetailsFields() {
   if (note && typeof note.value === "string") sd.note = note.value;
 }
 
+function sameSiteWarning(sd) {
+  return !!(sd && sd.site && sd.lastSite && sd.site === sd.lastSite && sd.siteDismissed !== sd.site);
+}
+
 function syncTimeVisibility() {
   const sd = app.ui && app.ui.sd;
   if (!sd || typeof document === "undefined" || typeof document.getElementById !== "function") return;
@@ -122,6 +138,8 @@ export function openRoutineDetails(itemId, logId) {
   const draft = log ? routineLogDraft(app.state, log.id) : null;
   if (log && !draft) return false;
   const clock = routineClock();
+  const site = draft ? routineSiteId(draft.site) : "";
+  const prior = lastRoutineSite(app.state && app.state.dailyRoutines, item.id, draft ? draft.logId : "");
   app.ui.sheet = "routines-details";
   app.ui.sd = {
     itemId: item.id,
@@ -136,6 +154,10 @@ export function openRoutineDetails(itemId, logId) {
     time: draft ? draft.time : "",
     note: draft ? draft.note : "",
     status: log ? log.status : "",
+    site,
+    lastSite: prior,
+    displaySite: prior || site,
+    siteDismissed: "",
     error: "",
     motion: prefersReducedMotion() ? "reduce" : "full",
   };
@@ -158,6 +180,17 @@ export function commitRoutineDetails() {
   const backdated = showTime(sd.day, sd.maxDay);
   const draft = { amount: sd.amount, day: sd.day, note: typeof sd.note === "string" ? sd.note : "" };
   if (backdated) draft.time = typeof sd.time === "string" ? sd.time : "";
+  if (sd.kind === "dose") {
+    sd.lastSite = lastRoutineSite(app.state && app.state.dailyRoutines, sd.itemId, sd.logId);
+    draft.site = typeof sd.site === "string" ? sd.site : "";
+    if (sameSiteWarning(sd)) {
+      sd.error = "";
+      if (typeof app.renderSheet === "function") app.renderSheet();
+      const dismiss = field("dr-site-dismiss");
+      if (dismiss && typeof dismiss.focus === "function") dismiss.focus();
+      return false;
+    }
+  }
   if (!editRoutineLog(app.state, sd.logId, draft)) {
     sd.error = "Enter an amount and a day up to today. A day that already has a log stays as it is. On an earlier day, leave the time blank or use hours and minutes.";
     if (typeof app.renderSheet === "function") app.renderSheet();
@@ -179,6 +212,30 @@ export function openRoutineCheckin() {
   return true;
 }
 
+export function setRoutineDetailsSite(siteId) {
+  if (!app.ui || !app.ui.sd || app.ui.sheet !== "routines-details" || !app.ui.sd.logId || app.ui.sd.kind !== "dose") return false;
+  readDetailsFields();
+  const raw = typeof siteId === "string" ? siteId.trim() : "";
+  const next = routineSiteId(raw);
+  if (raw && !next) return false;
+  if (app.ui.sd.site !== next) app.ui.sd.siteDismissed = "";
+  app.ui.sd.site = next;
+  app.ui.sd.lastSite = lastRoutineSite(app.state && app.state.dailyRoutines, app.ui.sd.itemId, app.ui.sd.logId);
+  app.ui.sd.error = "";
+  if (typeof app.renderSheet === "function") app.renderSheet();
+  return true;
+}
+
+export function dismissRoutineSiteWarning() {
+  const sd = app.ui && app.ui.sd;
+  if (!sd || !app.ui || app.ui.sheet !== "routines-details" || !sameSiteWarning(sd)) return false;
+  readDetailsFields();
+  sd.siteDismissed = sd.site;
+  sd.error = "";
+  if (typeof app.renderSheet === "function") app.renderSheet();
+  return true;
+}
+
 export function setRoutineDetailsQuarter(amount) {
   if (!app.ui || !app.ui.sd || app.ui.sheet !== "routines-details" || !app.ui.sd.logId) return false;
   readDetailsFields();
@@ -186,6 +243,42 @@ export function setRoutineDetailsQuarter(amount) {
   app.ui.sd.error = "";
   if (typeof app.renderSheet === "function") app.renderSheet();
   return true;
+}
+
+function calcEntry(sd) {
+  if (!sd || sd.kind !== "dose" || typeof sd.itemId !== "string" || !sd.itemId) return "";
+  return `<button type="button" class="btn block dr-details-calc" data-action="routines-calc" data-item-id="${esc(sd.itemId)}">Reconstitution calculator</button>
+    <p class="sub">Opens the calculator for this item. It shows U-100 units for what you entered. It does not suggest an amount.</p>`;
+}
+
+function siteHTML(sd) {
+  const selected = routineSiteId(sd.site);
+  const shown = routineSiteId(sd.displaySite);
+  const last = shown
+    ? `<p class="dr-site-last" data-last-site="${esc(shown)}">Last site: ${esc(routineSiteLabel(shown))}</p>`
+    : `<p class="dr-site-last" data-last-site="">No site logged yet.</p>`;
+  const none = `<button type="button" class="dr-site" data-action="routines-details-site" data-site="" aria-pressed="${selected ? "false" : "true"}">No site</button>`;
+  const buttons = ROUTINE_SITES.map((site) => `<button type="button" class="dr-site" data-action="routines-details-site" data-site="${esc(site.id)}" aria-pressed="${selected === site.id ? "true" : "false"}">${esc(site.label)}</button>`).join("");
+  const warn = sameSiteWarning(sd)
+    ? `<div class="dr-site-warn" role="alert" data-site-warn="same"><p>Same site as last time.</p><button type="button" id="dr-site-dismiss" data-action="routines-details-site-dismiss">Dismiss</button><p class="sub">You can dismiss this and still save.</p></div>`
+    : "";
+  return `<span class="field-label" id="dr-details-site-label">Injection site, optional</span>
+    ${last}
+    <div class="dr-sites" role="group" aria-labelledby="dr-details-site-label">${none}${buttons}</div>
+    ${warn}
+    <p class="sub">A site is optional. Saving does not require one.</p>`;
+}
+
+function supplyDetailsHTML() {
+  const sd = app.ui && app.ui.sd;
+  if (!sd || typeof sd.itemId !== "string" || !sd.itemId) return "";
+  const view = projectDailyRoutines(app.state && app.state.dailyRoutines);
+  const item = view && (view.items || []).find((row) => row.id === sd.itemId);
+  if (!item) return "";
+  const today = typeof sd.maxDay === "string" && sd.maxDay ? sd.maxDay : routineClock().day;
+  const supply = routineSupplyView({ item, logs: view.logs, today });
+  if (!supply.text) return "";
+  return `<p class="dr-supply" data-supply="${esc(supply.state)}">${esc(supply.text)}</p>`;
 }
 
 function historyHTML(compoundId) {
@@ -216,6 +309,7 @@ function dayFieldsHTML(sd) {
     </div>
     <label class="field-label" for="dr-details-note">Note, optional</label>
     <textarea class="text-in dr-details-note" id="dr-details-note" maxlength="280" rows="3" autocomplete="off">${esc(sd.note || "")}</textarea>
+    ${sd.kind === "dose" ? siteHTML(sd) : ""}
     ${error}
     <button type="button" class="btn primary block" data-action="routines-details-save">Save</button>`;
 }
@@ -251,11 +345,13 @@ export function routineDetailsSheetHTML() {
     : loggedCheck
       ? loggedDayHTML(sd)
       : sd.kind === "dose"
-        ? `<p class="sub">Log this dose with a tap. Amount, day, time, and a note are edited here after it is logged.</p>`
+        ? `<p class="sub">Log this dose with a tap. Amount, day, time, a note, and an optional injection site are edited here after it is logged. A site is not required to log.</p>`
         : `<p class="sub">This is a check. A tap logs it.</p>`;
   return `<h3 data-motion="${motion}">Details</h3>
     <p class="sub">${esc(name)}. This page stays open until you tap the X.</p>
+    ${supplyDetailsHTML()}
     ${body}
+    ${calcEntry(sd)}
     <h3 class="dr-details-history">History</h3>
     <p class="sub">Logged amounts. Changing the item amount does not change them.</p>
     ${historyHTML(sd.compoundId)}
@@ -383,6 +479,8 @@ app.closeRoutineDetails = closeRoutineDetails;
 app.commitRoutineDetails = commitRoutineDetails;
 app.openRoutineCheckin = openRoutineCheckin;
 app.setRoutineDetailsQuarter = setRoutineDetailsQuarter;
+app.setRoutineDetailsSite = setRoutineDetailsSite;
+app.dismissRoutineSiteWarning = dismissRoutineSiteWarning;
 app.routineDetailsSheetHTML = routineDetailsSheetHTML;
 app.pressRoutineDetails = pressRoutineDetails;
 app.releaseRoutineDetails = releaseRoutineDetails;
