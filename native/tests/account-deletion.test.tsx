@@ -28,12 +28,21 @@ jest.mock('../src/data/sync/supabase',()=>({SupabaseTransport:class {
 jest.mock('expo-network',()=>({addNetworkStateListener:jest.fn(()=>({remove:jest.fn()}))}));
 jest.mock('../src/phone-only/export',()=>({exportAccountBackup:jest.fn(async()=>{}),exportPhoneBackup:jest.fn(async()=>{})}));
 
+// Photo files kept outside the database (src/auth/owner-files.ts): addresses of files that exist.
+const mockFiles=new Set<string>();
+jest.mock('expo-file-system',()=>{
+  class Directory{uri:string;constructor(base:{uri:string},name:string){this.uri=`${base.uri}${name}/`;}get exists(){return false;}delete(){}}
+  class File{uri:string;constructor(a:string|Directory,b?:string){this.uri=typeof a==='string'?a:a.uri+b;}get exists(){return mockFiles.has(this.uri);}delete(){mockFiles.delete(this.uri);}}
+  return {Directory,File,Paths:{document:{uri:'file:///docs/'},cache:{uri:'file:///caches/'}}};
+});
+const PHOTO='file:///docs/profile-photo/fixture-1.jpg';
 function session(owner:string){return {user:{id:owner,email:'fixture@example.test'}} as Session;}
 function fixtureRepo(owner:string){
   // One unsynced row: deletion must not be blocked by it, unlike a plain sign-out.
   let pending=owner===OWNER_A?[{row:syntheticRow(),revision:'100:fixture'}]:[];
-  return {owner,syncFlags:{syncedV1Columns:false},syncTables:()=>syncTables(),pending:()=>pending,conflicts:()=>[],
-    subscribe:()=>()=>{},ack:jest.fn(),wipe:jest.fn(()=>{pending=[];}),hasUnsynced:()=>pending.length>0,unsyncedCount:()=>pending.length,
+  const local=new Map<string,unknown>(owner===OWNER_A?[['profilePhoto',PHOTO]]:[]);
+  return {owner,localGet:(key:string)=>local.get(key),syncFlags:{syncedV1Columns:false},syncTables:()=>syncTables(),pending:()=>pending,conflicts:()=>[],
+    subscribe:()=>()=>{},ack:jest.fn(),wipe:jest.fn(()=>{pending=[];local.clear();}),hasUnsynced:()=>pending.length>0,unsyncedCount:()=>pending.length,
     cursor:()=>'0',applyPage:jest.fn()} as unknown as Repository;
 }
 function clientFixture(invoke:jest.Mock,getUser:jest.Mock=jest.fn(async()=>{throw new Error('offline fixture');})){
@@ -44,7 +53,7 @@ function clientFixture(invoke:jest.Mock,getUser:jest.Mock=jest.fn(async()=>{thro
 }
 let observed:AuthState;
 function Probe(){observed=useAuth();return null;}
-beforeEach(()=>{jest.clearAllMocks();jest.spyOn(AppState,'addEventListener').mockImplementation(()=>({remove:jest.fn()}));jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);});
+beforeEach(()=>{mockFiles.clear();mockFiles.add(PHOTO);jest.clearAllMocks();jest.spyOn(AppState,'addEventListener').mockImplementation(()=>({remove:jest.fn()}));jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);});
 async function mountProvider(invoke:jest.Mock,getUser?:jest.Mock){
   const a=fixtureRepo(OWNER_A),guest=fixtureRepo('guest');
   jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:(owner:string)=>owner===OWNER_A?a:owner==='guest'?guest:fixtureRepo(owner)} as never);
@@ -64,6 +73,8 @@ test('deleteAccount calls the server with the DELETE confirmation, then erases t
   expect(a.wipe).toHaveBeenCalledTimes(1);expect(observed.session).toBeNull();
   expect(fixture.auth.signOut).toHaveBeenCalledWith({scope:'local'});
   expect(signOutStorage.remove).toHaveBeenCalled();
+  // The profile photo file goes with the account, not only its address.
+  expect(mockFiles.has(PHOTO)).toBe(false);
   await view.unmount();
 });
 test.each([
@@ -76,6 +87,7 @@ test.each([
   await act(async()=>{await expect(observed.deleteAccount!()).rejects.toBeInstanceOf(AccountDeletionFailed);});
   expect(a.wipe).not.toHaveBeenCalled();expect(fixture.auth.signOut).not.toHaveBeenCalled();
   expect(observed.session?.user.id).toBe(OWNER_A);expect(observed.repository).toBe(a);
+  expect(mockFiles.has(PHOTO)).toBe(true);
   await view.unmount();
 });
 
