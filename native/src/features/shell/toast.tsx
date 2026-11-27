@@ -27,6 +27,8 @@ export function showToast(text: string, options: ToastOptions = {}) {
 function expireToast(id: number) { if (current?.id === id) { current = null; changed(); } }
 /** Takes a toast's action once: the first press gets it and ends the toast, any later press gets nothing. */
 function takeAction(id: number) { const act = current?.id === id ? current.action : undefined; expireToast(id); return act; }
+/** Clears the toast for every screen, so one test's toast never stands in for the next test's. */
+export function resetToast() { current = null; changed(); }
 const useToast = () => useSyncExternalStore(cb => { listeners.add(cb); return () => { listeners.delete(cb); }; }, () => current, () => current);
 
 /** How the toast moves (motion.css): it springs up 16 pt from 96 percent on the toast spring while it fades in over 180 ms, and
