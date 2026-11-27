@@ -5,6 +5,7 @@ import type { SettingsPrefs } from '@/features/settings/prefs-model';
 import type { Repository } from '@/data/repository';
 import { PlanStore } from '@/features/plans/store';
 import { plannedWeek } from '@/features/plans/schedule';
+import { SplitStore } from '@/features/splits/store';
 import { t } from '@/i18n/en';
 import { currentPause, dayKey, markOf, nowOf, rItems, type RoutinesState } from '@/features/routines/model';
 
@@ -168,6 +169,13 @@ export function planReminders(rem: SettingsPrefs['rem'], workoutDays: readonly n
 export function plannedWorkoutDays(repo: Repository | null | undefined): number[] {
   if (!repo) return [];
   try {
+    // The chosen split's own schedule comes first, as the Split screen shows it: its weekdays, or its weekly target spread
+    // over the week. The plan store keeps how a split runs only once the synced plan columns are on.
+    const split = new SplitStore(repo).def();
+    if (split?.days.length) {
+      return split.mode === 'weekdays' ? split.week.map((w, i) => (w >= 0 ? i : -1)).filter(i => i >= 0)
+        : [...new Set(Array.from({ length: split.perWeek }, (_, i) => Math.floor(i * 7 / split.perWeek)))];
+    }
     // Any Monday will do: the weekdays a plan uses do not depend on the week (only which workout lands on them does).
     return plannedWeek('2024-01-01', new PlanStore(repo).read()).map(d => (new Date(`${d.date}T00:00:00Z`).getUTCDay() + 6) % 7);
   } catch { return []; }
