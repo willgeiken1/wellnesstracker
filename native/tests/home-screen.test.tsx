@@ -8,6 +8,8 @@ import Home from '../src/app/(tabs)/index';
 import { dateLine, greeting } from '../src/features/home/hero';
 import { MINI, terrain } from '../src/features/home/contour';
 import { homeTileAction } from '../src/features/home/tiles/use-home-tiles';
+import { foodDay, pickFoodDay } from '../src/features/food/selection';
+import { redirectSystemPath } from '../src/app/+native-intent';
 import { readWaterIn } from '../src/features/home/tiles/read';
 import { addDrink, DEFAULT_CONTAINERS, litresOn, readWater, setContainers, setWaterUnit } from '../src/features/food/water';
 import { pageHandlers, useShellEdit } from '../src/features/shell/registry';
@@ -268,6 +270,23 @@ describe('logging from inside a tile', () => {
     homeTileAction(repo, { id: meals(repo)[0].id, name: 'Breakfast' }, { ql: 'food', food: 'Nothing like it' });
     expect(repo.list('food_entries')).toHaveLength(0);
     expect(showToast).toHaveBeenLastCalledWith('That food could not be added. Try again.', { color: 'warning' });
+  });
+  test('logging from Home or a shortcut is for today, even with an earlier day picked in Food', async () => {
+    const today = attributedDay(), earlier = '2026-01-05';
+    pickFoodDay(earlier); expect(foodDay()).toBe(earlier);
+    homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal', meal: 'b' });
+    expect(foodDay()).toBe(today);
+    pickFoodDay(earlier);
+    homeTileAction(memoryRepository(), null, { ql: 'meal' });
+    expect(foodDay()).toBe(today);
+    pickFoodDay(earlier);
+    open();
+    await render(<Home />, { wrapper });
+    await act(async () => { pageHandlers('home').meal?.run?.(); });
+    expect(foodDay()).toBe(today);
+    pickFoodDay(earlier);
+    expect(redirectSystemPath({ path: 'insight://food/log', initial: false })).toBe('/food/log');
+    expect(foodDay()).toBe(today);
   });
   test('a meal slot opens the food log on that meal, not the one due next', () => {
     homeTileAction(memoryRepository(), { id: 'x', name: 'Dinner' }, { ql: 'meal', meal: 'b' });

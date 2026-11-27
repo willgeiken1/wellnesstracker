@@ -7,6 +7,7 @@ import type { Repository } from '@/data/repository';
 import { addWater } from '@/features/food/actions';
 import { attributedDay, deleteFood, recentFoods, saveFood } from '@/features/food/model';
 import { quickContainers, readWater } from '@/features/food/water';
+import { logForToday } from '@/features/food/selection';
 import { appleHealth } from '@/features/health/apple';
 import type { HealthDays } from '@/features/health/days';
 import type { OuraRecovery } from '@/features/health/oura';
@@ -68,8 +69,9 @@ export function homeTileAction(repo: Repository | null, nextMeal: HomeInput['nex
     return;
   }
   // A meal slot opens the log on that meal, not the one due next (breakfast tapped after breakfast is still breakfast).
+  if (data.ql === 'meal') logForToday();
   if (data.ql === 'meal' && data.meal) { router.push({ pathname: '/food/log', params: { meal: String(data.meal) } } as unknown as Href); return; }
-  if (data.ql === 'meal' || !repo || !nextMeal) { router.push('/food/log' as unknown as Href); return; }
+  if (data.ql === 'meal' || !repo || !nextMeal) { logForToday(); router.push('/food/log' as unknown as Href); return; }
   if (data.ql !== 'food') return;
   const wanted = String(data.food ?? '').trim().toLowerCase();
   const food = recentFoods(repo).find(f => String(f.name ?? '').trim().toLowerCase() === wanted);

@@ -1,4 +1,5 @@
 import { router, type Href } from 'expo-router';
+import { logForToday } from '@/features/food/selection';
 import { memo, useId, useMemo } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { BarBackdrop } from '@/components/blur-bar';
@@ -35,7 +36,7 @@ function NumbersCover({ colors, w, h }: { colors: ThemeColors; w: number; h: num
   </View>;
 }
 
-const go = (href: string) => router.push(href as unknown as Href);
+const go = (href: string) => { if (href === '/food/log') logForToday(); router.push(href as unknown as Href); };
 
 /** One Home tile in one style: drawn from Home's shared tile data, or its empty state. */
 export const HomeTileView = memo(function HomeTileView(p: TileRenderProps) {
