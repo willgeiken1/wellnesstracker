@@ -17,7 +17,7 @@ import { useTheme } from '@/design/theme-provider';
 import { showToast } from '@/features/shell/toast';
 import { useAppleHealth } from '@/features/health/use-apple-health';
 import { useOura } from '@/features/health/use-oura';
-import { readProfile, saveProfile } from '@/features/onboarding/model';
+import { readProfile, saveProfileName } from '@/features/onboarding/model';
 import { devicePreferencesUnsaved, saveDevicePreferences, useDevicePreferences } from '@/features/onboarding/device-preferences';
 import { LEGAL_LINKS, openPage } from './links';
 import { iconArt, iconId } from './app-icon';
@@ -205,7 +205,7 @@ export function ConnectionsPage({ limited = false }: { limited?: boolean }) {
 function NameField({ repo }: { repo: NonNullable<ReturnType<typeof useAuth>['repository']> }) {
   const k = useKit();
   const [name, setName] = useState(() => { try { return readProfile(repo).name; } catch { return ''; } });
-  const commit = () => { try { saveProfile(repo, { ...readProfile(repo), name: name.trim() }); } catch { /* the profile keeps its last saved name */ } };
+  const commit = () => { try { saveProfileName(repo, name); } catch { /* the profile keeps its last saved name */ } };
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 16 }}>
     <KitText weight={600} size={15.5} style={{ width: 96 }}>{st('settingsName')}</KitText>
     <TextInput testID="settings-name" value={name} onChangeText={setName} onBlur={commit} onSubmitEditing={commit} returnKeyType="done" autoComplete="given-name"

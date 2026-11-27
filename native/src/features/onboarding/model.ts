@@ -66,6 +66,14 @@ export function saveProfile(repo:Repository,input:ProfileInput,day=today()) {
     if(stats.weight_kg!==null)repo.save('weigh_ins',{day,weight_kg:stats.weight_kg,entered_value:Number(input.weight),entered_unit:input.unit,source:'app'});
   });
 }
+/** Renames the saved profile and keeps every other field as it is. A profile from setup may have no birth date (About you
+ * skipped or age left blank), which the full save in saveProfile rightly refuses, so a name change goes through here.
+ * Writes nothing when there is no profile yet: a profile row marks the account as set up. */
+export function saveProfileName(repo:Repository,name:string) {
+  const current=repo.list('profile').sort(compareRows).at(-1);
+  if(!current)return;
+  repo.save('profile',{...current.data,name:name.trim()||null},current.id);
+}
 export function finishOnboarding(repo:Repository,input:ProfileInput,template:'empty'|'fullBody',targets:Targets|null,day=today()) {
   if(!validProfile(input,day))throw new Error('Invalid profile.');
   if(targets&&Object.values(targets).some(v=>!Number.isFinite(v)||v<0))throw new Error('Invalid targets.');
