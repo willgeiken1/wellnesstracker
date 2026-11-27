@@ -324,27 +324,28 @@ const Week: TileBody = ({ p, repo, d }) => {
   const vals = cur.map((x, i) => days[i] > d.today ? null : pv ? x.p : x.kcal), prev = prevS.map(x => pv ? x.p : x.kcal);
   const liveI = days.indexOf(d.today), full = liveI >= 0 ? liveI : 7;
   const known = (a: (number | null)[]) => a.slice(0, full).filter((x): x is number => x != null);
-  const avgOf = (a: (number | null)[]) => { const k2 = known(a); return k2.length ? Math.round(k2.reduce((x, y) => x + y, 0) / k2.length) : 0; };
+  // No known reading in the days counted leaves the average unknown, never 0, and a comparison needs both weeks known.
+  const avgOf = (a: (number | null)[]) => { const k2 = known(a); return k2.length ? Math.round(k2.reduce((x, y) => x + y, 0) / k2.length) : null; };
   const avg = avgOf(vals), pavg = avgOf(prev), onT = known(vals).filter(x => Math.abs(x - goal) <= goal * 0.1).length;
   const mx = Math.max(goal * 1.18, ...[...vals, ...(lastMode ? prev : [])].map(x => (x ?? 0) * 1.04));
-  const VF = (x: number) => pv ? num(x) : EN(d, x), dlt = avg - pavg, logged = known(vals).length;
+  const VF = (x: number) => pv ? num(x) : EN(d, x), AV = avg == null ? '–' : VF(avg), dlt = avg != null && pavg != null ? avg - pavg : null, logged = known(vals).length;
   const C = (H: number, cw: number, vl?: boolean, ls?: number) => <Cols vals={vals} H={H} cw={cw} max={mx} goal={lastMode ? null : goal} band={lastMode ? null : 0.1} last={lastMode ? prev : null}
     sel={weekday(d.day)} live={liveI >= 0 ? liveI : null} vlab={vl} labels={WD1} labelSize={ls} vfmt={x => pv ? String(Math.round(x)) : `${(enValue(x, d.eu) / 1000).toFixed(1)}k`}
     onDay={live(p) ? dayIndexTap(d) : undefined} label={pv ? t('foodProteinByDayPlain') : t('foodCaloriesByDay')}
     aria={(i, x) => `${DAYN[i]}, ${x == null ? t('foodNothingLogged') : `${VF(x)} ${u}${i === liveI ? ` ${t('foodSoFar')}` : ''}`}${lastMode ? `, ${t('foodWeekBefore')} ${prev[i] == null ? t('foodNothingLogged') : VF(prev[i]!)}` : ''}`} />;
-  const cmp = tx(dlt >= 0 ? 'foodMoreADay' : 'foodLessADay', { v: VF(Math.abs(dlt)), u });
+  const cmp = dlt == null ? t('foodNoWeekCompare') : tx(dlt >= 0 ? 'foodMoreADay' : 'foodLessADay', { v: VF(Math.abs(dlt)), u });
   if (p.size === 'S') return <View style={col}>
-    {lastMode ? <><Num v={VF(avg)} unit={u} fs={26} /><Sub style={{ marginTop: 4 }}>{dlt >= 0 ? '+' : '−'}{VF(Math.abs(dlt))} {u} {t('foodADay')}</Sub></>
+    {lastMode ? <><Num v={AV} unit={u} fs={26} /><Sub style={{ marginTop: 4 }}>{dlt == null ? t('foodNoWeekCompare') : `${dlt >= 0 ? '+' : '−'}${VF(Math.abs(dlt))} ${u} ${t('foodADay')}`}</Sub></>
       : <><Num v={String(onT)} unit={tx('foodOfN', { n: logged })} fs={30} /><Sub style={{ marginTop: 4 }}>{t('foodDaysOnGoal')}</Sub></>}
     <View style={{ marginTop: 'auto' }}>{C(48, 12, false, 9.5)}</View>
   </View>;
   if (p.size === 'M') return <View style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
-    <View style={{ width: 104, ...col }}><Num v={VF(avg)} unit={u} fs={24} /><Sub style={{ marginTop: 4 }}>{t('foodDailyAverageLower')}</Sub>
-      <Sub lines={3} style={{ marginTop: 'auto', lineHeight: 16 }}>{lastMode ? <><B>{VF(Math.abs(dlt))} {u}</B> {t(dlt >= 0 ? 'foodMoreThanLast' : 'foodLessThanLast')}</> : <><B>{tx('foodNOfM', { n: onT, m: logged })}</B> {t('foodWithin10')}</>}</Sub></View>
+    <View style={{ width: 104, ...col }}><Num v={AV} unit={u} fs={24} /><Sub style={{ marginTop: 4 }}>{t('foodDailyAverageLower')}</Sub>
+      <Sub lines={3} style={{ marginTop: 'auto', lineHeight: 16 }}>{lastMode ? dlt == null ? t('foodNoWeekCompare') : <><B>{VF(Math.abs(dlt))} {u}</B> {t(dlt >= 0 ? 'foodMoreThanLast' : 'foodLessThanLast')}</> : <><B>{tx('foodNOfM', { n: onT, m: logged })}</B> {t('foodWithin10')}</>}</Sub></View>
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>{C(76, 18)}</View>
   </View>;
   return <View style={col}>
-    <Num v={VF(avg)} unit={`${u} ${t('foodADay')}`} fs={30} />
+    <Num v={AV} unit={`${u} ${t('foodADay')}`} fs={30} />
     <Sub style={{ marginTop: 5 }}>{lastMode ? cmp : tx('foodDaysWithin', { n: onT, m: logged })}</Sub>
     <View style={{ marginTop: 'auto' }}>{C(150, 26, true)}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 14 }}>
@@ -455,12 +456,12 @@ const Timing: TileBody = ({ p, repo, d }) => {
   if (p.size === 'M') return <View style={col}>{top}<View style={{ marginTop: 'auto' }}><Timeline d={d} w={p.body.w} h={32} mh={26} mw={7} target={tg} ticks /></View></View>;
   const days = weekDays(d.day), gw = p.body.w - 22, liveI = days.indexOf(d.today);
   const rows = days.slice(0, liveI >= 0 ? liveI : 7).map(day => { const items = repo.list('food_entries').filter(r => r.data.day === day).map(r => hours(r.updated_at)); return items.length ? [Math.min(...items), Math.max(...items)] as const : null; });
-  const lens = rows.filter((x): x is readonly [number, number] => !!x).map(x => x[1] - x[0]), avgL = lens.length ? lens.reduce((a, b) => a + b, 0) / lens.length : 0;
+  const lens = rows.filter((x): x is readonly [number, number] => !!x).map(x => x[1] - x[0]), avgL = lens.length ? lens.reduce((a, b) => a + b, 0) / lens.length : null;
   return <View style={col}>{top}
     <View style={{ marginTop: 'auto' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8 }}><KitText weight={700} size={10} color={k.c.food} style={{ width: 14, textAlign: 'center' }}>{WD1[weekday(d.day)]}</KitText><Timeline d={d} w={gw} h={32} mh={26} mw={7} target={tg} /></View>
       <View style={{ height: 1, backgroundColor: k.c.hair, marginTop: 12, marginBottom: 10 }} />
-      <View style={{ flexDirection: 'row' }}><Kick style={{ flex: 1 }}>{d.isToday || liveI >= 0 ? t('foodEarlierWeek') : t('foodThatWeek')}</Kick><Sub size={11.5}>{t('foodAverage')} <B>{dur(avgL)}</B> {t('foodADay')}</Sub></View>
+      <View style={{ flexDirection: 'row' }}><Kick style={{ flex: 1 }}>{d.isToday || liveI >= 0 ? t('foodEarlierWeek') : t('foodThatWeek')}</Kick><Sub size={11.5}>{t('foodAverage')} <B>{avgL == null ? '–' : dur(avgL)}</B> {t('foodADay')}</Sub></View>
       <View style={{ gap: 6, marginTop: 9 }}>{rows.map((x, i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8 }}>
         <KitText weight={700} size={10} color={weekday(d.day) === i ? k.c.food : 'text-muted'} style={{ width: 14, textAlign: 'center' }}>{WD1[i]}</KitText>
         <View style={{ height: 10, width: gw }}>

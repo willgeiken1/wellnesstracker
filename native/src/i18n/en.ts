@@ -1192,7 +1192,7 @@ export const en = {
   foodAddFoodTo: 'Add food to {meal}', foodCopyYesterday: 'Copy yesterday', foodSavedMeals: 'Saved meals', foodLoggedClosed: '{day} is logged and closed.',
   foodAddContainer: 'Add {name}, {size}', foodWaterSoFar: '{v} of {goal} so far', foodWaterToGo: '{v} to go', foodDrinksToday: '{n} today', foodDrink: 'drink', foodDrinks: 'drinks',
   foodWeekAverage: 'Week average', foodWaterByDay: 'Water by day, goal {goal}', foodSoFar: 'so far', foodWeekBefore: 'week before', foodWeekBeforeCap: 'Week before',
-  foodMoreADay: '{v} {u} more a day than last week', foodLessADay: '{v} {u} less a day than last week', foodADay: 'a day', foodDaysOnGoal: 'days on goal',
+  foodMoreADay: '{v} {u} more a day than last week', foodLessADay: '{v} {u} less a day than last week', foodADay: 'a day', foodNoWeekCompare: 'Not enough logged to compare weeks', foodDaysOnGoal: 'days on goal',
   foodDailyAverageLower: 'daily average', foodMoreThanLast: 'more a day than last week', foodLessThanLast: 'less a day than last week', foodNOfM: '{n} of {m}',
   foodWithin10: 'days within 10% of goal', foodDaysWithin: '{n} of {m} days within 10%', foodGoalLegend: '{v} {u} goal', foodTapADay: 'Tap a day',
   foodNotOnFoods: 'Not on your foods yet', foodUnderLimit: '{v} {u} under the limit', foodOverLimit: '{v} {u} over the limit', foodGoalMet: 'Goal met', foodToGo: '{v} {u} to go',
