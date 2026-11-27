@@ -45,7 +45,7 @@ function readFood(store: WorkoutStore, days: string[], now: Date): { food: FoodD
     }) : [];
     return {
       kcal: sum.energy_kj === null ? null : sum.energy_kj / KJ, protein: sum.protein_g, carbs: sum.carbs_g, fat: sum.fat_g,
-      goalKcal: targets ? targets.energy_kj / KJ : null, goalProtein: targets ? targets.protein_g : null, meals,
+      goalKcal: targets ? targets.energy_kj / KJ : null, goalProtein: targets ? targets.protein_g : null, meals, logged: rows.some(r => r.deleted_at === null),
     };
   });
   const today = food[food.length - 1].meals;

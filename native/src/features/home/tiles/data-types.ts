@@ -9,7 +9,7 @@ export interface HomeTileData {
   now: Date;
   days: Date[];
   dayLabels: string[];
-  calories: { unit: 'kcal'; goal: number; today: number; series: number[]; meals: MealTime[]; macros: { protein: number; carbs: number; fat: number } };
+  calories: { unit: 'kcal'; goal: number; today: number; series: number[]; /** Each day of `series`, whether anything was logged. */ logged?: boolean[]; meals: MealTime[]; macros: { protein: number; carbs: number; fat: number } };
   protein: { unit: 'g'; goal: number; today: number; series: number[]; byMeal: (number | null)[] };
   water: {
     unit: string; goal: number; today: number; series: number[]; hourly: number[];

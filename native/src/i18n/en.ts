@@ -1401,7 +1401,7 @@ export const en = {
   // P1 home hero
   homeHeroToday: 'Today', homeHeroRestDay: 'Rest day', homeHeroAllMet: 'All goals met', homeHeroRest: 'Rest',
   homeHeroTraining: 'Training', homeHeroFood: 'Food', homeHeroSleep: 'Sleep',
-  homeHeroNothing: 'Nothing logged yet', homeHeroNoSleep: 'No sleep recorded', homeHeroNoData: 'No data', homeHeroRecovery: 'Recovery day',
+  homeHeroNothing: 'Nothing logged yet', homeHeroEnergyUnknown: 'Logged foods don\'t list energy', homeHeroUnknown: 'unknown', homeHeroNoSleep: 'No sleep recorded', homeHeroNoData: 'No data', homeHeroRecovery: 'Recovery day',
   homeHeroSessionDone: 'Session done', homeHeroGoalMet: 'Goal met', homeHeroHidden: 'Hidden · tap a tile to show', homeNumbersHidden: '{title} hidden. Show numbers', homeTapToShow: 'Tap to show',
   homeHeroMinLeft: '{n} min left · {pct}', homeHeroEnergyLeft: '{n} {u} left · {pct}', homeHeroSleepBelow: '{n} below goal · {pct}',
   homeHeroOf: 'of ', homeHeroOfGoal: 'of {goal}', homeHeroClearSky: 'A clear sky', homeHeroQuietDay: 'A quiet day',

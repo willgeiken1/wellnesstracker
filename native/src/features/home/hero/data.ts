@@ -47,10 +47,11 @@ export function heroInput(data: HomeTileData | null, store: WorkoutStore | null,
   scores?: readonly (number | null)[], trainGoal: number = HERO_DEFAULT_GOALS.trainMin): HeroInput {
   const days = lastWeek(now), train = trainingMinutes(store, days, now);
   const last7 = <T,>(list: readonly T[] | undefined | null) => { const l = list ?? []; return days.map((_, i) => l[l.length - 7 + i]); };
-  const kcal = last7(data?.calories.series as (number | null)[] | undefined), sleepH = last7(data?.sleep.series as (number | null)[] | undefined);
+  const kcal = last7(data?.calories.series as (number | null)[] | undefined), logged = last7(data?.calories.logged), sleepH = last7(data?.sleep.series as (number | null)[] | undefined);
   const out: HeroDayIn[] = days.map((_, i) => ({
     trainMin: train[i],
     kcal: finite(kcal[i]) ? kcal[i] : null,
+    ...(logged[i] && !finite(kcal[i]) ? { kcalUnknown: true } : {}),
     sleepMin: finite(sleepH[i]) && sleepH[i]! > 0 ? Math.round(sleepH[i]! * 60) : null,
     ...(scores ? { score: finite(scores[i]) ? scores[i] : null } : {}),
   }));

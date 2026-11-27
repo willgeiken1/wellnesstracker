@@ -14,6 +14,8 @@ const KG_PER_LB = 0.45359237, FLOZ = 33.814;
 export interface FoodDayIn {
   kcal: number | null; protein: number | null; carbs: number | null; fat: number | null;
   goalKcal: number | null; goalProtein: number | null;
+  /** Something was logged that day, so a null total means the foods don't list it, not that nothing was eaten. */
+  logged?: boolean;
   meals: { id: string; name: string; kcal: number | null; protein: number | null; count: number; loggedAt: Date | null }[];
 }
 export interface ActiveWorkoutIn { name: string; startedAt: Date | null; setsDone: number; setsTotal: number }
@@ -203,7 +205,7 @@ export function buildTileData(input: HomeInput): HomeTileData {
   return {
     now, days: dates, dayLabels: dates.map(d => WEEKDAYS[d.getDay()]),
     calories: {
-      unit: 'kcal', goal: goalKcal, today: eaten, series: series(kcal) as number[],
+      unit: 'kcal', goal: goalKcal, today: eaten, series: series(kcal) as number[], logged: series(food.map(d => (d.logged ?? d.meals.some(m => m.count > 0)) ? 1 : 0)).map(x => x === 1),
       meals: meals.map(m => ({ name: m.name, kcal: finite(m.kcal) ? Math.round(m.kcal) : null, time: m.loggedAt ? clock12(m.loggedAt) : null })),
       macros: { protein: Math.round(today?.protein ?? 0), carbs: Math.round(today?.carbs ?? 0), fat: Math.round(today?.fat ?? 0) },
     },
