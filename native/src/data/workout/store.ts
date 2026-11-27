@@ -268,7 +268,7 @@ export class WorkoutStore {
   private content(id: string) {
     const s = this.repo.get('sessions', id);
     return JSON.stringify({session:s?.data, entries:this.entries(id).map(e => ({
-      data:e.data, skipped:this.skipped(e.id), sets:this.sets(e.id).map(s => ({...s.data, tag:this.repo.syncFlags?.syncedV1Columns ? s.data.tag ?? null : this.drafts(e.id)[Number(s.data.position)]?.tag ?? (this.drafts(e.id)[Number(s.data.position)]?.warmup ? 'warmup' : null)}))
+      data:e.data, skipped:this.skipped(e.id), sets:this.sets(e.id).map(s => ({...s.data, tag:this.setTag(e.id, s)}))
     }))});
   }
   beginEditing(id: string) {
@@ -443,6 +443,13 @@ export class WorkoutStore {
     const session = this.repo.get('entries', entryId)?.data.session_id;
     if (session && this.repo.get('sessions', String(session))?.data.finished_at !== null) this.recompute();
   }
+  /** Put warm-up sets in front of an exercise's sets, while none of them is logged yet. */
+  prependWarmups(entryId: string, count: number) {
+    const drafts = this.drafts(entryId);
+    if (count < 1 || drafts.some(d => d.setId) || drafts.some(d => d.tag === 'warmup' || d.warmup) || drafts.length + count > 100) return;
+    const warm = Array.from({length: count}, () => ({weight: '', reps: '', tag: 'warmup', warmup: true}) as Draft);
+    this.repo.localSave(`draft:${entryId}`, [...warm, ...drafts]);
+  }
   addSet(entryId: string) {
     const drafts = this.drafts(entryId);
     if (drafts.length >= 100) return;
@@ -470,6 +477,12 @@ export class WorkoutStore {
     });
     this.recompute();
   }
+  /** A logged set's tag: on the row when synced columns are on, otherwise in the exercise's local drafts (or their older warm-up flag). */
+  setTag(entryId: string, set: Row): Draft['tag'] {
+    if (this.repo.syncFlags?.syncedV1Columns) return this.tag(set.data.tag);
+    const d = this.drafts(entryId)[Number(set.data.position)];
+    return d?.tag ?? (d?.warmup ? 'warmup' : null);
+  }
   private tag(value: unknown): Draft['tag'] { return value === 'warmup' || value === 'failure' || value === 'drop' ? value : null; }
   private setData(entryId: string, index: number, d: Draft): Row['data'] {
     if (!validateSet(d.weight, d.reps, this.unit(entryId)).valid) throw Error('Invalid set.');
@@ -487,8 +500,14 @@ export class WorkoutStore {
   private writeSet(entryId: string, index: number, d: Draft, id?: string) {
     return this.repo.save('sets', this.setData(entryId, index, d), id);
   }
+  /** Settings › Workout › Start automatically (features/settings/prefs.ts, `work.auto`). On unless turned off. */
+  private autoRest() {
+    try { const prefs = this.repo.localGet<{ work?: { auto?: unknown } }>('settings-prefs'); return prefs?.work?.auto !== false; } catch { return true; }
+  }
+  /** Starts the rest timer after a finished set or round, unless the person turned automatic rest off. The timer's own
+   * controls still work either way. */
   private startRest(entry: Row, index: number, setId: string, now = Date.now()) {
-    if (this.pastMode(String(entry.data.session_id))) return;
+    if (this.pastMode(String(entry.data.session_id)) || !this.autoRest()) return;
     const group = this.supersetGroup(entry);
     const members = this.entries(String(entry.data.session_id)).filter(e => !this.skipped(e.id) && (group ? this.supersetGroup(e) === group : e.id === entry.id));
     const roundDone = members.every(e => index >= this.drafts(e.id).length || !!this.drafts(e.id)[index].setId);

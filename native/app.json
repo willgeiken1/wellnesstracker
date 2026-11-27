@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.insightwellness.app",
       "supportsTablet": false,
       "deploymentTarget": "17.0",
+      "usesAppleSignIn": true,
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -178,6 +179,12 @@
       "expo-sqlite",
       "expo-secure-store",
       [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ],
+      [
         "expo-sharing",
         {
           "ios": {
@@ -198,19 +205,27 @@
           }
         }
       ],
+      "expo-live-activity",
       "expo-status-bar",
+      "expo-apple-authentication",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Insight uses Face ID to unlock the app."
+        }
+      ],
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow Insight Wellness to take a meal photo you choose for an estimate.",
-          "photosPermission": false,
+          "cameraPermission": "Insight uses the camera when you choose to scan a food barcode or take a progress or profile photo. Photos stay on this iPhone.",
+          "photosPermission": "Insight opens your photo library when you choose a profile photo. The photo you pick stays on this iPhone.",
           "microphonePermission": false
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Insight Wellness to scan food barcodes when you choose Scan.",
+          "cameraPermission": "Insight uses the camera when you choose to scan a food barcode or take a progress or profile photo. Photos stay on this iPhone.",
           "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
@@ -220,7 +235,7 @@
         "@kingstinct/react-native-healthkit",
         {
           "NSHealthShareUsageDescription": "Insight Wellness reads your body weight, body fat, steps, sleep and sleep stages, active calories, exercise minutes, heart rate, resting heart rate, heart rate variability, VO2 max, water, mindful minutes and workouts from Apple Health to show them beside your training and food. They stay on this phone.",
-          "NSHealthUpdateUsageDescription": false,
+          "NSHealthUpdateUsageDescription": "Insight Wellness does not write anything to Apple Health. It only reads the data you allow, and it would ask you before ever saving to Apple Health.",
           "background": false
         }
       ],

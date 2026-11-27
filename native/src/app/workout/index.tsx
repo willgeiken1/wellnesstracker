@@ -1,1 +1,1 @@
-export { ActiveWorkout as default } from '@/features/workout/active';
+export { TrainingLogger as default } from '@/features/workout/logger/screen';

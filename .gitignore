@@ -8,3 +8,6 @@ test-results/
 playwright-report/
 blob-report/
 team/shots/60/
+
+# Keep the app design tokens so EAS uploads them
+!/native/src/design/tokens.json

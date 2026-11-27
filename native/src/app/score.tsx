@@ -1,8 +1,7 @@
 import { Stack } from 'expo-router';
-import { ScoreDetail } from '@/features/score/detail';
-import { t } from '@/i18n/en';
+import { DayScoreScreen } from '@/features/progress/screens/score';
 
-export default function ScorePage() {
-  // The page shows its own title, so the bar carries only Back; `title` still names it for VoiceOver.
-  return <><Stack.Screen options={{ title: t('scoreTitle'), headerTitle: '', headerBackButtonDisplayMode: 'minimal' }} /><ScoreDetail /></>;
+/** The day score: how today adds up. */
+export default function ScoreRoute() {
+  return <><Stack.Screen options={{ headerShown: false }} /><DayScoreScreen /></>;
 }

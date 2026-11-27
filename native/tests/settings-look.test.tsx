@@ -6,13 +6,13 @@ import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { memoryRepository } from './workout-repository';
 import { ThemeProvider } from '../src/design/theme-provider';
-import { createTheme, palettes } from '../src/design/tokens';
+import { DEFAULT_PALETTE, createTheme, paletteName, palettes } from '../src/design/tokens';
 import { WorkoutStore } from '../src/data/workout/store';
 import { AuthContext, type AuthState } from '../src/auth/provider';
 import Settings from '../src/app/settings/index';
 import SettingsLayout from '../src/app/settings/_layout';
 import Section from '../src/app/settings/[section]';
-import { settingsGroups, settingsSections, searchSettings } from '../src/features/settings/sections';
+import { GROUPS, SECTION_IDS, searchSettings } from '../src/features/settings/sections';
 import { ThemedSwitch, restClock } from '../src/features/settings/parts';
 import { WorkoutSettings } from '../src/features/workout/settings';
 import { RestOptions } from '../src/features/workout/rest-options';
@@ -20,6 +20,7 @@ import { FoodAiPrivacy } from '../src/features/food/ai/privacy';
 import { aiState, setThumbnails } from '../src/features/food/ai/service';
 import { Account as PhoneAccount } from '../src/phone-only/screens';
 import { t } from '../src/i18n/en';
+import { setNotifierForTests } from '../src/features/reminders/notifier';
 
 let mockSection = 'about';
 let mockScreens: { name: string; options: Record<string, unknown> }[] = [];
@@ -45,98 +46,84 @@ const show = (ui: React.ReactNode, auth: AuthState = base()) =>
 beforeEach(() => { jest.clearAllMocks(); mockScreens = []; Constants.expoConfig!.extra!.phoneOnly = false; });
 
 describe('Settings home', () => {
-  test('shows search, the profile card and every destination in its group, with no Back to Home button', async () => {
+  test('shows the large title, search, the profile card and the four groups of sections in the mockup order', async () => {
     await show(<Settings />);
-    expect(screen.getByRole('header', { name: 'Settings' })).toBeTruthy();
+    expect(screen.getAllByRole('header', { name: 'Settings' }).length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Search settings')).toBeTruthy();
     expect(screen.getByTestId('settings-profile')).toBeTruthy();
-    for (const title of ['You', 'App', 'Data & privacy', 'About']) expect(screen.getAllByText(title).length).toBeGreaterThan(0);
-    // Notifications has no row until reminders exist (App Review 2.1); its page still answers if opened.
-    expect(settingsSections.map(row => row.route)).toEqual(['account', 'profile', 'appearance', 'workout', 'score', 'health', 'privacy', 'data', 'about']);
-    expect(screen.queryByRole('button', { name: 'Notifications' })).toBeNull();
-    for (const row of settingsSections) expect(screen.getByRole('button', { name: t(row.label) })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Back to Home' })).toBeNull();
+    expect(GROUPS.map(group => group.length)).toEqual([2, 3, 3, 2]);
+    for (const id of SECTION_IDS) expect(screen.getByTestId(`settings-row-${id}`)).toBeTruthy();
+    expect(screen.queryByText(/Plus|Upgrade|Subscribe/)).toBeNull();
   });
-  test('every row opens its own page', async () => {
+  test('every row opens its own page, Appearance on its own route', async () => {
     await show(<Settings />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Appearance' }));
+    await fireEvent.press(screen.getByTestId('settings-row-appearance'));
     expect(router.push).toHaveBeenLastCalledWith('/settings/appearance');
-    await fireEvent.press(screen.getByRole('button', { name: 'Account' }));
-    expect(router.push).toHaveBeenLastCalledWith('/settings/account');
-    for (const route of ['profile', 'workout', 'health', 'privacy', 'data', 'about'] as const) {
-      await fireEvent.press(screen.getByTestId(`settings-row-${route}`));
-      expect(router.push).toHaveBeenLastCalledWith({ pathname: '/settings/[section]', params: { section: route } });
+    for (const id of SECTION_IDS.filter(id => id !== 'appearance')) {
+      await fireEvent.press(screen.getByTestId(`settings-row-${id}`));
+      expect(router.push).toHaveBeenLastCalledWith({ pathname: '/settings/[section]', params: { section: id } });
     }
     await fireEvent.press(screen.getByTestId('settings-profile'));
-    expect(router.push).toHaveBeenLastCalledWith('/settings/account');
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: '/settings/[section]', params: { section: 'account' } });
   });
-  test('search filters rows by label, also finds a setting by what it holds, and says when nothing matches', async () => {
+  test('search finds sections and single settings, and says when nothing matches', async () => {
     await show(<Settings />);
-    await fireEvent.changeText(screen.getByLabelText('Search settings'), 'priv');
-    expect(screen.getByRole('button', { name: 'Privacy' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Appearance' })).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Search settings'), 'rest');
+    expect(screen.getAllByText('Default rest').length).toBeGreaterThan(0);
     expect(screen.queryByTestId('settings-profile')).toBeNull();
-    await fireEvent.changeText(screen.getByLabelText('Search settings'), 'REST');
-    expect(screen.getByRole('button', { name: 'Workout' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Privacy' })).toBeNull();
     await fireEvent.changeText(screen.getByLabelText('Search settings'), 'zzzz');
-    expect(screen.getByTestId('settings-no-match')).toHaveTextContent('No setting matches. Try "rest" or "units".');
-    await fireEvent.changeText(screen.getByLabelText('Search settings'), '  ');
-    expect(screen.getAllByRole('button').length).toBe(settingsSections.length + 1);
-    expect(searchSettings('units', row => t(row.label)).flatMap(group => group.rows.map(row => row.route))).toEqual(['profile']);
-    expect(settingsGroups.map(group => group.rows.length)).toEqual([2, 4, 2, 1]);
+    expect(screen.getByText('No settings match “zzzz”')).toBeTruthy();
+    expect(screen.getByText('Try a word like theme, Oura, rest or export.')).toBeTruthy();
+    expect(searchSettings('oura').map(hit => hit.section)).toContain('connections');
+    expect(searchSettings('x'.repeat(3))).toEqual([]);
+    expect(searchSettings('e').length).toBeLessThanOrEqual(14);
   });
   test('the profile card states only what is known', async () => {
-    const signedIn = await show(<Settings />, { ...base(), session: { user: { id: 'fixture', email: 'fixture@example.test' } } as AuthState['session'], pending: 2 });
-    expect(screen.getByTestId('settings-profile')).toHaveProp('accessibilityLabel', 'fixture@example.test, Changes waiting to sync');
-    await signedIn.unmount();
     const phone = await show(<Settings />, { ...base(), phoneOnly: true });
-    expect(screen.getByText('Saved on this phone')).toBeTruthy();
-    expect(screen.getByText('No account or sync')).toBeTruthy();
+    expect(screen.getAllByText(/Saved on this phone|No account or sync/).length).toBeGreaterThan(0);
     await phone.unmount();
     await show(<Settings />, { ...base(), demo: true });
-    expect(screen.getByText('Example data')).toBeTruthy();
-  });
-  test('the appearance row shows the current theme name', async () => {
-    await show(<Settings />);
-    expect(screen.getByTestId('settings-row-appearance')).toHaveProp('accessibilityValue', { text: 'Sea Glass Tide' });
+    expect(screen.getAllByText(/Example data|Nothing here is saved/).length).toBeGreaterThan(0);
   });
 });
 
 describe('Settings stack', () => {
-  test('the bar carries no second title, and Settings home gets a labelled back button that leaves Settings', async () => {
+  test('every screen draws its own bar and keeps a title for VoiceOver', async () => {
     await show(<SettingsLayout />);
     const index = mockScreens.find(item => item.name === 'index')!;
     expect(index.options.title).toBe('Settings');
-    await show((index.options.headerLeft as () => React.ReactNode)());
-    await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
-    expect(router.back).toHaveBeenCalledTimes(1);
-    jest.mocked(router.canGoBack).mockReturnValueOnce(false);
-    await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
-    expect(router.replace).toHaveBeenCalledWith('/');
+    expect(mockScreens.every(item => item.name !== 'index' || item.options.title)).toBe(true);
   });
 });
 
 describe('Settings pages', () => {
   test.each([
-    ['about', 'About'], ['licenses', 'Licenses'], ['notifications', 'Notifications'],
-  ])('%s has one title and no Back to Settings button', async (section, title) => {
+    ['goals', 'Goals and targets'], ['connections', 'Connections'], ['account', 'Account and sync'], ['reminders', 'Reminders'],
+    ['privacy', 'Privacy and security'], ['units', 'Units and formats'], ['workout', 'Workout settings'], ['data', 'Your data'], ['about', 'About'],
+    ['privacy-center', 'Privacy center'], ['delete-account', 'Delete account'],
+  ])('%s opens with its own bar title', async (section, title) => {
     mockSection = section;
-    await show(<Section />);
-    // One page title, first on the page; Licenses also has small section headings under it.
-    expect(screen.getAllByRole('header', { name: title })).toHaveLength(1);
-    expect(screen.getAllByRole('header')[0]).toHaveTextContent(title);
-    if (section !== 'licenses') expect(screen.getAllByRole('header')).toHaveLength(1);
-    expect(mockScreens.at(-1)!.options.title).toBe(title);
-    expect(screen.queryByRole('button', { name: 'Back to Settings' })).toBeNull();
-    expect(screen.queryByText('Coming soon')).toBeNull();
+    await show(<Section />, { ...base(), repository: memoryRepository() });
+    expect(screen.getAllByText(title).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Plus|Upgrade|Coming soon/)).toBeNull();
   });
-  test('About shows the version and opens Licenses', async () => {
+  test('About shows the version and opens Acknowledgements', async () => {
     mockSection = 'about';
     await show(<Section />);
-    expect(screen.getByText('1.0.0')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Licenses' }));
+    // As iOS writes it: a zero patch number is left off.
+    expect(screen.getByText('Version 1.0 (1)')).toBeTruthy();
+    expect(screen.getAllByText('1.0 (1)').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/1\.0\.0/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Acknowledgements' }));
     expect(router.push).toHaveBeenCalledWith({ pathname: '/settings/[section]', params: { section: 'licenses' } });
+  });
+  test('versionLabel drops only a zero patch number', () => {
+    const { versionLabel } = require('../src/features/settings/home') as typeof import('../src/features/settings/home');
+    expect(versionLabel('1.0.0', '1')).toBe('1.0 (1)');
+    expect(versionLabel('1.2.0', '7')).toBe('1.2 (7)');
+    expect(versionLabel('1.2.3', '7')).toBe('1.2.3 (7)');
+    expect(versionLabel('2.0', '3')).toBe('2.0 (3)');
+    expect(versionLabel(undefined, undefined)).toBe('1.0 (1)');
   });
   test('About links the published privacy policy, terms and support pages, and says when one fails to open', async () => {
     mockSection = 'about';
@@ -145,7 +132,7 @@ describe('Settings pages', () => {
       await fireEvent.press(screen.getByRole('button', { name }));
       expect(mockBrowser).toHaveBeenLastCalledWith(`https://willgeiken1.github.io/wellnesstracker/${page}`);
     }
-    expect(screen.getByTestId('settings-about-disclaimer')).toHaveTextContent(/not medical advice/);
+    expect(screen.getByText(/not medical advice/)).toBeTruthy();
     expect(screen.queryByTestId('settings-about-link-failed')).toBeNull();
     const { Linking } = require('react-native') as typeof import('react-native');
     const safari = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('synthetic'));
@@ -154,17 +141,57 @@ describe('Settings pages', () => {
     expect(await screen.findByTestId('settings-about-link-failed')).toHaveTextContent(t('linkFailed'));
     safari.mockRestore();
   });
-  test('Health without Health access says so plainly', async () => {
-    Constants.expoConfig!.extra!.phoneOnly = true;
-    mockSection = 'health';
-    await show(<Section />);
-    expect(screen.getByTestId('settings-health-empty')).toHaveTextContent(/No data from Health yet/);
-    expect(screen.queryByText(/build/i)).toBeNull();
+  test('Goals saves the calorie and protein targets as food targets, and the goal weight where Progress reads it', async () => {
+    const repo = memoryRepository();
+    mockSection = 'goals';
+    await show(<Section />, { ...base(), repository: repo });
+    await fireEvent.press(screen.getAllByRole('button', { name: 'More' })[0]);
+    expect(Math.round(Number(repo.list('food_targets').at(-1)?.data.energy_kj) / 4.184)).toBe(2050);
+    await fireEvent.press(screen.getAllByRole('button', { name: 'More' })[1]);
+    expect(repo.list('food_targets').at(-1)?.data.protein_g).toBe(105);
+    const goalStepper = screen.getAllByRole('button', { name: 'More' });
+    await fireEvent.press(goalStepper[goalStepper.length - 1]);
+    const goal = repo.list('goals').find(r => r.data.kind === 'weight');
+    expect(goal?.data).toMatchObject({ kind: 'weight', target_value: 178.5, target_unit: 'lb' });
   });
-  test('Notifications states that there are no reminders', async () => {
-    mockSection = 'notifications';
-    await show(<Section />);
-    expect(screen.getByTestId('settings-notifications-empty')).toHaveTextContent(/No reminders yet/);
+  test('Reminders counts what is on in its intro', async () => {
+    mockSection = 'reminders';
+    // A build with notifications (without them the page says they come later).
+    setNotifierForTests({ permission: async () => 'undetermined', request: async () => 'undetermined', replace: async () => {} });
+    try {
+      await show(<Section />);
+      // Every reminder starts off; At most 2 a day is a limit and stays on.
+      expect(screen.getByText(/0 are on, and you will get at most 2 a day\./)).toBeTruthy();
+    } finally { setNotifierForTests(null); }
+  });
+  test('Delete account offers Save a backup first whenever there is a log of your own to back up', async () => {
+    mockSection = 'delete-account';
+    const signedIn = await show(<Section />, { ...base(), repository: memoryRepository(), session: { user: { id: 'fixture' } } as AuthState['session'] } as AuthState);
+    expect(screen.getByRole('button', { name: 'Save a backup first' })).not.toBeDisabled();
+    await signedIn.unmount();
+    const phone = await show(<Section />, { ...base(), phoneOnly: true, repository: memoryRepository() });
+    expect(screen.getByRole('button', { name: 'Save a backup first' })).not.toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Save a backup first' }));
+    const { exportPhoneBackup } = require('../src/phone-only/export') as typeof import('../src/phone-only/export');
+    expect(exportPhoneBackup).toHaveBeenCalledTimes(1);
+    await phone.unmount();
+    // Example data is not yours, so there is nothing of yours to back up (Account hides Export backup there too).
+    await show(<Section />, { ...base(), demo: true, repository: memoryRepository() });
+    expect(screen.getByRole('button', { name: 'Save a backup first' })).toBeDisabled();
+  });
+  test('Delete account asks twice and only unlocks once DELETE is typed', async () => {
+    const deleteAccount = jest.fn(async () => {});
+    mockSection = 'delete-account';
+    await show(<Section />, { ...base(), repository: memoryRepository(), session: { user: { id: 'fixture' } } as AuthState['session'], deleteAccount } as AuthState);
+    expect(screen.getByText('Delete your account?')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('delete-continue'));
+    expect(screen.getAllByText('Type DELETE to confirm').length).toBeGreaterThan(0);
+    await fireEvent.changeText(screen.getByTestId('delete-type'), 'delet');
+    expect(screen.getByTestId('delete-final')).toBeDisabled();
+    await fireEvent.changeText(screen.getByTestId('delete-type'), 'delete');
+    expect(screen.getByTestId('delete-final')).not.toBeDisabled();
+    await fireEvent.press(screen.getByTestId('delete-final'));
+    expect(deleteAccount).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -6,5 +6,5 @@ export type OuraPreviewState = typeof OURA_PREVIEW_STATES[number];
 const noop = () => {};
 /** A made-up Oura card in one state, for development screenshots only. Nothing is connected, read or sent; every button does nothing. */
 export function previewOura(state: OuraPreviewState): OuraState {
-  return { state: state === 'busy' || state === 'failed' ? 'off' : state, busy: state === 'busy', failed: state === 'failed' || state === 'unreachable', connect: noop, refresh: noop, disconnect: noop };
+  return { state: state === 'busy' || state === 'failed' ? 'off' : state, busy: state === 'busy', failed: state === 'failed' || state === 'unreachable', connect: noop, refresh: noop, disconnect: async () => false };
 }

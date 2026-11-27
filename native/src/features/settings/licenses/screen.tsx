@@ -13,8 +13,8 @@ import notices from './notices.json';
 export type PackageNotice = { name: string; version: string; license: string; url?: string; text: number };
 export const PACKAGES: readonly PackageNotice[] = notices.packages;
 
-/** The notice ids a detail page can open: the font, the body map colours, or a package name. */
-export const FONT_NOTICE = 'lexend', COLOUR_NOTICE = 'colorbrewer';
+/** The notice ids a detail page can open: a font, the body map colours, or a package name. */
+export const FONT_NOTICE = 'lexend', JAKARTA_NOTICE = 'jakarta', COLOUR_NOTICE = 'colorbrewer';
 
 /** Licence files are wrapped at about 80 characters for a terminal. On a phone that leaves ragged half-lines,
  * so lines inside a paragraph are joined. Blank lines, and lines that start a list item or a rule, still break. */
@@ -41,9 +41,10 @@ export function Licenses() {
   const [failed, setFailed] = useState(false);
   return <>
     <ThemedText muted>{t('licensesIntro')}</ThemedText>
-    <SectionLabel>{t('licensesFont')}</SectionLabel>
+    <SectionLabel>{t('settingsLicensesFonts')}</SectionLabel>
     <Group testID="licenses-font">
-      <NavRow label="Lexend" value={t('licenseOfl')} onPress={() => openNotice(FONT_NOTICE)} />
+      <NavRow testID="licenses-font-jakarta" label="Plus Jakarta Sans" value={t('licenseOfl')} onPress={() => openNotice(JAKARTA_NOTICE)} />
+      <NavRow testID="licenses-font-lexend" label="Lexend" value={t('licenseOfl')} onPress={() => openNotice(FONT_NOTICE)} />
     </Group>
     <SectionLabel>{t('licensesCredits')}</SectionLabel>
     <Group testID="licenses-credits">
@@ -73,6 +74,10 @@ export function LicenseNotice({ notice }: { notice: string }) {
     <Group><InfoRow label="Lexend" hint={t('licenseFontHint')} value={t('licenseOfl')} /></Group>
     <Body text={notices.lexend} />
   </>;
+  if (notice === JAKARTA_NOTICE) return <>
+    <Group><InfoRow label="Plus Jakarta Sans" hint={t('settingsLicenseJakartaHint')} value={t('licenseOfl')} /></Group>
+    <Body text={notices.jakarta} />
+  </>;
   if (notice === COLOUR_NOTICE) return <>
     <Card style={{ borderRadius: 18, padding: tokens.spacing[3] }}><ThemedText>{t('atlasPaletteCredit')}</ThemedText></Card>
     <Body text={notices.apache} />
@@ -92,6 +97,7 @@ export function LicenseNotice({ notice }: { notice: string }) {
 /** The page title for a notice id: the font or package name. */
 export function noticeTitle(notice: string): string {
   if (notice === FONT_NOTICE) return 'Lexend';
+  if (notice === JAKARTA_NOTICE) return 'Plus Jakarta Sans';
   if (notice === COLOUR_NOTICE) return t('licensesColours');
   return PACKAGES.some(entry => entry.name === notice) ? notice : t('licenses');
 }

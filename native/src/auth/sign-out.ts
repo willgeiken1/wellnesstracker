@@ -1,5 +1,6 @@
 import type { Repository } from '../data/repository';
 import { resetHomeWidgetStores } from '../features/home-widgets/storage';
+import { eraseAllOwnerFiles, eraseOwnerFiles } from './owner-files';
 export interface SignOutMarker { owner: string; startedAt: number; phase: 'pending' | 'wiped' | 'session-cleared' }
 export interface SignOutStorage {
   read(): Promise<SignOutMarker | null>; write(marker: SignOutMarker): Promise<void>; remove(): Promise<void>;
@@ -19,6 +20,9 @@ export async function beginSignOut(owner: string, storage: SignOutStorage, start
 export async function completeSignOut(marker: SignOutMarker, repo: Repository, storage: SignOutStorage, clearSession:(owner:string)=>Promise<void>) {
   if(repo.owner!==marker.owner)throw new Error('Sign-out owner mismatch.');
   if(marker.phase==='pending') {
+    // Photo files kept outside the database; their addresses go with the wipe, so this comes first. A file that can't be
+    // deleted throws here, before the wipe, so the addresses and this marker stay and a retry finishes the job.
+    eraseOwnerFiles(repo);
     repo.wipe(); // All owner data and sync metadata in one SQLite transaction.
     resetHomeWidgetStores(marker.owner); // The cached widget store would otherwise restore the wiped layout.
     marker={...marker,phase:'wiped'};await storage.write(marker);
@@ -42,6 +46,7 @@ export class UnreadableSignOutMarker extends Error {
 /** No checkpoints: a retained corrupt/unreadable marker repeats all steps safely. */
 export async function escapeSignOut(database: {wipeAll():void}, storage: SignOutStorage, clearSession:()=>Promise<void>) {
   database.wipeAll();
+  eraseAllOwnerFiles(); // After the rows, so a failed wipe leaves files and addresses as they were.
   resetHomeWidgetStores();
   await clearSession();
   await storage.remove();

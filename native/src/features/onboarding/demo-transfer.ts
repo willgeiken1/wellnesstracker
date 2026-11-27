@@ -4,6 +4,9 @@ import { syncedTables } from '../../data/rows';
 import { sampleRow } from '../../../fixtures/demo';
 import { today } from './model';
 import { t } from '../../i18n/en';
+import { WATER_KEY, readWater } from '../food/water';
+import { ROUTINES_KEY } from '../routines/store';
+import { demoState, emptyState, normalize, type RoutinesState } from '../routines/model';
 /** Unknown legacy provenance is rejected before an account request as well as
  * at the transfer boundary. Nothing is erased and no sample can be enqueued. */
 export function assertDemoTransferSafe(source:Repository) {
@@ -82,9 +85,52 @@ export function promoteDemo(source:Repository,destination:Repository) {
     const importIds=source.localGet<string[]>('pwaImportedIds');
     if(importIds)destination.localSave('pwaImportedIds',[...new Set([...(destination.localGet<string[]>('pwaImportedIds')??[]),...importIds])]);
     if(source.localGet('pwaHomeImported')){destination.localSave('pwaHomeImported',true);if(!existingHome){const home=source.localGet('pwaHomeV2');if(home)destination.localSave('pwaHomeV2',home);}}
+    // Drinks logged during Look around first are the person's own; the sample's drinks (ids starting wdemo) stay behind.
+    // They join the account's water log without replacing its containers, unit or goal.
+    if(source.localGet(WATER_KEY)) {
+      const mine=Object.entries(readWater(source).log).map(([day,list])=>[day,(Array.isArray(list)?list:[]).filter(d=>d&&typeof d.id==='string'&&!d.id.startsWith('wdemo'))] as const).filter(([,list])=>list.length);
+      if(mine.length) {
+        const into=readWater(destination), log={...into.log};
+        for(const [day,list] of mine){const have=new Set((log[day]??[]).map(d=>d.id));log[day]=[...(log[day]??[]),...list.filter(d=>!have.has(d.id))].sort((a,b)=>a.at-b.at);}
+        destination.localSave(WATER_KEY,{...into,log});
+      }
+    }
+    carryRoutines(source,destination);
     // wipe() cannot run in atomic(); replace with the narrow transfer eraser.
     source.clearDemoForTransfer();
   });
   return {weighInsSkipped};
 }
 
+
+/**
+ * Routines and items made during Look around first are the person's own, with their check-offs; the sample's routines
+ * and items (the fixture's fixed ids) and anything done to them stay behind. They join the account's routines without
+ * replacing any it already has. An item keeps only the routines the account will have.
+ */
+function carryRoutines(source:Repository,destination:Repository) {
+  const from=normalize(source.localGet(ROUTINES_KEY));
+  if(!from)return;
+  const sample=demoState();
+  const fixture=new Set([...sample.routines,...sample.hidden,...sample.items].map(x=>x.id));
+  const routines=[...from.routines,...from.hidden.map(({sub:_sub,...r})=>{void _sub;return r;})].filter(r=>!fixture.has(r.id));
+  const items=from.items.filter(i=>!fixture.has(i.id));
+  if(!routines.length&&!items.length)return;
+  const stored=normalize(destination.localGet(ROUTINES_KEY)),into:RoutinesState=stored??emptyState();
+  const haveR=new Set([...into.routines,...into.hidden].map(r=>r.id)),haveI=new Set(into.items.map(i=>i.id));
+  const newR=routines.filter(r=>!haveR.has(r.id)),newI=items.filter(i=>!haveI.has(i.id));
+  if(!newR.length&&!newI.length)return;
+  const known=new Set([...haveR,...newR.map(r=>r.id)]),ids=new Set(newI.map(i=>i.id));
+  const pick=<T,>(byDay:Record<string,Record<string,T>>|undefined,base:Record<string,Record<string,T>>|undefined)=>{
+    const out:Record<string,Record<string,T>>={...(base??{})};
+    for(const [day,marks] of Object.entries(byDay??{})){
+      const mine=Object.entries(marks).filter(([id])=>ids.has(id));
+      if(mine.length)out[day]={...(out[day]??{}),...Object.fromEntries(mine)};
+    }
+    return out;
+  };
+  const next:RoutinesState={...into,routines:[...into.routines,...newR],items:[...into.items,...newI.map(i=>({...i,routines:i.routines.filter(r=>known.has(r))}))],log:pick(from.log,into.log)};
+  const used=pick(from.used,into.used);
+  if(Object.keys(used).length)next.used=used;
+  destination.localSave(ROUTINES_KEY,next);
+}

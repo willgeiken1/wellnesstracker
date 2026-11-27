@@ -2,7 +2,8 @@ import type { Repository } from '../../data/repository';
 import { compareRows } from '../../data/rows';
 import { WorkoutStore } from '../../data/workout/store';
 import { type Plan, type PlanDay, plannedWeek, validatePlan } from './schedule';
-interface Definition { id?: string; days: PlanDay[] }
+/** How it runs and the weekly target are kept here only while the synced plan columns are off, so they still save. */
+interface Definition { id?: string; days: PlanDay[]; mode?: Plan['mode']; daysPerWeek?: number }
 const key = 'plans:definition';
 /** IN-M209-1/2: One current definition; membership and weekday assignments
  * stay owner-local. Only mode and days_per_week may enter synced plan rows.
@@ -16,9 +17,10 @@ export class PlanStore {
     return id ? this.repo.get('plans',id) : this.repo.list('plans').sort(compareRows).at(-1);
   }
   read(): Plan {
-    const config=this.config();
-    return {mode:config?.data.mode === 'fixed' ? 'fixed' : 'rotation',
-      daysPerWeek:Number(config?.data.days_per_week ?? 3),
+    const config=this.config(), local=this.definition();
+    const per=Number(config ? config.data.days_per_week ?? 3 : local.daysPerWeek ?? 3);
+    return {mode:(config ? config.data.mode : local.mode) === 'fixed' ? 'fixed' : 'rotation',
+      daysPerWeek:Number.isInteger(per) && per >= 1 && per <= 7 ? per : 3,
       days:this.definition().days.filter(d=>this.repo.list('routines').some(r=>r.id===d.routineId))};
   }
   save(plan: Plan) {
@@ -30,7 +32,8 @@ export class PlanStore {
         id=this.repo.save('plans',{mode:plan.mode,days_per_week:plan.daysPerWeek},this.config()?.id).id;
         for (const row of this.repo.list('plans')) if (row.id !== id) this.repo.remove('plans',row.id);
       }
-      this.repo.localSave(key,{id,days:plan.days} satisfies Definition);
+      this.repo.localSave(key,(this.repo.syncFlags?.syncedV1Columns ? {id,days:plan.days}
+        : {id,days:plan.days,mode:plan.mode,daysPerWeek:plan.daysPerWeek}) satisfies Definition);
     });
   }
   nextIndex() {
@@ -54,5 +57,8 @@ export class PlanStore {
       return session;
     });
   }
+  /** The plan's own name ("Push Pull Legs"), kept on this phone. */
+  name() { return this.repo.localGet<string>('plans:name') ?? ''; }
+  setName(name:string) { this.repo.localSave('plans:name', name.trim().slice(0,60)); }
   week(monday:string) { return plannedWeek(monday,this.read(),this.nextIndex()); }
 }

@@ -42,17 +42,23 @@ export function importStart(now = new Date()): Date {
   return start;
 }
 
+/** Body's "From Apple Health" switch: on unless the person turned it off. Saved on this phone. */
+export const HEALTH_WEIGHT_KEY = 'progressWeightFromHealth';
+export function weightFromHealthOn(repo: Repository): boolean { try { return repo.localGet<boolean>(HEALTH_WEIGHT_KEY) !== false; } catch { return true; } }
+
 /** Reads weights if the person has already been asked, and adds any new ones. Never prompts. The read goes
  * back `IMPORT_DAYS`, or to the earliest day an earlier read reached, so readings kept from back then are read
  * again if iOS cleared the Health store. `live` is asked after every wait: once it says no (the page closed, or
  * the account changed or signed out) nothing more is written. */
 export async function refreshWeights(repo: Repository, source: HealthSource | null, now = new Date(), live: () => boolean = () => true): Promise<number> {
-  if (!source || await source.access() !== 'asked' || !live()) return 0;
+  // Body's "From Apple Health" switch, checked before the read and again before anything is written.
+  const on = () => live() && weightFromHealthOn(repo);
+  if (!source || !on() || await source.access() !== 'asked' || !on()) return 0;
   const usual = importStart(now), kept = repo.healthWeightsFrom(), [y, m, d] = (kept ?? '').split('-').map(Number);
   const earlier = kept ? new Date(y, m - 1, d) : null;
   const since = earlier && Number.isFinite(earlier.getTime()) && earlier < usual ? earlier : usual;
   const samples = await source.weights(since);
-  if (!live()) return 0;
+  if (!on()) return 0;
   dropMissing(repo, samples, since);
   const added = importWeights(repo, samples, now);
   repo.noteHealthWeightsFrom(localDay(since));

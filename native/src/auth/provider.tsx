@@ -1,5 +1,5 @@
 import { ImportPreviewConflict } from '../features/importer/errors';
-import { commitImport, previewImport, type ImportPlan } from '../features/importer/local';
+import { commitPendingAccountImport, type ImportPlan } from '../features/importer/local';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PropsWithChildren } from 'react';
 import { Alert, AppState } from 'react-native';
 import { t } from '../i18n/en';
@@ -9,6 +9,7 @@ import { getAuthClient, clearLocalSession } from './client';
 import { openLocalDatabase } from '../data/database';
 import type { Repository } from '../data/repository';
 import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
+import type { SyncState } from '../data/sync-line';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed, AccountDeletionUncertain } from './sign-out';
@@ -18,11 +19,17 @@ import { lastOwnerStorage, realOwnerId } from './last-owner-storage';
 import { seedDemo } from '../../fixtures/demo';
 import { ageOn } from '../features/onboarding/model';
 import { assertDemoTransferSafe, promoteDemo } from '../features/onboarding/demo-transfer';
+import { loadSettingsPrefs } from '../features/settings/prefs';
 // Clear the hint for every resumed departure phase, before recovery can wipe/remove its marker.
 const bootSignOutStorage: typeof signOutStorage={
   async read(){const marker=await signOutStorage.read();if(marker)await lastOwnerStorage.clear();return marker;},
   write:marker=>signOutStorage.write(marker),remove:()=>signOutStorage.remove(),
 };
+/** What Continue with Google gives back. Google sign-in needs a Google provider switched on in Supabase first, so until
+ * then it is always `notConfigured` and Welcome says so calmly. */
+export type GoogleSignInResult = { ok: true } | { ok: false; reason: 'notConfigured' | 'cancelled' | 'failed' };
+/** Continue with Google. Not set up yet: there is no Google provider in the backend, so it reports that and does nothing. */
+export async function signInWithGoogle(): Promise<GoogleSignInResult> { return { ok: false, reason: 'notConfigured' }; }
 export interface AuthState {
   legacyImport?(action:'preview'|'commit', mapping?:Record<string,string>, previewId?:string):Promise<ImportPlan>;
   phoneOnly?: boolean;
@@ -35,7 +42,18 @@ export interface AuthState {
   bootExportOwner?(): string | null;
   recovery?: 'corrupt-marker' | 'read-error' | 'unreadable-marker' | 'departure' | 'boot-error'; bootErrorClass?: string; bootRetryNeedsConfirmation?: boolean; retryBoot?(confirmed?: boolean): void; retryMarkerRead?():void; countRecoveryUnsynced?():Promise<number|undefined>; recoveryFailed?: boolean; recoverLocalData?(): Promise<void>;
   lookAround(): void; signIn(email: string,password: string): Promise<string | null>;
-  createAccount(email: string,password: string,dob?: string): Promise<string | null>; signOut(discardUnsynced?: boolean): Promise<void>; syncNow(): Promise<void>;
+  createAccount(email: string,password: string,dob?: string): Promise<string | null>;
+  /** Signs in (or creates the account) with the identity token from Sign in with Apple and the raw nonce whose hash Apple
+   * signed. Absent where there are no accounts. */
+  signInWithApple?(token: string, nonce: string): Promise<string | null>;
+  /** Email and password with one path for new and returning people: signs in, or makes the account when there is none. */
+  continueWithEmail?(email: string, password: string): Promise<string | null>;
+  /** Continue with Google (not set up yet; see `signInWithGoogle`). */
+  signInWithGoogle?(): Promise<GoogleSignInResult>;
+  /** Using the app without an account (Skip for now, Start as a guest): data stays on this phone in the guest space. */
+  guest?: boolean; continueAsGuest?(): void; exitGuest?(): void;
+  signOut(discardUnsynced?: boolean): Promise<void>; /** Resolves with where sync stands once this run is over (nothing on a build without sync). */
+  syncNow(): Promise<SyncState | void>;
   /** Permanently deletes the signed-in account on the server, then erases this phone's copy. */
   deleteAccount?(): Promise<void>;
 }
@@ -58,6 +76,8 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   const departingOwner=useRef<string|null>(null);
   const client=clientState.client;
   const [session,setSession]=useState<Session|null>(null), [demo,setDemo]=useState(false), [authReady,setAuthReady]=useState(false);
+  // Guest use is remembered on this phone (the device space), so a guest reopens straight into the app.
+  const [guest,setGuest]=useState(false);
   const [repository,setRepository]=useState<Repository|null>(null),[dataError,setDataError]=useState(false);
   const ageBlocked=useRef(false),authRequest=useRef(0),authInFlight=useRef(false);
   const [demoTarget,setDemoTarget]=useState<string|null>(null),[demoTransferError,setDemoTransferError]=useState(false);
@@ -118,6 +138,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       setDemoTarget(target=>target&&target!==owner?null:target);setDemoTransferError(false);
       const device=database.forOwner('device');
       if(device.localGet?.('demoUpgradePending'))device.localSave('demoUpgradePending',false);
+      setGuest(owner==='guest'&&device.localGet?.('guestMode')===true);
       const repo=database.forOwner(owner);
       if(owner==='demo')seedDemo(repo);
       setRepository(repo);setDataError(false);
@@ -127,7 +148,11 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   // Never expose the previous owner's repository during the render before effect cleanup.
   const currentRepo=repository?.owner===owner?repository:null;
   const userId=session?.user.id;
-  const engine=useMemo(()=>!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[currentRepo,client,userId,departurePending]);
+  // Settings, Sync across devices. Off means no engine at all: no debounced push, no foreground or reconnect sync,
+  // no Sync now or pull, and turning it off closes the engine, which cancels its timer and any run in flight.
+  // Edits stay in the outbox, so turning it back on makes a new engine whose first sync uploads them.
+  const syncOn=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>!currentRepo||loadSettingsPrefs(currentRepo).sync.on);
+  const engine=useMemo(()=>syncOn&&!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[syncOn,currentRepo,client,userId,departurePending]);
   const pending=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.pending().length??0);
   const conflicts=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.conflicts().length??0);
   const initialPullComplete=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.initialPullComplete??false);
@@ -162,21 +187,27 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   },[currentRepo,demoTarget,owner,initialPullComplete,demoTransferError,transferAttempt]);
   // A file intentionally opened while signed out follows the first account on this device.
   useEffect(()=>{let active=true;if(!currentRepo||!userId||!initialPullComplete)return;
-    void openLocalDatabase().then(database=>{if(!active||activeSession.current?.user.id!==currentRepo.owner)return;const guest=database.forOwner('guest'),plan=guest.localGet<ImportPlan>('pwaPendingAccountPlan');if(!plan)return;currentRepo.atomic(()=>{commitImport(currentRepo,previewImport(currentRepo,plan),true);guest.localSave('pwaPendingAccountPlan',null);});}).catch(()=>{/* File and guest copy remain available for an explicit retry. */});return()=>{active=false;};
+    void openLocalDatabase().then(database=>{if(!active||activeSession.current?.user.id!==currentRepo.owner)return;commitPendingAccountImport(database.forOwner('guest'),currentRepo);}).catch(()=>{/* File and guest copy remain available for an explicit retry. */});return()=>{active=false;};
   },[currentRepo,userId,initialPullComplete]);
-  const authenticate=async(email:string,password:string,dob?:string,create=false):Promise<string|null>=>{
+  const authenticate=async(email:string,password:string,dob?:string,create=false,apple?:{token:string;nonce:string},join=false):Promise<string|null>=>{
+    // Sign in with Apple and Continue with email may create the account, so a session's under-13 block stops them too.
+    if((apple||join)&&ageBlocked.current)return 'invalidProfile';
     if(create){const age=ageOn(dob??'');if(ageBlocked.current||age===null||age<13){if(age!==null&&age<13)ageBlocked.current=true;return 'invalidProfile';}}
     if(!bootReady||departingOwner.current||departurePending||!client)return 'authUnavailable';
     const request=++authRequest.current;authInFlight.current=true;setDemoTarget(null);setDemoTransferError(false);
     try {
       if(demo){const database=await openLocalDatabase();try{assertDemoTransferSafe(database.forOwner('demo'));}catch{return 'demoCarryUnavailable';}}
-      const {data,error}=create?await client.auth.signUp({email,password}):await client.auth.signInWithPassword({email,password});
+      const {data,error}=apple?await client.auth.signInWithIdToken({provider:'apple',token:apple.token,nonce:apple.nonce}):create||join?await client.auth.signUp({email,password}):await client.auth.signInWithPassword({email,password});
       if(request!==authRequest.current)return 'authFailed';
       if(error)return 'authFailed';
+      // Signing up an email that already has an account comes back with no identities: that was a wrong password.
+      if(join&&Array.isArray(data?.user?.identities)&&data.user.identities.length===0)return 'authFailed';
       // A confirmation-only signup has no transfer intent. No durable device-wide flag.
       const target=data?.session?.user;
-      if(demo&&target&&(!activeSession.current||activeSession.current.user.id===target.id)&&target.email?.trim().toLowerCase()===email.trim().toLowerCase())setDemoTarget(target.id);
-      return create&&!data?.session?'confirmEmail':null;
+      // Apple may hide the email behind a relay address, so its carry checks the account Apple's token named instead.
+      if(demo&&target&&(!activeSession.current||activeSession.current.user.id===target.id)&&(apple?data?.user?.id===target.id:target.email?.trim().toLowerCase()===email.trim().toLowerCase()))setDemoTarget(target.id);
+      if(data?.session)void openLocalDatabase().then(database=>database.forOwner('device').localSave('guestMode',false)).catch(()=>{/* Only a hint. */});
+      return (create||join)&&!data?.session?'confirmEmail':null;
     }catch{return 'authFailed';}
     finally {if(request===authRequest.current)authInFlight.current=false;}
   };
@@ -219,6 +250,20 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
     lookAround:()=>{if(bootReady&&!departingOwner.current&&!departureLocked.current)setDemo(true);},
     signIn:(email,password)=>authenticate(email,password),
     createAccount:(email,password,dob)=>authenticate(email,password,dob,true),
+    signInWithApple:(token,nonce)=>authenticate('','',undefined,false,{token,nonce}),
+    continueWithEmail:async(email,password)=>{
+      const failure=await authenticate(email,password);
+      // No account with that email and password: make one (8 characters or more), which the server refuses for a taken email.
+      if(failure!=='authFailed'||password.length<8)return failure;
+      return authenticate(email,password,undefined,false,undefined,true);
+    },
+    signInWithGoogle,
+    guest,
+    continueAsGuest:()=>{
+      if(!bootReady||departingOwner.current||departureLocked.current)return;
+      setGuest(true);void openLocalDatabase().then(database=>database.forOwner('device').localSave('guestMode',true)).catch(()=>{/* Guest for this session only. */});
+    },
+    exitGuest:()=>{setGuest(false);void openLocalDatabase().then(database=>database.forOwner('device').localSave('guestMode',false)).catch(()=>{/* Only a hint. */});},
     signOut:async(discardUnsynced=false)=>{
       authRequest.current++;authInFlight.current=false;if(demoTarget)setDemoTarget(null);if(demoTransferError)setDemoTransferError(false);
       if(departurePending&&retryDeparture.current)return retryDeparture.current();
@@ -252,7 +297,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
       // The account is gone: there is nothing to sync, so erase this phone's copy without the unsynced check.
       await depart();
     },
-    syncNow:()=>engine?.sync()??Promise.resolve(),
+    syncNow:()=>engine?engine.sync().then(()=>({status:engine.status,pending:currentRepo?.pending().length??0,conflicts:currentRepo?.conflicts().length??0})):Promise.resolve(),
   };
   async function depart() {
       if(!bootReady||!currentRepo||departingOwner.current)throw new Error('Sign-out recovery required.');

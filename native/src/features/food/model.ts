@@ -47,8 +47,9 @@ export function undoFood(repo:Repository,token:Undo) {
   if(token.owner!==repo.owner||!row||row.deleted_at===null||row.updated_at!==token.stamp)return false;
   repo.save('food_entries',token.data,token.id);return true;
 }
-const defaultMealKeys=['foodBreakfast','foodLunch','foodDinner','foodSnacks'] as const;
-function defaultMeals() {return defaultMealKeys.map((key,position)=>({id:`fd000000-0000-4000-8000-00000000000${position}`,name:t(key),position}));}
+// The ids keep their original numbers (Snack was the fourth meal); the day runs Breakfast, Lunch, Snack, Dinner.
+const defaultMealKeys=[['foodBreakfast',0,0],['foodLunch',1,1],['foodDinner',2,3],['foodSnack',3,2]] as const;
+export function defaultMeals() {return defaultMealKeys.map(([key,n,position])=>({id:`fd000000-0000-4000-8000-00000000000${n}`,name:t(key),position}));}
 export function meals(repo:Repository):{id:string;name:string;position:number}[] {
   const rows=repo.list('meals').map(r=>({id:r.id,name:String(r.data.name??''),position:Number(r.data.position??0)}));
   const existing=new Set(repo.list('meals',true).map(r=>r.id));

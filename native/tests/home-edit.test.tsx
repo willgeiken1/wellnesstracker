@@ -1,203 +1,66 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
-import { router } from 'expo-router';
-import { ThemeProvider } from '../src/design/theme-provider';
-import { memoryRepository } from './workout-repository';
-import { WorkoutStore } from '../src/data/workout/store';
-import { saveFood, attributedDay, meals } from '../src/features/food/model';
-import { useAuth } from '../src/auth/provider';
-import Home from '../src/app/(tabs)/index';
-import { addTile, defaultTiles, HOME_TILES_KEY, loadTiles, moveTile, offHome, removeTile, setWide, TILE_IDS } from '../src/features/home/tiles';
-jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
-jest.mock('expo-symbols', () => ({ SymbolView: () => null }));
-jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
-const wrapper = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
-function open(repo = memoryRepository()) {
-  jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle', demo: false } as ReturnType<typeof useAuth>);
-  return repo;
+import { HEALTH_TILES, HOME_TILES_KEY, RING_TILES, addHealthTiles, homeLayout, scoreOn, setScoreOn, type TileStorage } from '../src/features/home/tiles';
+import { loadTileLayout, resetTileStores, tileStoreFor } from '../src/features/tiles/store';
+
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+
+// Home's layout lives in the tile engine; Home's own part is its starting tiles and the doors other screens use.
+function storage(owner = 'edit-owner'): TileStorage & { data: Record<string, unknown> } {
+  const data: Record<string, unknown> = {};
+  return { owner, data, localGet: <T,>(k: string) => data[k] as T | undefined, localSave: (k: string, v: unknown) => { data[k] = v; } } as TileStorage & { data: Record<string, unknown> };
 }
-// Made-up sample data only.
-const oats = { name: 'Sample oats', energy_kj: 418.4, protein_g: 5, carbs_g: 20, fat_g: 2, fiber_g: null, sugar_g: null, sodium_mg: null, amount_g: null };
-function seeded() {
-  const repo = memoryRepository(), day = attributedDay();
-  saveFood(repo, day, meals(repo)[0].id, oats, 1, undefined, day);
-  const store = new WorkoutStore(repo), start = Date.now() - 600000, session = store.start(undefined, start), entry = store.addExercise(session.id, 'Bench Press', 1);
-  store.editDraft(entry.id, 0, { weight: '100', reps: '8' }); store.toggleDone(entry.id, 0);
-  store.finish(session.id, { startedAt: start, finishedAt: Date.now() - 60000, notes: '' });
-  return open(repo);
-}
-const order = () => screen.getByTestId('home-tiles').children.map(child => {
-  const node = child as { props: { testID?: string }; children: { props: { testID?: string } }[] };
-  return node.props.testID ?? within(child as never).queryAllByTestId(/^home-(map|next)$/)[0]?.props.testID ?? 'week';
-});
-let hours: jest.SpyInstance;
-beforeEach(() => { jest.mocked(router.navigate).mockClear(); hours = jest.spyOn(Date.prototype, 'getHours').mockReturnValue(10); });
-afterEach(() => hours.mockRestore());
+const ids = (s: TileStorage) => homeLayout(s).map(e => e.id);
+beforeEach(() => resetTileStores());
 
-describe('home tile layout', () => {
-  test('starts with every tile, in the starting order, none wide', () => {
-    // The Apple Health tiles start off Home; connecting Apple Health adds them.
-    expect(defaultTiles()).toEqual({ order: TILE_IDS.filter(id => !['steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful'].includes(id)), wide: [] });
-    expect(loadTiles(null)).toEqual(defaultTiles());
-    expect(offHome(defaultTiles())).toEqual(['steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful']);
-  });
-  test('add, remove, move and resize return new layouts and ignore no-ops', () => {
-    const start = defaultTiles();
-    const without = removeTile(start, 'week');
-    expect(without.order).not.toContain('week');
-    expect(offHome(without)).toEqual(['week', 'steps', 'sleep', 'active', 'exercise', 'bodyFat', 'water', 'mindful']);
-    expect(removeTile(without, 'week')).toBe(without);
-    expect(addTile(without, 'week').order.at(-1)).toBe('week');
-    expect(addTile(start, 'week')).toBe(start);
-    expect(moveTile(start, 'score', -1).order.slice(0, 2)).toEqual(['score', 'map']);
-    expect(moveTile(start, 'map', -1)).toBe(start);
-    expect(moveTile(start, 'weight', 1)).toBe(start);
-    expect(setWide(start, 'calories', true).wide).toEqual(['calories']);
-    expect(setWide(start, 'calories', false)).toBe(start);
-    expect(setWide(start, 'map', true)).toBe(start);
-    expect(start).toEqual(defaultTiles());
-  });
-  test('a damaged or stale save never breaks Home', () => {
-    const storage = (value: unknown) => ({ localGet: () => value as never, localSave: jest.fn() });
-    expect(loadTiles(storage('nonsense'))).toEqual(defaultTiles());
-    expect(loadTiles(storage({ order: 'map' }))).toEqual(defaultTiles());
-    expect(loadTiles(storage({ order: ['weight', 'gone', 'weight', 'map'], wide: ['map', 'weight', 7], v: 2 }))).toEqual({ order: ['weight', 'map'], wide: ['weight'] });
-    expect(loadTiles(storage({ order: [], v: 2 }))).toEqual({ order: [], wide: [] });
-    // A layout saved before the Score existed gets it once, under the map; a newer save keeps it off.
-    expect(loadTiles(storage({ order: ['weight', 'map', 'next'] })).order).toEqual(['weight', 'map', 'score', 'next']);
-    expect(loadTiles(storage({ order: ['next'] })).order).toEqual(['score', 'next']);
-    expect(loadTiles({ localGet: () => { throw new Error('locked'); }, localSave: jest.fn() })).toEqual(defaultTiles());
-  });
+test('Home starts with Next, Workout, Protein, Water, Steps and Weight, in the design\'s sizes and styles', () => {
+  expect(loadTileLayout(null, 'home').map(e => [e.id, e.size, e.style])).toEqual([
+    ['next', 'M', 'B'], ['workout', 'M', 'A'], ['protein', 'S', 'A'], ['water', 'S', 'E'], ['steps', 'S', 'A'], ['weight', 'S', 'A'],
+  ]);
+  expect(HOME_TILES_KEY).toBe('tiles-home');
 });
 
-test('Edit opens a sheet listing what is on Home, and Done closes it', async () => {
-  seeded();
-  await render(<Home />, { wrapper });
-  expect(screen.queryByText('On Home')).toBeNull();
-  await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
-  expect(screen.getByRole('header', { name: 'Edit Home' })).toBeTruthy();
-  for (const id of defaultTiles().order) expect(screen.getByTestId(`edit-on-${id}`)).toBeTruthy();
-  expect(screen.getByText('Every tile is on Home.')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Move up, Today map' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Move down, Weight' })).toBeDisabled();
-  await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
-  expect(screen.queryByText('On Home')).toBeNull();
+test('connecting a health source adds its tiles after what is there, once, as tile ids only', () => {
+  const s = storage();
+  addHealthTiles(s);
+  expect(ids(s)).toEqual(['next', 'workout', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful']);
+  addHealthTiles(s);
+  expect(ids(s)).toHaveLength(11);
+  // Saved where the grid reads it, so Home shows them at once and after a restart.
+  resetTileStores();
+  expect(ids(s)).toEqual(['next', 'workout', 'protein', 'water', 'steps', 'weight', 'sleep', 'active', 'exercise', 'bodyFat', 'mindful']);
+  expect(JSON.stringify(s.data[HOME_TILES_KEY])).not.toMatch(/\d{3,}/);
+  expect(HEALTH_TILES).toEqual(expect.arrayContaining(RING_TILES));
 });
 
-test('removing, adding and reordering change Home at once and are saved on the phone', async () => {
-  const repo = seeded();
-  await render(<Home />, { wrapper });
-  expect(screen.getByTestId('home-map')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Remove, Today map' }));
-  expect(screen.queryByTestId('home-map')).toBeNull();
-  expect(screen.getByTestId('edit-off-map')).toBeTruthy();
-  expect(repo.localGet(HOME_TILES_KEY)).toMatchObject({ order: ['score', 'week', 'next', 'calories', 'protein', 'volume', 'weight'], v: 2 });
-  await fireEvent.press(screen.getByRole('button', { name: 'Add, Today map' }));
-  expect(screen.getByTestId('home-map')).toBeTruthy();
-  expect((repo.localGet(HOME_TILES_KEY) as { order: string[] }).order.at(-1)).toBe('map');
-  await fireEvent.press(screen.getByRole('button', { name: 'Move up, Volume' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Move up, Volume' }));
-  expect((repo.localGet(HOME_TILES_KEY) as { order: string[] }).order).toEqual(['score', 'week', 'next', 'volume', 'calories', 'protein', 'weight', 'map']);
-  const shown = order().filter(id => id.startsWith('home-tile-'));
-  expect(shown).toEqual(['home-tile-volume', 'home-tile-calories', 'home-tile-protein']);
+test('a tile the person removed comes back only when its source is connected again', () => {
+  const s = storage();
+  tileStoreFor(s, 'home').remove('steps');
+  expect(ids(s)).not.toContain('steps');
+  addHealthTiles(s, RING_TILES);
+  expect(ids(s)).toEqual(expect.arrayContaining(['steps', 'sleep']));
 });
 
-test('a layout change that could not be saved still shows, and the sheet says it was not kept', async () => {
-  const repo = seeded();
-  const local = jest.spyOn(repo, 'localSave').mockImplementationOnce(() => { throw new Error('synthetic write failure'); });
-  await render(<Home />, { wrapper });
-  await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
-  expect(screen.queryByTestId('home-edit-unsaved')).toBeNull();
-  await fireEvent.press(screen.getByRole('button', { name: 'Remove, Today map' }));
-  expect(screen.queryByTestId('home-map')).toBeNull();
-  expect(screen.getByRole('alert')).toHaveTextContent("This change couldn't be saved on this phone. It shows until you leave this screen.");
-  // The next change saves the whole layout, the earlier one included, and the warning goes.
-  await fireEvent.press(screen.getByRole('button', { name: 'Move up, Volume' }));
-  expect(local).toHaveBeenCalledTimes(2);
-  expect((repo.localGet(HOME_TILES_KEY) as { order: string[] }).order).not.toContain('map');
-  expect(screen.queryByTestId('home-edit-unsaved')).toBeNull();
+test('the Insight Score switch and the tile on Home are one state', () => {
+  const s = storage();
+  expect(scoreOn(s)).toBe(false);
+  setScoreOn(s, true);
+  expect(scoreOn(s)).toBe(true);
+  expect(ids(s)[0]).toBe('score');
+  expect(tileStoreFor(s, 'home').getState().tiles.some(e => e.id === 'score')).toBe(true);
+  setScoreOn(s, false);
+  expect(scoreOn(s)).toBe(false);
+  expect(ids(s)).toEqual(['next', 'workout', 'protein', 'water', 'steps', 'weight']);
 });
 
-test.each([[false, 'slide'], [true, 'none']])('with Reduce Motion %s the edit sheet opens with %s', async (reduce, animation) => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { AccessibilityInfo } = require('react-native') as typeof import('react-native');
-  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValueOnce(reduce);
-  seeded();
-  await render(<Home />, { wrapper });
-  await act(async () => { await Promise.resolve(); });
-  await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
-  expect(screen.getByTestId('home-edit-sheet')).toHaveProp('animationType', animation);
+test('with no account nothing is written and nothing breaks', () => {
+  expect(() => addHealthTiles(null)).not.toThrow();
+  expect(scoreOn(null)).toBe(false);
+  expect(() => setScoreOn(undefined, true)).not.toThrow();
 });
 
-test('a small tile can be made full width and back', async () => {
-  const repo = seeded();
-  await render(<Home />, { wrapper });
-  expect(screen.getByTestId('home-tile-calories')).toHaveStyle({ width: '48.5%' });
-  await fireEvent.press(screen.getByRole('button', { name: 'Edit Home' }));
-  const toggle = screen.getByRole('switch', { name: 'Calories, full width' });
-  expect(toggle).not.toBeChecked();
-  await fireEvent.press(toggle);
-  expect(screen.getByRole('switch', { name: 'Calories, full width' })).toBeChecked();
-  expect(screen.getByTestId('home-tile-calories')).toHaveStyle({ width: '100%' });
-  expect(repo.localGet(HOME_TILES_KEY)).toMatchObject({ wide: ['calories'] });
-  expect(screen.queryByRole('switch', { name: 'Today map, full width' })).toBeNull();
-  await fireEvent.press(screen.getByRole('switch', { name: 'Calories, full width' }));
-  expect(screen.getByTestId('home-tile-calories')).toHaveStyle({ width: '48.5%' });
-});
-
-test('a saved layout is used on the next open', async () => {
-  const repo = seeded();
-  repo.localSave(HOME_TILES_KEY, { order: ['next', 'weight', 'calories'], wide: ['calories'], v: 2 });
-  await render(<Home />, { wrapper });
-  expect(screen.queryByTestId('home-map')).toBeNull();
-  expect(screen.getByTestId('home-next')).toBeTruthy();
-  expect(screen.getByTestId('home-tile-calories')).toHaveStyle({ width: '100%' });
-  expect(screen.queryByTestId('home-tile-protein')).toBeNull();
-  // Weight is on Home but has no weigh-ins in this sample, so it stays hidden rather than showing a zero.
-  expect(screen.queryByTestId('home-tile-weight')).toBeNull();
-});
-
-test('with every tile removed Home says so and offers Edit', async () => {
-  const repo = seeded();
-  repo.localSave(HOME_TILES_KEY, { order: [], wide: [], v: 2 });
-  await render(<Home />, { wrapper });
-  expect(screen.getByText('Home is empty')).toBeTruthy();
-  await fireEvent.press(within(screen.getByTestId('home-nothing-on')).getByRole('button', { name: 'Edit Home' }));
-  expect(screen.getByText('Nothing on Home. Add a tile below.')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button', { name: 'Add, What is next' }));
-  expect(screen.getByTestId('home-next')).toBeTruthy();
-});
-
-describe('a new account, before anything is logged', () => {
-  test('starts with the empty map, what is next and the tiles note', async () => {
-    open();
-    await render(<Home />, { wrapper });
-    expect(screen.getByTestId('home-empty-map')).toBeTruthy();
-    expect(screen.getByTestId('home-next')).toBeTruthy();
-    expect(screen.getByText('Tiles')).toBeTruthy();
-  });
-  test('keeps only what the person left on Home, in their order', async () => {
-    const repo = open();
-    repo.localSave(HOME_TILES_KEY, { order: ['next'], wide: [], v: 2 });
-    await render(<Home />, { wrapper });
-    expect(screen.getByTestId('home-next')).toBeTruthy();
-    expect(screen.queryByTestId('home-empty-map')).toBeNull();
-    expect(screen.queryByText('Tiles')).toBeNull();
-  });
-  test('removing the map in Edit takes it off Home straight away', async () => {
-    open();
-    await render(<Home />, { wrapper });
-    await fireEvent.press(screen.getByTestId('home-edit'));
-    await fireEvent.press(screen.getByRole('button', { name: 'Remove, Today map' }));
-    expect(screen.queryByTestId('home-empty-map')).toBeNull();
-    expect(screen.getByTestId('home-next')).toBeTruthy();
-  });
-  test('with every tile removed it says Home is empty, the same as an account with data', async () => {
-    const repo = open();
-    repo.localSave(HOME_TILES_KEY, { order: [], wide: [], v: 2 });
-    await render(<Home />, { wrapper });
-    expect(screen.getByTestId('home-nothing-on')).toBeTruthy();
-    expect(screen.queryByTestId('home-next')).toBeNull();
-  });
+test('a failed local write leaves Home showing the change, saved again with the next change', () => {
+  const s = storage();
+  s.localSave = () => { throw new Error('disk full'); };
+  expect(() => addHealthTiles(s)).not.toThrow();
+  expect(ids(s)).toContain('sleep');
+  expect(tileStoreFor(s, 'home').getState().unsaved).toBe(true);
 });

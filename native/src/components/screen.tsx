@@ -1,14 +1,13 @@
-import { ScrollView, View, Pressable, StyleSheet, type ColorValue } from 'react-native';
+import { ScrollView, StyleSheet, type ColorValue } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import type { PropsWithChildren } from 'react';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
-import { PRESSED_ROW_OPACITY } from './tappable';
-import { ThemedText } from './themed-text';
-import { Icon } from './icon';
-import { touchTarget } from './button';
+import { IconButton } from './button';
+import { KIT, StackGapContext } from './kit-style';
+import { PageHeader } from './nav-bar';
 import { DOCK_FADE } from './floating-tabs';
 export function Screen({ children, title, tabHeader = false, topInset = false }: PropsWithChildren<{ title?: string; tabHeader?: boolean; topInset?: boolean }>) {
   const { colors, barLook } = useTheme();
@@ -20,17 +19,14 @@ export function Screen({ children, title, tabHeader = false, topInset = false }:
     {/* Fields stay above the keyboard on iOS, the first tap on a button while the keyboard is up still
         presses it, and dragging the list puts the keyboard away. */}
     <ScrollView testID="screen-scroll" keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
-      automaticallyAdjustKeyboardInsets contentContainerStyle={[styles.content, tabHeader && { paddingBottom: tokens.spacing[3] + insets.bottom + fade }]}>
-      {title && <View style={styles.header}>
-        <ThemedText variant="title" accessibilityRole="header" style={{ flex: 1 }}>{title}</ThemedText>
-        {tabHeader && <Pressable accessibilityRole="button" accessibilityLabel={t('openSettings')}
-          onPress={() => router.push('/settings')} style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}><Icon name="avatar" /></Pressable>}
-      </View>}
-      {children}
+      automaticallyAdjustKeyboardInsets contentContainerStyle={[styles.content, tabHeader && { paddingTop: 0, paddingBottom: tokens.spacing[3] + insets.bottom + fade }]}>
+      <StackGapContext.Provider value={KIT.gap}>
+        {/* A tab's header sits right under the status bar, as the mockup's page does. */}
+        {title && <PageHeader title={title} right={tabHeader ? <IconButton icon="person" label={t('openSettings')} onPress={() => router.push('/settings')} /> : undefined} />}
+        {children}
+      </StackGapContext.Provider>
     </ScrollView>
   </SafeAreaView>;
 }
-const styles = StyleSheet.create({ content: { padding: tokens.spacing[3], gap: tokens.spacing[3], flexGrow: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: tokens.spacing[2] },
-  avatar: { minWidth: touchTarget, minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' },
-  pressed: { opacity: PRESSED_ROW_OPACITY } });
+// The kit's page: a 16 pt gutter, and cards and lists stacked 12 pt apart (`.card + .card`).
+const styles = StyleSheet.create({ content: { padding: tokens.spacing[3], gap: KIT.gap, flexGrow: 1 } });

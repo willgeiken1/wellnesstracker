@@ -9,18 +9,22 @@ import * as design from '../src/design/tokens';
 const wrapper = ({ children }: PropsWithChildren) => <ThemeProvider>{children}</ThemeProvider>;
 const options = [{ value: 'a', label: 'First' }, { value: 'b', label: 'Second' }, { value: 'c', label: 'Third' }] as const;
 
-test('the choices sit in one visible track: filled for a card, outlined for the page', async () => {
+// Rewritten for the final design (kit.css `.seg`): one surface-2 track with no outline, the chosen choice raised on it,
+// the others transparent; each choice is drawn 34 pt tall and grows to 46 pt to touch.
+test('the choices sit in one visible track, the chosen one raised on it', async () => {
   const onChange = jest.fn();
   await render(<SegmentedControl label="Made-up choices" options={options} value="a" onChange={onChange} />, { wrapper });
   const track = StyleSheet.flatten(screen.root!.props.style);
   expect(track.backgroundColor).toBeTruthy();
-  expect(track.borderWidth).toBe(1);
-  const chosen = StyleSheet.flatten(screen.getByRole('tab', { name: 'First' }).props.style);
-  const other = StyleSheet.flatten(screen.getByRole('tab', { name: 'Second' }).props.style);
+  expect(track).toMatchObject({ padding: 2, gap: 2, borderRadius: 12 });
+  const chosenTab = screen.getByRole('tab', { name: 'First' }), otherTab = screen.getByRole('tab', { name: 'Second' });
+  const chosen = StyleSheet.flatten(chosenTab.props.style), other = StyleSheet.flatten(otherTab.props.style);
   expect(other.backgroundColor).toBe('transparent');
   expect(chosen.backgroundColor).not.toBe('transparent');
-  expect(other.minHeight).toBeGreaterThanOrEqual(44);
-  await fireEvent.press(screen.getByRole('tab', { name: 'Second' }));
+  expect(chosen.backgroundColor).not.toBe(track.backgroundColor);
+  expect(other.minHeight).toBe(34);
+  expect(other.minHeight + otherTab.props.hitSlop.top + otherTab.props.hitSlop.bottom).toBeGreaterThanOrEqual(44);
+  await fireEvent.press(otherTab);
   expect(onChange).toHaveBeenCalledWith('b');
 });
 test.each(['dark', 'light'] as const)('in %s mode a choice that is not chosen keeps 4.5:1 text on the track', mode => {

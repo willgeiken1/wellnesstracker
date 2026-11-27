@@ -73,4 +73,22 @@ export class CardioStore {
       return row;
     });
   }
+  /** A cardio session typed in by hand (Log cardio): a run, walk, ride, row, elliptical or stairs, with an optional distance. */
+  logManual(input: ManualInput, today = localDay()) {
+    validateFinish(input.day, input.durationMs, today);
+    if (!MANUAL_KINDS.includes(input.kind)) throw new Error('Invalid cardio kind');
+    if (input.distanceM != null && (!Number.isFinite(input.distanceM) || input.distanceM < 0 || input.distanceM > 400_000)) throw new Error('Invalid distance');
+    if (input.notes.length > 2000) throw new Error('Cardio notes too long');
+    return this.repo.atomic(() => {
+      const row = this.repo.save('cardio_sessions', { day: input.day, kind: input.kind, duration_ms: input.durationMs, distance_m: input.distanceM, notes: input.notes });
+      // How hard it felt and when it started stay on this phone: the synced row has no columns for them.
+      if (input.effort) this.repo.localSave(`cardio.effort.${row.id}`, input.effort);
+      if (input.startedAt) this.repo.localSave(`cardio.started.${row.id}`, input.startedAt);
+      return row;
+    });
+  }
 }
+export const MANUAL_KINDS = ['run', 'walk', 'cycle', 'row', 'elliptical', 'stairs'] as const;
+export type ManualKind = typeof MANUAL_KINDS[number];
+export type Effort = 'easy' | 'light' | 'moderate' | 'hard' | 'max';
+export interface ManualInput { kind: ManualKind; day: string; durationMs: number; distanceM: number | null; notes: string; effort?: Effort; startedAt?: number }

@@ -15,6 +15,7 @@ import { seedDemo } from '../fixtures/demo';
 import { syncTables } from '../src/data/sync/flags';
 import type { Repository } from '../src/data/repository';
 import * as Network from 'expo-network';
+import { SETTINGS_PREFS_KEY, loadSettingsPrefs, withPref } from '../src/features/settings/prefs';
 
 jest.mock('expo-secure-store',()=>({getItemAsync:jest.fn(),setItemAsync:jest.fn(),deleteItemAsync:jest.fn(),WHEN_UNLOCKED_THIS_DEVICE_ONLY:6}));
 jest.mock('../src/auth/client', () => ({ getAuthClient: jest.fn(() => null), clearLocalSession: jest.fn(async()=>{}) }));
@@ -715,4 +716,129 @@ test.each([true,false])('demo promotion shows a notice only for skipped weigh-in
  else expect(alert).not.toHaveBeenCalled();
  await act(async()=>{await observed.syncNow();});expect(promotion).toHaveBeenCalledTimes(1);
  alert.mockRestore();promotion.mockReset();
+});
+
+test('Sign in with Apple signs in with the identity token and raw nonce, and reports a refused token as a failed sign-in',async()=>{
+ const guest=fixtureRepo('guest'),account=fixtureRepo(OWNER_A),fixture=clientFixture(null);
+ jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:owner=>owner===OWNER_A?account:guest,wipeAll:jest.fn()});
+ const idToken=jest.fn(async(_c:unknown)=>({data:{session:session(OWNER_A),user:session(OWNER_A).user},error:null as unknown}));
+ (fixture.auth as Record<string,unknown>).signInWithIdToken=idToken;
+ await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);await waitFor(()=>expect(observed.ready).toBe(true));
+ let result:string|null|undefined;
+ await act(async()=>{result=await observed.signInWithApple?.('synthetic-apple-token','synthetic-raw-nonce');fixture.emit(session(OWNER_A));});
+ expect(result).toBeNull();expect(idToken).toHaveBeenCalledWith({provider:'apple',token:'synthetic-apple-token',nonce:'synthetic-raw-nonce'});
+ expect(fixture.auth.signInWithPassword).not.toHaveBeenCalled();
+ await waitFor(()=>expect(observed.repository).toBe(account));
+ idToken.mockResolvedValueOnce({data:{session:null as unknown as Session,user:null as unknown as Session['user']},error:new Error('Synthetic refusal')});
+ await act(async()=>{result=await observed.signInWithApple?.('synthetic-apple-token','synthetic-raw-nonce');});
+ expect(result).toBe('authFailed');
+});
+
+test('Continue with email signs in, or makes the account when that email has none, with one button', async () => {
+  const guest = fixtureRepo('guest');
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: () => guest });
+  const fixture = clientFixture(null);
+  const view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.ready).toBe(true));
+  // A returning person: the password works.
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'secret123'))).toBeNull();
+  expect(fixture.auth.signUp).not.toHaveBeenCalled();
+  // A new person: sign-in fails, so the account is made and the email waits for confirmation.
+  fixture.auth.signInWithPassword.mockResolvedValue({ error: { message: 'Invalid login credentials' } } as never);
+  expect(await act(async () => observed.continueWithEmail!('new@example.test', 'secret123'))).toBe('confirmEmail');
+  expect(fixture.auth.signUp).toHaveBeenLastCalledWith({ email: 'new@example.test', password: 'secret123' });
+  // An email that already has an account, with the wrong password: signing up returns no identities, which is a failure.
+  fixture.auth.signUp.mockResolvedValue({ data: { session: null, user: { identities: [] } }, error: null } as never);
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'wrongpass'))).toBe('authFailed');
+  // Too short to be a new password: no account is made.
+  fixture.auth.signUp.mockClear();
+  expect(await act(async () => observed.continueWithEmail!('fixture@example.test', 'short'))).toBe('authFailed');
+  expect(fixture.auth.signUp).not.toHaveBeenCalled();
+  await view.unmount();
+});
+
+test('a guest opens the app on this phone only, is remembered, and can leave; Google is not set up', async () => {
+  const guest = fixtureRepo('guest'), local = new Map<string, unknown>();
+  const device = { localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); } };
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: (owner: string) => owner === 'device' ? device : guest } as never);
+  const view = await render(<AuthProvider client={null}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.ready).toBe(true));
+  expect(observed.guest).toBe(false);
+  await act(async () => { observed.continueAsGuest!(); });
+  expect(observed.guest).toBe(true);
+  await waitFor(() => expect(local.get('guestMode')).toBe(true));
+  expect(observed.repository).toBe(guest);
+  expect(mockPush).not.toHaveBeenCalled();
+  expect(await observed.signInWithGoogle!()).toEqual({ ok: false, reason: 'notConfigured' });
+  await act(async () => { observed.exitGuest!(); });
+  expect(observed.guest).toBe(false);
+  await waitFor(() => expect(local.get('guestMode')).toBe(false));
+  await view.unmount();
+  // Reopened after a guest session, the phone remembers.
+  local.set('guestMode', true);
+  const again = await render(<AuthProvider client={null}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.guest).toBe(true));
+  await again.unmount();
+});
+/* Settings, Sync across devices: off must mean nothing leaves the phone (AGENTS.md review rule on privacy switches). */
+function syncSwitchRepo(owner: string) {
+  const listeners = new Set<() => void>(), local = new Map<string, unknown>();
+  let pending: { row: ReturnType<typeof syntheticRow>; revision: string }[] = [];
+  const notify = () => listeners.forEach(l => l());
+  const repo = {
+    owner, syncFlags: {syncedV1Columns:false}, syncTables: () => syncTables(), pending: () => pending, conflicts: () => [],
+    subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); notify(); },
+    ack: jest.fn(() => { pending = []; notify(); }),
+    wipe: jest.fn(() => { pending = []; notify(); }), hasUnsynced: () => pending.length > 0, unsyncedCount: () => pending.length,
+    cursor: () => '0', applyPage: jest.fn(),
+  };
+  return { repo: repo as unknown as Repository, edit: () => { pending = [{ row: syntheticRow(), revision: `${pending.length + 101}:fixture` }]; notify(); } };
+}
+const setSync = (repo: Repository, on: boolean) => repo.localSave(SETTINGS_PREFS_KEY, withPref(loadSettingsPrefs(repo), 'sync.on', on));
+const pastDebounce = () => new Promise(resolve => setTimeout(resolve, 2300));
+function fireForegroundAndReconnect() {
+  for (const [type, listener] of jest.mocked(AppState.addEventListener).mock.calls) if (type === 'change') (listener as (s: string) => void)('active');
+  for (const [listener] of jest.mocked(Network.addNetworkStateListener).mock.calls) {
+    (listener as (s: { isConnected: boolean }) => void)({ isConnected: false });
+    (listener as (s: { isConnected: boolean }) => void)({ isConnected: true });
+  }
+}
+test('sync switched off: an edit, foreground, reconnect and Sync now push and pull nothing; back on uploads the edit', async () => {
+  const { repo: a, edit } = syncSwitchRepo(OWNER_A);
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: owner => owner === OWNER_A ? a : fixtureRepo(owner) });
+  const fixture = clientFixture(), view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.initialPullComplete).toBe(true));
+  await act(async () => { setSync(a, false); });
+  const pulls = mockPull.mock.calls.length;
+  expect(mockPush).not.toHaveBeenCalled();
+  await act(async () => { edit(); fireForegroundAndReconnect(); await observed.syncNow(); await pastDebounce(); });
+  expect(mockPush).not.toHaveBeenCalled(); expect(mockPull).toHaveBeenCalledTimes(pulls);
+  expect(observed.pending).toBe(1); expect(a.ack).not.toHaveBeenCalled();
+  await act(async () => { setSync(a, true); });
+  await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(observed.pending).toBe(0)); expect(a.ack).toHaveBeenCalledTimes(1);
+  await view.unmount();
+}, 15_000);
+test('switching sync off cancels a push already scheduled for an edit', async () => {
+  const { repo: a, edit } = syncSwitchRepo(OWNER_A);
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: owner => owner === OWNER_A ? a : fixtureRepo(owner) });
+  const fixture = clientFixture(), view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.initialPullComplete).toBe(true));
+  const pulls = mockPull.mock.calls.length;
+  await act(async () => { edit(); setSync(a, false); await pastDebounce(); });
+  expect(mockPush).not.toHaveBeenCalled(); expect(mockPull).toHaveBeenCalledTimes(pulls); expect(observed.pending).toBe(1);
+  await view.unmount();
+}, 15_000);
+test('sign-out with sync off uploads nothing and keeps the unsynced-changes warning', async () => {
+  const { repo: a, edit } = syncSwitchRepo(OWNER_A);
+  jest.mocked(openLocalDatabase).mockResolvedValue({ wipeAll: jest.fn(), forOwner: owner => owner === OWNER_A ? a : fixtureRepo(owner) });
+  const fixture = clientFixture(), view = await render(<AuthProvider client={fixture.client}><Probe /></AuthProvider>);
+  await waitFor(() => expect(observed.initialPullComplete).toBe(true));
+  await act(async () => { setSync(a, false); edit(); });
+  await act(async () => { await observed.prepareSignOut?.(); await expect(observed.signOut()).rejects.toThrow('Unsynced changes require confirmation.'); });
+  expect(mockPush).not.toHaveBeenCalled(); expect(a.wipe).not.toHaveBeenCalled(); expect(fixture.auth.signOut).not.toHaveBeenCalled();
+  await act(async () => { await observed.signOut(true); });
+  expect(mockPush).not.toHaveBeenCalled(); expect(a.wipe).toHaveBeenCalledTimes(1);
+  await view.unmount();
 });

@@ -3,7 +3,7 @@ import { localDatabase } from './sqlite';
 import { Repository } from '../../src/data/repository';
 import { dailyWeights, saveWeighIn } from '../../src/features/body/model';
 import type { HealthAccess, HealthSource, WeightSample } from '../../src/features/health/source';
-import { IMPORT_DAYS, importStart, importWeights, refreshWeights } from '../../src/features/health/weights';
+import { HEALTH_WEIGHT_KEY, IMPORT_DAYS, importStart, importWeights, refreshWeights } from '../../src/features/health/weights';
 
 // Made-up readings only.
 const now = new Date(2026, 10, 12, 9, 0);
@@ -110,5 +110,23 @@ test('a read that finishes after the page or account has gone writes nothing', a
     const slow: HealthSource = { access: async () => 'asked', request: async () => {}, steps: async () => 0, sleep: async () => [], activeEnergy: async () => 0, exerciseMinutes: async () => 0, heart: async () => null, vo2Max: async () => null, water: async () => 0, mindful: async () => [], bodyFat: async () => [], workouts: async () => [], weights: async () => { live = false; return [sample(A, 10, 80.4)]; } };
     expect(await refreshWeights(repo, slow, now, () => live)).toBe(0);
     expect(repo.list('weigh_ins')).toHaveLength(0);
+  } finally { sqlite.close(); }
+});
+
+test('with Body\'s "From Apple Health" switch off nothing is read or written, even by a read already under way', async () => {
+  const { db, repo: fixture, sqlite } = await localDatabase();
+  try {
+    const repo = new Repository(db, 'guest', fixture.device, randomUUID);
+    repo.localSave(HEALTH_WEIGHT_KEY, false);
+    const off = source('asked', [sample(A, 10, 80.4)]);
+    expect(await refreshWeights(repo, off, now)).toBe(0);
+    expect(off.since).toBeUndefined();
+    expect(repo.list('weigh_ins')).toHaveLength(0);
+    repo.localSave(HEALTH_WEIGHT_KEY, true);
+    const turnedOff: HealthSource = { ...source('asked', []), weights: async () => { repo.localSave(HEALTH_WEIGHT_KEY, false); return [sample(A, 10, 80.4)]; } };
+    expect(await refreshWeights(repo, turnedOff, now)).toBe(0);
+    expect(repo.list('weigh_ins')).toHaveLength(0);
+    repo.localSave(HEALTH_WEIGHT_KEY, true);
+    expect(await refreshWeights(repo, source('asked', [sample(A, 10, 80.4)]), now)).toBe(1);
   } finally { sqlite.close(); }
 });
