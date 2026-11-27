@@ -229,7 +229,7 @@
         "@kingstinct/react-native-healthkit",
         {
           "NSHealthShareUsageDescription": "Insight Wellness reads your body weight, body fat, steps, sleep and sleep stages, active calories, exercise minutes, heart rate, resting heart rate, heart rate variability, VO2 max, water, mindful minutes and workouts from Apple Health to show them beside your training and food. They stay on this phone.",
-          "NSHealthUpdateUsageDescription": false,
+          "NSHealthUpdateUsageDescription": "Insight Wellness does not write anything to Apple Health. It only reads the data you allow, and it would ask you before ever saving to Apple Health.",
           "background": false
         }
       ],
