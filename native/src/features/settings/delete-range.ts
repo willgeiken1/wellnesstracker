@@ -2,6 +2,7 @@ import type { Repository } from '@/data/repository';
 import type { Row, Table } from '@/data/rows';
 import { deleteProgressPhoto } from '@/core/owner-files';
 import { WATER_KEY } from '@/features/food/water';
+import { WorkoutStore } from '@/data/workout/store';
 
 /** What Delete a date range can remove, in the order the sheet lists them. */
 export const RANGE_KINDS = ['workouts', 'food', 'body', 'routines', 'photos'] as const;
@@ -31,6 +32,8 @@ export function deleteDateRange(repo: Repository, from: string, to: string, kind
       for (const e of entries) drop('entries', e);
       for (const s of sessions) drop('sessions', s);
       for (const c of live(repo, 'cardio_sessions')) if (inDays(c.data.day, from, to)) drop('cardio_sessions', c);
+      // Records and weekly sets are kept worked out from the workouts left, so a deleted best no longer hides a later one.
+      if (sessions.length) new WorkoutStore(repo).recompute();
     } else if (kind === 'food') {
       for (const f of live(repo, 'food_entries')) if (inDays(f.data.day, from, to)) drop('food_entries', f);
       const water = repo.localGet<{ log?: Record<string, unknown[]> }>(WATER_KEY);
