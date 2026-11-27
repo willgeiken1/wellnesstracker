@@ -6,10 +6,11 @@ import { ThemeProvider, useTheme } from '../src/design/theme-provider';
 import { t } from '../src/i18n/en';
 import { estimateTargets } from '../src/features/onboarding/model';
 import {
-  blankDraft, heightLabel, heightOptions, markSkip, nextOf, prevOf, routinePlan, skipTarget, slotLabel, suggest, switchUnit, withKcal, withMacro, type FlowDraft,
+  allOwn, blankDraft, heightLabel, heightOptions, markSkip, nextOf, prevOf, routinePlan, skipTarget, slotLabel, suggest, switchUnit, withKcal, withMacro, type FlowDraft,
 } from '../src/features/onboarding/flow/model';
 import { ONBOARDING_TIPS, addSuggestedRoutines, isSetUp, saveOnboarding, saveResumed } from '../src/features/onboarding/flow/save';
 import { Onboarding, OnboardingDraftProvider } from '../src/features/onboarding/screen';
+import { TargetsStep } from '../src/features/onboarding/flow/steps';
 import { ROUTINES_KEY, createRoutinesStore, type RoutinesStore } from '../src/features/routines/store';
 import type { RoutinesState } from '../src/features/routines/model';
 import { applyAppIcon } from '../src/features/settings/app-icon';
@@ -72,8 +73,8 @@ describe('targets', () => {
   });
   test('moving calories keeps protein, sets fat to 25 percent and gives carbs the rest; a macro moves calories', () => {
     const base = suggest(basics(), 'maintain', fallback, DAY);
-    expect(withKcal(base, 2420)).toEqual({ ...base, kcal: 2420, f: 67, c: 289 });
-    expect(withMacro(base, 'p', 180)).toEqual({ ...base, p: 180, kcal: Math.round((180 * 4 + 279 * 4 + 66 * 9) / 10) * 10 });
+    expect(withKcal(base, 2420)).toEqual({ ...base, kcal: 2420, f: 67, c: 289, own: { kcal: true, f: true } });
+    expect(withMacro(base, 'p', 180)).toEqual({ ...base, p: 180, kcal: Math.round((180 * 4 + 279 * 4 + 66 * 9) / 10) * 10, own: { p: true } });
   });
 });
 
@@ -167,11 +168,34 @@ describe('what setup saves', () => {
     saveOnboarding(repo, { ...typed, t: suggest(typed, 'maintain', fallback, DAY) }, DAY);
     expect(repo.list('weigh_ins').map(r => r.data)).toEqual([expect.objectContaining({ day: DAY, entered_value: 182.1, source: 'app' })]);
     expect(repo.list('food_targets')).toHaveLength(1);
+    // With the weight from Apple Health, targets are saved only once every number is the person's own.
     const other = memoryRepository(), filled = basics({ filled: true, healthKg: 82.6 });
-    saveOnboarding(other, { ...filled, t: withKcal(suggest(filled, 'maintain', fallback, DAY), 2400), edited: true }, DAY);
+    const own = withMacro(withMacro(withMacro(suggest(filled, 'maintain', fallback, DAY), 'p', 150), 'c', 250), 'f', 70);
+    expect(allOwn(own)).toBe(true);
+    saveOnboarding(other, { ...filled, t: own, edited: true }, DAY);
     expect(other.list('weigh_ins')).toEqual([]);
-    expect(other.list('food_targets')[0].data).toMatchObject({ energy_kj: 2400 * 4.184 });
+    expect(other.list('food_targets')[0].data).toMatchObject({ protein_g: 150, carbs_g: 250, fat_g: 70, energy_kj: own.kcal * 4.184 });
     expect(other.localGet('targetBasis')).toBe('manual');
+  });
+  test('with the weight from Apple Health, changing one target does not save the others that rest on it', () => {
+    const filled = basics({ filled: true, healthKg: 82.6 }), est = suggest(filled, 'maintain', fallback, DAY);
+    // Calories by hand: protein is still the estimate from the Health weight, and carbs follow it.
+    const kcal = withKcal(est, 2400);
+    expect(allOwn(kcal)).toBe(false);
+    const one = memoryRepository();
+    saveOnboarding(one, { ...filled, t: kcal, edited: true }, DAY);
+    expect(one.list('food_targets')).toEqual([]);
+    expect(one.localGet('targetBasis')).toBe('estimated');
+    // One macro by hand: the other two are still the estimate, and calories follow all three.
+    const two = memoryRepository();
+    saveOnboarding(two, { ...filled, t: withMacro(est, 'p', 160), edited: true }, DAY);
+    expect(two.list('food_targets')).toEqual([]);
+    // Protein, then calories: fat follows calories and carbs follow both, so every number is the person's own.
+    expect(allOwn(withKcal(withMacro(est, 'p', 160), 2400))).toBe(true);
+    // A typed weight makes the estimate the person's own basics, so a single change is saved as before.
+    const typed = memoryRepository(), mine = basics({ filled: true, healthKg: null });
+    saveOnboarding(typed, { ...mine, t: withKcal(suggest(mine, 'maintain', fallback, DAY), 2400), edited: true }, DAY);
+    expect(typed.list('food_targets')[0].data).toMatchObject({ energy_kj: 2400 * 4.184 });
   });
   test('a skipped section writes nothing, but a profile row still marks the account as set up', () => {
     const repo = memoryRepository();
@@ -327,6 +351,16 @@ describe('the flow', () => {
     await finishFromBody();
     expect(repo.list('weigh_ins').filter(r => r.data.source === 'app' && r.data.day !== '2026-11-25').map(r => r.data))
       .toEqual([expect.objectContaining({ entered_value: 180, entered_unit: 'lb', source: 'app' })]);
+  });
+
+  test('with the weight from Apple Health, a partly changed target says it will not be kept until all four are set', async () => {
+    const filled = basics({ filled: true, healthKg: 82.6 }), est = suggest(filled, 'maintain', fallback, DAY), noop = () => {};
+    const step = (tl: typeof est) => <ThemeProvider><TargetsStep eyebrow="" d={{ ...filled, t: tl, edited: true }} est onPlan={noop} onKcal={noop} onMacro={noop} onReset={noop} /></ThemeProvider>;
+    const view = await render(step(withKcal(est, 2400)));
+    expect(screen.getByText(t('obbNoteHealthKeep'))).toBeTruthy();
+    await view.rerender(step(withMacro(withMacro(withMacro(est, 'p', 150), 'c', 250), 'f', 70)));
+    expect(screen.getByText(t('obbNoteYours'))).toBeTruthy();
+    expect(screen.queryByText(t('obbNoteHealthKeep'))).toBeNull();
   });
 
   test('Not now skips About you and Goals; Back then passes over them', async () => {

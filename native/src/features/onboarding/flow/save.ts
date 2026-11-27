@@ -4,7 +4,7 @@ import { SETTINGS_PREFS_KEY, loadSettingsPrefs, withPref } from '@/features/sett
 import type { RoutinesStore } from '@/features/routines/store';
 import type { RoutinesState } from '@/features/routines/model';
 import { ageOn, estimateTargets, today, type Targets } from '../model';
-import { ageOf, dobFor, kgOf, profileInput, routinePlan, type FlowDraft, type GoalId, type Macros, type RoutineItemKey } from './model';
+import { ageOf, allOwn, dobFor, kgOf, profileInput, routinePlan, type FlowDraft, type GoalId, type Macros, type RoutineItemKey } from './model';
 
 /*
  * What setup writes (ONBOARDING.md section 4). Everything is written when they tap Open Insight, except the routines
@@ -53,8 +53,9 @@ function saveAbout(repo: Repository, d: FlowDraft, day: string) {
 function saveGoals(repo: Repository, d: FlowDraft, t: Macros, day: string) {
   repo.localSave(ONBOARDING_GOALS, { train: !!d.goals.train, eat: !!d.goals.eat, sleep: !!d.goals.sleep, routines: !!d.goals.routines } satisfies Record<GoalId, boolean>);
   // Targets sync, so numbers worked out from an Apple Health weight are never saved (as Food's own estimates never use
-  // one). Food estimates them again from the first weight typed in. Numbers the person changed are their own.
-  if (t.est && !d.edited && d.healthKg !== null) {
+  // one). Food estimates them again from the first weight typed in. Only targets that are wholly the person's own are
+  // saved: changing one number keeps the others the estimate made from the Health weight.
+  if (t.est && d.healthKg !== null && !allOwn(t)) {
     repo.localSave('targetBasis', 'estimated');
     repo.localSave('targetPlan', d.plan);
     return;

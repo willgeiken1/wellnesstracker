@@ -1714,7 +1714,7 @@ export const en = {
   obbPlan: 'Plan', obbCut: 'Cut', obbCutSub: 'Lose slowly', obbMaintain: 'Maintain', obbMaintainSub: 'Hold steady', obbBulk: 'Bulk', obbBulkSub: 'Gain slowly',
   obbCalories: 'Calories', obbKcal: 'kcal', obbProtein: 'Protein', obbCarbs: 'Carbs', obbFat: 'Fat', obbGrams: '{m} in grams', obbG: 'g',
   obbMacroBar: 'Calories from protein {p}%, carbs {c}%, fat {f}%',
-  obbNoteEst: 'Protein 2 g per kg of body weight.', obbNoteTypical: 'Based on a typical day.', obbNoteYours: 'Your numbers.', obbUseSuggestion: 'Use suggestion',
+  obbNoteEst: 'Protein 2 g per kg of body weight.', obbNoteTypical: 'Based on a typical day.', obbNoteYours: 'Your numbers.', obbNoteHealthKeep: 'These rest on your Apple Health weight, so Food works them out again from the first weight you log. Set all four to keep them.', obbUseSuggestion: 'Use suggestion',
   obbConnectTitle: 'Bring in your data', obbConnectLede: 'Sleep, steps and heart data sit beside your training and food. Connect either now or later.',
   obbHealth: 'Apple Health', obbHealthSub: 'Sleep, steps, heart, weight and workouts', obbOura: 'Oura', obbOuraSub: 'Sleep, readiness and HRV from your ring',
   obbConnect: 'Connect', obbConnectA11y: 'Connect {name}', obbConnected: 'Connected', obbLock: 'Insight only reads. Change this any time in Settings.',
