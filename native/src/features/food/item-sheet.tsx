@@ -201,14 +201,16 @@ function FactsPanel({ food, grams, servingText, barcode }: { food: Food; grams: 
 
 /** Protein, carbs and fat with their grams and share of the calories (`.fd-leg`). */
 export function EnergyLegend({ p, c, f }: { p: number | null; c: number | null; f: number | null }) {
+  // A share of the calories needs all three: with any unknown, no share is worked out (none is shown or spoken as 0%).
+  const whole = p != null && c != null && f != null;
   const k = useKit(), [pp, pcc, pf] = macroPercents(p ?? 0, c ?? 0, f ?? 0).pc, pc = { p: pp, c: pcc, f: pf };
   const rows: [string, number | null, number, string][] = [[t('foodMacroProtein'), p, pc.p, MACRO_COLOR.p], [t('foodMacroCarbs'), c, pc.c, MACRO_COLOR.c], [t('foodMacroFat'), f, pc.f, MACRO_COLOR.f]];
-  return <View style={{ gap: 6, marginTop: 12 }} accessible accessibilityLabel={fill(t('foodSplitA11y'), { p: pc.p, c: pc.c, f: pc.f })}>
+  return <View style={{ gap: 6, marginTop: 12 }} accessible accessibilityLabel={whole ? fill(t('foodSplitA11y'), { p: pc.p, c: pc.c, f: pc.f }) : rows.map(([label, g]) => g == null ? `${label} ${t('foodUnknownLower')}` : `${label} ${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`).concat(t('foodSplitUnknownA11y')).join(', ')}>
     {rows.map(([label, g, pct, color]) => <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: k.tok(color) }} />
       <KitText weight={500} size={13} color="text-muted" style={{ flex: 1 }}>{label}</KitText>
       <KitText weight={700} size={13.5} tracking={-0.02} numeric>{g == null ? '–' : `${g < 10 && g % 1 ? g.toFixed(1) : num(g)} g`}</KitText>
-      <KitText weight={700} size={12.5} tracking={-0.02} color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null ? '' : `${pct}%`}</KitText>
+      <KitText weight={700} size={12.5} tracking={-0.02} color="text-muted" style={{ width: 38, textAlign: 'right' }}>{g == null || !whole ? '' : `${pct}%`}</KitText>
     </View>)}
   </View>;
 }
