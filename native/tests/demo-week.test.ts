@@ -11,7 +11,7 @@ import { buildTileData, type HomeInput } from '../src/features/home/tiles/data';
 import { readAppData } from '../src/features/home/tiles/read';
 import { heroInput, lastWeek } from '../src/features/home/hero/data';
 import { heroView } from '../src/features/home/hero/model';
-import { litresOn, readWater } from '../src/features/food/water';
+import { addDrink, litresOn, readWater } from '../src/features/food/water';
 import { defaultMeals } from '../src/features/food/model';
 jest.mock('expo-sqlite', () => require('./server/expo-sqlite-stub'));
 
@@ -135,6 +135,20 @@ describe('Explore with sample data: the example week', () => {
       expect(account.list('sessions')).toEqual([]);
       expect(account.list('sets')).toEqual([]);
       expect(account.localGet('foodWater')).toBeUndefined();
+    } finally { sqlite.close(); }
+  }, 60000);
+
+  test('a drink logged in Look around first carries into the account, and the sample drinks do not', async () => {
+    const { demo, account, sqlite } = await demoRepo();
+    try {
+      seedDemo(demo, AFTERNOON);
+      const today = days(AFTERNOON)[6], glass = readWater(demo).containers[0];
+      const { drink } = addDrink(demo, today, { c: glass }, AFTERNOON);
+      promoteDemo(demo, account);
+      const log = readWater(account).log;
+      expect(Object.values(log).flat().map(d => d.id)).toEqual([drink.id]);
+      expect(log[today].map(d => d.oz)).toEqual([glass.oz]);
+      expect(demo.localGet('foodWater')).toBeUndefined();
     } finally { sqlite.close(); }
   }, 60000);
 
