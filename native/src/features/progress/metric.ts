@@ -53,6 +53,7 @@ export function metricView(d: ProgressData, key: MetricKey, range?: Range): Metr
     case 'hrv': return { key, name, short, unit: 'ms', goal: null, goalL: null, band: d.hrvBand, about: heartOura ? t('progressAboutHrv') : t('progressAboutHrvApple'), src: heartSrc };
     case 'rhr': return { key, name, short, unit: 'bpm', goal: null, goalL: null, band: d.rhrBand, about: t('progressAboutRhr'), src: heartSrc };
     case 'steps': return { key, name, short, unit: 'steps', goal: d.stepGoal, goalL: fill(t('progressGoalIs'), { v: fmt(d.stepGoal) }), band: null, tick: v => v ? `${Math.round(v / 1000)}k` : '0', about: fill(t('progressAboutSteps'), { goal: fmt(d.stepGoal) }), src: stepsSrc(d, range) };
+    case 'active': return { key, name, short, unit: 'kcal', goal: null, goalL: null, band: null, tick: v => v ? `${Math.round(v)}` : '0', about: t('progressAboutActive'), src: t('progressSrcApple') };
     case 'kcal': {
       const g = d.food.goalKcal;
       return { key, name, short, unit: 'kcal', goal: g, goalL: g == null ? null : fill(t('progressGoalIs'), { v: fmt(g) }), band: null, tick: v => v ? `${(v / 1000).toFixed(1)}k` : '0', about: t('progressAboutKcal'), src: t('progressSrcInsight') };

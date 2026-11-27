@@ -259,6 +259,23 @@ describe('water on Home', () => {
     expect(litresOn(readWater(repo), attributedDay())).toBe(0);
     expect(water().getByText('0')).toBeTruthy();
   });
+  test('opening the water sheet from Home is for today, even after an earlier day was picked in Food', async () => {
+    open();
+    await render(<Home />, { wrapper });
+    await settle();
+    const t0 = new Date(), earlier = `${t0.getFullYear() - 1}-01-15`;
+    act(() => { pickFoodDay(earlier); });
+    expect(foodDay()).toBe(earlier);
+    await fireEvent.press(screen.getByRole('button', { name: 'Water. Log water' }));
+    expect(router.push).toHaveBeenLastCalledWith('/food/water');
+    expect(foodDay()).toBe(attributedDay());
+    act(() => { pickFoodDay(earlier); });
+    await act(async () => { pageHandlers('home').water?.run?.(); });
+    expect(foodDay()).toBe(attributedDay());
+    act(() => { pickFoodDay(earlier); });
+    homeTileAction(memoryRepository(), null, { ql: 'water', wc: 'gone' });
+    expect(foodDay()).toBe(attributedDay());
+  });
   test('a container that is no longer on quick add opens the water sheet instead of logging', () => {
     const repo = memoryRepository();
     homeTileAction(repo, null, { ql: 'water', wc: 'gone' });

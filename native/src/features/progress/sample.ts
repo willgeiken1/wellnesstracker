@@ -45,6 +45,8 @@ export function sampleProgress(today: string, unit: Unit, now = Date.now()): Pro
     hrv: history(today, [...gen(31, 23, 54, 6), ...hrv], [50, 51, 49, 52, 53, 52, 54, 55, 53, 54, 55, 55]),
     rhr: history(today, [...gen(41, 23, 56.5, 2.5), ...rhr], [59, 59, 58, 58, 57, 57, 56, 56, 57, 56, 56, 56]),
     steps: history(today, [...gen(51, 23, 8300, 2600).map(x => Math.round(x / 10) * 10), ...steps], [7200, 6900, 7400, 7900, 8600, 9100, 9400, 9000, 8500, 8200, 8400, 8500]),
+    // The example has no Apple Health active energy, as Home's example has none: its trend says No data.
+    active: Array(HISTORY).fill(null),
     kcal: history(today, [...gen(61, 23, 2170, 240), ...kcalWeek], [...N10, 2230, 2190]),
     // Training adds up each month, so older days carry a month's minutes spread over its sessions.
     training: history(today, [...train, ...minWeek], [...N10, 640 / 13, 760 / 15]),

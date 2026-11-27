@@ -78,7 +78,7 @@ export function homeTileAction(repo: Repository | null, nextMeal: HomeInput['nex
   if (data.ql === 'water') {
     const c = repo ? quickContainers(readWater(repo)).find(x => x.id === data.wc) : undefined;
     if (repo && c) addWater(repo, attributedDay(), { c });
-    else router.push('/food/water' as unknown as Href);
+    else { logForToday(); router.push('/food/water' as unknown as Href); }
     return;
   }
   // A meal slot opens the log on that meal, not the one due next (breakfast tapped after breakfast is still breakfast).

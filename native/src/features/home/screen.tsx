@@ -77,7 +77,7 @@ export function Home() {
   useQuickActions('home', {
     edit: { run: () => tileEdit.set('home', true) },
     add: { run: () => tileRoutes().tray('home') },
-    water: { run: () => go('/food/water'), label: t('homeLogWater'), hint: waterHint(tiles?.data.water) },
+    water: { run: () => { logForToday(); go('/food/water'); }, label: t('homeLogWater'), hint: waterHint(tiles?.data.water) },
     meal: { run: () => { logForToday(); go('/food/log'); } },
     start: { run: () => go('/workout') },
     weigh: { run: () => go('/progress') },

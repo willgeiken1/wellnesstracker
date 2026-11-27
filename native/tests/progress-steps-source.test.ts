@@ -3,6 +3,7 @@ import { mergeHealthDays } from '../src/features/health/oura';
 import type { HealthDays } from '../src/features/health/days';
 import { metricView } from '../src/features/progress/metric';
 import { buildProgress } from '../src/features/progress/source';
+import { TREND_KEYS, TREND_OPEN } from '../src/features/progress/model';
 import { memoryRepository } from './workout-repository';
 
 // Made-up step counts only.
@@ -44,5 +45,19 @@ describe('where the nights shown came from', () => {
     const bare = progress({ steps: null, sleepHours: Array(N).fill(7), ...none });
     expect(metricView({ ...bare, sleepFrom: undefined }, 'sleep').src).toBe('Apple Health');
     expect(metricView(withOura({ ...bare, sleepFrom: undefined }), 'sleep').src).toBe('Oura');
+  });
+});
+
+describe('active energy', () => {
+  test('comes from Apple Health\'s active energy, day by day, with a missing day left blank, not 0', () => {
+    const kcal = Array<number | null>(N).fill(420); kcal[N - 2] = null;
+    const d = progress({ steps: null, sleepHours: null, ...none, activeKcal: kcal });
+    expect(d.days.active.slice(-3)).toEqual([420, null, 420]);
+    expect(metricView(d, 'active').src).toBe('Apple Health');
+    expect(metricView(d, 'active').unit).toBe('kcal');
+  });
+  test('opens as a trend but is not added to Progress\'s own list', () => {
+    expect(TREND_OPEN).toContain('active');
+    expect(TREND_KEYS).not.toContain('active');
   });
 });

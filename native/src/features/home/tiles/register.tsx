@@ -36,7 +36,8 @@ function NumbersCover({ colors, w, h }: { colors: ThemeColors; w: number; h: num
   </View>;
 }
 
-const go = (href: string) => { if (href === '/food/log') logForToday(); router.push(href as unknown as Href); };
+// Logging from Home is for today, whichever day Food last showed.
+const go = (href: string) => { if (href === '/food/log' || href === '/food/water') logForToday(); router.push(href as unknown as Href); };
 
 /** One Home tile in one style: drawn from Home's shared tile data, or its empty state. */
 export const HomeTileView = memo(function HomeTileView(p: TileRenderProps) {
@@ -74,7 +75,7 @@ const OPEN: Record<string, { open: Open; label?: string }> = {
   nextup: { open: () => go('/routines') },
   volume: { open: () => go('/workouts') },
   exercise: { open: () => go('/progress/trend?metric=training') },
-  active: { open: () => go('/progress/trend?metric=kcal') },
+  active: { open: () => go('/progress/trend?metric=active') },
   steps: { open: () => go('/progress/trend?metric=steps') },
   calories: { open: () => go('/food') },
   protein: { open: () => go('/food/nutrition') },

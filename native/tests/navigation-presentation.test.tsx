@@ -153,11 +153,12 @@ test('each area\'s own sheet options agree with the root stack, so a route never
 });
 
 // A tap on a tile opens what the design's tile opens (its LINK table and each page's tile `link`).
+// One change from the design's table: Active energy opens its own trend, not eaten calories, since the two are different numbers.
 test.each([
   ['home', 'week', '/progress/weekly'], ['home', 'protein', '/food/nutrition'], ['home', 'steps', '/progress/trend?metric=steps'],
   ['home', 'weight', '/progress/body'], ['home', 'bodyFat', '/progress/body'], ['home', 'sleep', '/progress/sleep'],
   ['home', 'hrv', '/progress/trend?metric=hrv'], ['home', 'rhr', '/progress/trend?metric=rhr'],
-  ['home', 'exercise', '/progress/trend?metric=training'], ['home', 'active', '/progress/trend?metric=kcal'],
+  ['home', 'exercise', '/progress/trend?metric=training'], ['home', 'active', '/progress/trend?metric=active'],
   ['home', 'score', '/score'], ['home', 'calories', '/food'], ['home', 'nextup', '/routines'], ['home', 'volume', '/workouts'],
   ['home', 'logMeal', '/food/log'],
   ['training', 'goal', '/progress/trend?metric=training'], ['training', 'muscles', '/progress/trend?metric=training'],

@@ -1264,7 +1264,7 @@ export const en = {
   // P5 progress
   progressNoData: 'No data', progressThisWeek: 'This week', progressThisWeekLower: 'this week', progress30Days: '30 days', progress12Months: '12 months',
   progressLast30: 'Last 30 days', progressLast12: 'Last 12 months', progressIn30: 'in 30 days', progressIn12: 'in 12 months', progressNoChangeIn: 'Not enough weigh-ins {range} to compare',
-  progressMWeight: 'Weight', progressMSleep: 'Sleep', progressMRhr: 'Resting heart rate', progressMSteps: 'Steps', progressMKcal: 'Calories', progressMTraining: 'Training', progressMScore: 'Day score',
+  progressMWeight: 'Weight', progressMSleep: 'Sleep', progressMRhr: 'Resting heart rate', progressMSteps: 'Steps', progressMActive: 'Active energy', progressMKcal: 'Calories', progressMTraining: 'Training', progressMScore: 'Day score',
   progressRhrShort: 'Resting HR', progressGoalIs: 'Goal {v}', progressGoalLower: 'goal {v}', progressGoal: 'Goal', progressGoalMet: 'Goal met',
   progressSrcOura: 'Oura', progressSrcApple: 'Apple Health', progressSrcInsight: 'Logged in Insight', progressSrcAppleAndInsight: 'Apple Health and Insight', progressSrcAppleAndOura: 'Apple Health and Oura',
   progressAboutWeight: 'Weigh-ins from your scale arrive through Apple Health, or you can log one here. The line marks the goal you set.',
@@ -1273,6 +1273,7 @@ export const en = {
   progressAboutHrvApple: 'Heart rate variability from Apple Health. Higher than your usual often means you have recovered well. The shaded band is your usual range.',
   progressAboutRhr: 'Your lowest heart rate while you sleep. Lower than your usual often means you have recovered well.',
   progressAboutSteps: 'Steps from your iPhone and Apple Watch, through Apple Health. Your goal is {goal} a day. Today is still going, so its bar is lighter.',
+  progressAboutActive: 'Calories burned moving, from your iPhone and Apple Watch through Apple Health. Today is still going, so its bar is lighter.',
   progressAboutKcal: 'Calories you logged in Food. Today is still going, so its bar is lighter.',
   progressAboutTraining: 'Minutes of training you logged each day. Rest days show as gaps.',
   progressPTraining: 'Training', progressPFood: 'Food', progressPSleep: 'Sleep',

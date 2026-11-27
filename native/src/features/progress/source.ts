@@ -118,6 +118,7 @@ export function buildProgress({ store, now, demo, health, recovery, ring, sleepG
 
   /* health: steps and sleep from Apple Health and Oura (merged per day), HRV and resting heart rate from one source only */
   d.days.steps = tail(health?.steps);
+  d.days.active = tail(health?.activeKcal);
   d.days.sleep = tail(health?.sleepHours);
   const fromOf = (from: ('oura' | 'apple' | null)[] | undefined, v: unknown[] | null | undefined) => {
     if (!from || !v || from.length !== v.length) return undefined;

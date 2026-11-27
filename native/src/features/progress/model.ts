@@ -8,7 +8,7 @@ import type { Unit } from '@/features/onboarding/model';
  */
 export type Range = 'week' | 'month' | 'year';
 export const RANGES: readonly Range[] = ['week', 'month', 'year'];
-export type MetricKey = 'weight' | 'sleep' | 'hrv' | 'rhr' | 'steps' | 'kcal' | 'training' | 'score';
+export type MetricKey = 'weight' | 'sleep' | 'hrv' | 'rhr' | 'steps' | 'active' | 'kcal' | 'training' | 'score';
 export type Daily = (number | null)[];
 /** How many days of history each daily list holds. */
 export const HISTORY = 365;
@@ -121,11 +121,14 @@ export const METRICS: Record<MetricKey, MetricInfo> = {
   hrv: { key: 'hrv', kind: 'line', color: 'recovery', icon: 'heart', best: 'max', dec: 0, line: true, partialToday: false },
   rhr: { key: 'rhr', kind: 'line', mini: 'dots', color: 'recovery', icon: 'heart', best: 'min', dec: 0, line: true, partialToday: false },
   steps: { key: 'steps', kind: 'bar', mini: 'heat', color: 'training', icon: 'steps', best: 'max', dec: 0, line: false, partialToday: true },
+  active: { key: 'active', kind: 'bar', color: 'training', icon: 'calories', best: 'max', dec: 0, line: false, partialToday: true },
   kcal: { key: 'kcal', kind: 'bar', mini: 'dots', color: 'food', icon: 'calories', best: 'max', dec: 0, line: false, partialToday: true },
   training: { key: 'training', kind: 'bar', color: 'training', icon: 'workouts', best: 'max', dec: 0, line: false, partialToday: true, yearSum: true },
   score: { key: 'score', kind: 'bar', color: 'accent', icon: 'score', best: 'max', dec: 0, line: false, partialToday: false },
 };
 export const TREND_KEYS: readonly Exclude<MetricKey, 'score'>[] = ['weight', 'sleep', 'hrv', 'rhr', 'steps', 'kcal', 'training'];
+/** Trends a screen can open. Active energy is opened from Home's Active energy tile and is not one of Progress's own list. */
+export const TREND_OPEN: readonly Exclude<MetricKey, 'score'>[] = [...TREND_KEYS, 'active'];
 
 /** A metric's value in what the person sees: weight in their unit, the rest as stored. */
 export const shown = (key: MetricKey, v: number | null, unit: Unit) => v == null ? null : key === 'weight' && unit === 'lb' ? v * LB : v;
@@ -227,7 +230,7 @@ export function emptyProgress(today: string, unit: Unit, now = Date.now()): Prog
   const blank = (): Daily => Array(HISTORY).fill(null);
   return {
     today, now, demo: false, unit,
-    days: { weight: blank(), sleep: blank(), hrv: blank(), rhr: blank(), steps: blank(), kcal: blank(), training: blank(), score: blank() },
+    days: { weight: blank(), sleep: blank(), hrv: blank(), rhr: blank(), steps: blank(), active: blank(), kcal: blank(), training: blank(), score: blank() },
     pillars: { training: null, food: null, sleep: null }, yesterdayScore: null, weekPillars: Array.from({ length: 7 }, () => ({ training: null, food: null, sleep: null })),
     baseline: { score: null, training: null, food: null, sleep: null }, dayNotes: Array(7).fill(''),
     night: null, wake: Array(7).fill(null), hrvBand: null, rhrBand: null, sleepGoalMin: 480, stepGoal: 8000,

@@ -32,7 +32,7 @@ jest.mock('expo-crypto', () => ({ randomUUID: () => 'id' }));
 jest.mock('expo-notifications', () => { throw new Error('expo-notifications is not in this build'); });
 
 const SCREENS: [string, () => React.ReactElement][] = [
-  ['day score', () => <DayScoreScreen />], ['trend', () => <TrendScreen metric="weight" range="month" />], ['training trend', () => <TrendScreen metric="training" />],
+  ['day score', () => <DayScoreScreen />], ['trend', () => <TrendScreen metric="weight" range="month" />], ['training trend', () => <TrendScreen metric="training" />], ['active energy trend', () => <TrendScreen metric="active" />],
   ['weekly report', () => <WeeklyScreen />], ['sleep', () => <SleepScreen />], ['body', () => <BodyScreen />], ['photos', () => <PhotosScreen />],
   ['log weight', () => <LogWeightSheet />], ['photo', () => <PhotoCaptureSheet />], ['measurements', () => <MeasurementsSheet />], ['export', () => <ExportSheet />],
 ];
@@ -86,6 +86,16 @@ test('a pillar with no data leaves the score to the others, so what each adds su
   // Only food has data, so the score is food's alone, not a third of it.
   expect(screen.getByLabelText('Training adds No data, Food 100.0, Sleep No data, total 100')).toBeTruthy();
   expect(screen.getByText('+100.0')).toBeTruthy();
+});
+
+test('the Active energy trend shows Active energy, about calories burned, and names Apple Health', async () => {
+  jest.mocked(useAuth).mockReturnValue({ repository: memoryRepository(), pending: 0, syncStatus: 'idle', demo: false } as ReturnType<typeof useAuth>);
+  await render(<ThemeProvider><TrendScreen metric="active" /></ThemeProvider>);
+  const all = words(screen.toJSON() as ReactTestRendererJSON).join(' | ');
+  expect(all).toMatch(/Active energy/);
+  expect(all).toMatch(/Apple Health/);
+  expect(all).toMatch(/Active energy, this week/);
+  expect(all).toMatch(/Calories burned moving/);
 });
 
 describe('the photo reminder in a build without notifications', () => {
