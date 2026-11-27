@@ -117,13 +117,18 @@ describe('no notification prompt until a reminder is turned on', () => {
     expect(n.replace).not.toHaveBeenCalled();
     for (const key of ['workout', 'rest', 'weekly', 'food', 'oura']) expect(checked(key)).toBe(false);
   });
-  test('only the Reminders page can ask: no launch, onboarding or other code reaches the notifications module', () => {
+  test('only turning a reminder on can ask: no launch, onboarding or other code reaches the notifications module', () => {
     const files: string[] = [];
     const walk = (dir: string) => { for (const f of readdirSync(dir)) { const p = join(dir, f); if (statSync(p).isDirectory()) walk(p); else if (/\.tsx?$/.test(f)) files.push(p); } };
     walk(join(__dirname, '../src'));
     const rel = (p: string) => p.slice(p.indexOf('src/'));
     expect(files.filter(f => /expo-notifications/.test(readFileSync(f, 'utf8'))).map(rel)).toEqual(['src/features/reminders/notifier.ts']);
-    expect(files.filter(f => /features\/reminders\/notifier/.test(readFileSync(f, 'utf8'))).map(rel)).toEqual(['src/features/settings/pages.tsx']);
+    // The Reminders page and a routine's Remind me are the two switches that turn a reminder on.
+    expect(files.filter(f => /features\/reminders\/notifier/.test(readFileSync(f, 'utf8'))).map(rel)).toEqual(['src/features/routines/screens.tsx', 'src/features/settings/pages.tsx']);
+    // Asking goes through one helper, called only from those two switches; the app-wide sync never asks.
+    expect(files.filter(f => /askForReminders\(/.test(readFileSync(f, 'utf8'))).map(rel))
+      .toEqual(['src/features/reminders/notifier.ts', 'src/features/routines/screens.tsx', 'src/features/settings/pages.tsx']);
+    expect(files.filter(f => /features\/reminders\//.test(f) && /\.request\(/.test(readFileSync(f, 'utf8'))).map(rel)).toEqual(['src/features/reminders/notifier.ts']);
     expect(files.filter(f => /requestPermissions|\.request\(\)/.test(readFileSync(f, 'utf8')) && /onboarding|_layout|\(tabs\)/.test(f)).map(rel)).toEqual([]);
   });
 });

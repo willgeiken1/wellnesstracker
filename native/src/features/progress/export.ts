@@ -7,7 +7,8 @@ import { meals } from '@/features/food/model';
 import { normalize, type RoutinesState } from '@/features/routines/model';
 import { ROUTINES_KEY } from '@/features/routines/store';
 import { rpeKey } from '@/features/workout/logger/model';
-import { addDays, finite, type ProgressData } from './model';
+import { cardioName } from '@/features/workout/training-data';
+import { addDays, daysBetween, finite, type ProgressData } from './model';
 import { metricView } from './metric';
 
 /**
@@ -57,7 +58,9 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
       rows.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
       files.push({ name: 'weight-and-body.csv', csv: csv(['date', 'measure', 'value', 'unit', 'source'], rows) });
     } else if (kind === 'sleep') {
-      files.push({ name: 'sleep.csv', csv: csv(['date', 'hours_in_bed', 'source'], daily('sleep').map(([day, h]) => [day, h, metricView(d, 'sleep').src])) });
+      // Each night says where it came from: Oura, or Apple Health where the ring had nothing that night.
+      const v = d.days.sleep, from = (day: string) => d.sleepFrom && d.sleepFrom.length === v.length ? d.sleepFrom[v.length - 1 - daysBetween(day, d.today)] : null;
+      files.push({ name: 'sleep.csv', csv: csv(['date', 'hours_in_bed', 'source'], daily('sleep').map(([day, h]) => [day, h, from(day) ?? metricView(d, 'sleep').src])) });
     } else if (kind === 'heart') {
       // HRV keeps its one source: Apple Health's is SDNN and Oura's is RMSSD, so the column says which.
       const hrv = new Map(daily('hrv')), rhr = new Map(daily('rhr')), days = [...new Set([...hrv.keys(), ...rhr.keys()])].sort();
@@ -85,6 +88,12 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
         }
       }
       files.push({ name: 'workouts-and-sets.csv', csv: csv(['date', 'workout', 'exercise', 'set', 'weight', 'unit', 'reps', 'rpe', 'tag'], rows) });
+      // Cardio is logged on its own (machines, runs and rides), so it gets its own file when there is any.
+      const cardio = repo.list('cardio_sessions').filter(c => keep(c.data.day)).sort(byDay).map(c => {
+        const ms = num(c.data.duration_ms), m = num(c.data.distance_m);
+        return [c.data.day, cardioName(String(c.data.kind ?? '')), ms == null ? null : Math.round(ms / 60000), m == null ? null : m / 1000, c.data.notes ?? ''];
+      });
+      if (cardio.length) files.push({ name: 'cardio.csv', csv: csv(['date', 'activity', 'minutes', 'distance_km', 'notes'], cardio) });
     } else if (kind === 'rout') {
       const ex = group(repo.list('routine_exercises'), 'routine_id'), rows: unknown[][] = [];
       for (const r of repo.list('routines').sort(byPos)) for (const e of (ex.get(r.id) ?? []).sort(byPos))

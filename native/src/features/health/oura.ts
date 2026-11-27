@@ -91,9 +91,10 @@ export async function readOuraDays(source: OuraSource | null, days: readonly str
   if (!status?.connected) return null;
   void refreshOura(source, status, now).then(fresh => { if (fresh) onFresh?.(); });
   const rows = new Map((await source.days(days[0], days[days.length - 1])).map(row => [row.day, row]));
+  const sleepHours = days.map(day => { const seconds = rows.get(day)?.sleepSeconds; return typeof seconds === 'number' && seconds > 0 ? seconds / 3600 : null; });
   return {
     steps: days.map(day => { const steps = rows.get(day)?.steps; return typeof steps === 'number' && Number.isFinite(steps) ? Math.round(steps) : null; }),
-    sleepHours: days.map(day => { const seconds = rows.get(day)?.sleepSeconds; return typeof seconds === 'number' && seconds > 0 ? seconds / 3600 : null; }),
+    sleepHours, sleepFrom: sleepHours.map(h => h == null ? null : 'oura'),
     // Only steps and sleep are read from Oura; everything else comes from Apple Health alone.
     activeKcal: null, exerciseMinutes: null, waterMl: null, mindfulMinutes: null, bodyFat: null,
   };
@@ -105,7 +106,11 @@ export function mergeHealthDays(apple: HealthDays | null, ring: HealthDays | nul
   if (!apple || !ring) return apple ?? ring;
   const pick = (first: DaySeries | null, second: DaySeries | null) => !first || !second ? first ?? second
     : first.map((value, i) => value !== null && value > 0 ? value : second[i] ?? value);
-  return { ...apple, steps: pick(apple.steps, ring.steps), sleepHours: pick(ring.sleepHours, apple.sleepHours) };
+  const sleepHours = pick(ring.sleepHours, apple.sleepHours);
+  // Each day keeps where its sleep came from: Oura's night, or Apple Health's where the ring has none.
+  const from = (h: DaySeries | null, i: number) => h?.[i] != null && h[i]! > 0;
+  const sleepFrom = sleepHours?.map((h, i) => h == null ? null : from(ring.sleepHours, i) ? 'oura' as const : from(apple.sleepHours, i) ? 'apple' as const : null);
+  return { ...apple, steps: pick(apple.steps, ring.steps), sleepHours, ...(sleepFrom ? { sleepFrom } : {}) };
 }
 
 /** What Oura adds to Insights › Recovery, oldest day first, null for a day with no reading. Held in memory only. */

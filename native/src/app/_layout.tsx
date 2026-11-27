@@ -30,6 +30,7 @@ import { setAndroidCopy, t } from '@/i18n/en';
 import { OnboardingDraftProvider } from '../features/onboarding/screen';
 import { PrivacyCover } from '@/features/privacy-lock/cover';
 import { useRestLiveActivity } from '@/features/workout/live-activity';
+import { ReminderSync } from '@/features/reminders/sync';
 import { LaunchOverlay } from '@/features/onboarding/launch';
 
 import { LegacyImportPrompt, SharedImportEntry } from '../features/importer/screen';
@@ -88,6 +89,8 @@ function Application() {
     {auth.demoTransferError&&<><ThemedText accessibilityRole="alert">{t('demoTransferFailed')}</ThemedText><Button label={t('tryAgain')} onPress={()=>auth.retryDemoTransfer?.()}/></>}
     {auth.ready && <NavigationShell access={!!auth.session || auth.demo || auth.guest === true || auth.phoneOnly === true} signedIn={!!auth.session} />}
     {auth.ready && <RestLiveActivity />}
+    {/* Keeps the reminders on the phone in step with what they depend on. Reads what iOS allows; never asks. */}
+    {auth.ready && <ReminderSync repository={auth.repository} />}
     {auth.ready && <PrivacyCover access={!!auth.session || auth.demo || auth.guest === true || auth.phoneOnly === true} />}
   </ThemeProvider>;
 }

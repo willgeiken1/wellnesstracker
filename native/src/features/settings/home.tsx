@@ -17,6 +17,7 @@ import { workoutRest } from './workout-data';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { AvatarPhoto, useProfilePhoto } from './avatar-photo';
 import { GROUPS, SECTIONS, searchSettings, type SectionId } from './sections';
+import { remindersOn } from '@/features/reminders/plan';
 
 /** The version the way iOS shows it, "1.0 (1)": a zero patch number is left off ("1.0.0" reads 1.0), any other stays. */
 export function versionLabel(version: string | undefined, build: string | undefined) {
@@ -75,7 +76,7 @@ export function summary(id: SectionId, p: SettingsPrefs, theme: string, connecte
     case 'connections': return st('settingsNConnected', { n: connected });
     case 'account': return st(syncs ? 'settingsSyncOn' : 'settingsSyncOff');
     // Without notifications (the phone-only build) no reminder is on, whatever was chosen before.
-    case 'reminders': if (o.limited) return st('settingsOff'); return st('settingsNOn', { n: (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => p.rem[key]).length });
+    case 'reminders': if (o.limited) return st('settingsOff'); return st('settingsNOn', { n: remindersOn(p.rem) });
     case 'privacy': return st(p.priv.lock ? 'settingsFaceId' : 'settingsNoLock');
     case 'appearance': return theme;
     case 'units': return p.units.weight === 'lb' ? 'US' : st('settingsMetric');

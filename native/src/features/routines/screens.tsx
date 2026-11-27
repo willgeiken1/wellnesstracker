@@ -5,9 +5,11 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 import { BarChart, EmptyState, Card, Icon, KitText, List, ListRow, NavBar, NavButton, SectionHeader, SegmentedControl, Tappable, alpha, useKit } from '@/components/kit';
 import { capitals } from '@/components/kit-style';
 import { showToast } from '@/features/shell/toast';
+import { askForReminders } from '@/features/reminders/notifier';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import {
@@ -18,6 +20,21 @@ import { routinesRoutes } from './nav';
 import { ItemList, ItemRow, OffRow } from './rows';
 import { SunPath, Thumb } from './sun-path';
 import { useRoutines, type RoutinesStore } from './store';
+
+/** The phone-only build cannot send notifications, so Remind me shows as coming later there. */
+const REMIND_LATER = Constants.expoConfig?.extra?.phoneOnly === true;
+/** Remind me, as Settings, Reminders turns a reminder on: iOS is asked once, the first time; if it says no (or said no
+ * before), the switch goes back off and says where to allow notifications. The app's root puts it on the phone. */
+function turnRemind(store: RoutinesStore, id: string, name: string, on: boolean) {
+  store.setRemind(id, on);
+  showToast(fill(t(on ? 'routinesRemindOn' : 'routinesRemindOff'), { name }), { color: 'sleep' });
+  if (!on) return;
+  void askForReminders().then(s => {
+    if (s !== 'denied') return;
+    store.setRemind(id, false);
+    showToast(t('settingsRemNeedsIos'), { color: 'warning' });
+  });
+}
 
 /** A pushed screen's frame: the page colour, the kit's nav bar, a 16 pt gutter. */
 function Page({ children, bar, testID }: { children: React.ReactNode; bar: React.ReactNode; testID?: string }) {
@@ -67,8 +84,9 @@ export function RoutineDetail({ store, rid }: { store: RoutinesStore; rid: strin
     <SectionHeader title={t('routinesSettings')} />
     <List>
       <ListRow icon="plus" color="sleep" title={fill(t('routinesAddItemTo'), { name: r.name })} onPress={() => routinesRoutes.add({ routine: r.id })} />
-      <ListRow icon="bell" color="sleep" title={t('routinesRemindMe')} sub={fill(t('routinesRemindSub'), { time: h12(r.from) })} toggle={r.remind}
-        onToggle={on => { store.setRemind(r.id, on); showToast(fill(t(on ? 'routinesRemindOn' : 'routinesRemindOff'), { name: r.name }), { color: 'sleep' }); }} />
+      {REMIND_LATER ? <ListRow icon="bell" color="sleep" title={t('routinesRemindMe')} sub={t('settingsLaterVersion')} toggle={false} disabled />
+        : <ListRow icon="bell" color="sleep" title={t('routinesRemindMe')} sub={fill(t('routinesRemindSub'), { time: h12(r.from) })} toggle={r.remind}
+          onToggle={on => turnRemind(store, r.id, r.name, on)} />}
       {pause ? <ListRow icon="pause" color="sleep" title={fill(t('routinesResumeName'), { name: r.name })} sub={fill(t('routinesPausedUntil'), { date: shortDate(pause.until) })} chevron={false}
         onPress={() => { store.resume(r.id); showToast(fill(t('routinesBackOn'), { name: r.name }), { color: 'sleep' }); }} />
         : <ListRow icon="pause" color="sleep" title={t('routinesPauseFor')} sub={t('routinesUntilPick')} onPress={() => routinesRoutes.pause(r.id)} />}

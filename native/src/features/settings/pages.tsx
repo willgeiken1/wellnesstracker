@@ -31,8 +31,9 @@ import { backupWhen } from './data-actions';
 import { rateInsight } from './rate';
 import { switchLock } from '@/features/privacy-lock/turn-on';
 import { useLockAvailable } from '@/features/privacy-lock/cover';
-import { isReminderSwitch, plannedWorkoutDays, planReminders, type PlannedReminder } from '@/features/reminders/plan';
-import { notifier, syncReminders, type NotifyPermission } from '@/features/reminders/notifier';
+import { OURA_ALERT_AVAILABLE, isReminderSwitch, remindersOn } from '@/features/reminders/plan';
+import { askForReminders, notifier, type NotifyPermission } from '@/features/reminders/notifier';
+import { useReminderSync } from '@/features/reminders/sync';
 
 const KG = 2.20462;
 const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return `${h} h${m ? ` ${m} m` : ''}`; };
@@ -293,14 +294,14 @@ const REM_OFF: SettingsPrefs['rem'] = { v: 2, cap: false, workout: false, workou
  *
  * Every reminder starts off. iOS is first asked for notifications when the person turns one on here: if they say no
  * (or said no before), the switch goes back off and a note says where to allow them. Whenever iOS allows them, the
- * time-based reminders that are on are put on the phone's schedule again after each change. */
+ * reminders that are on are put on the phone's schedule again after each change (the app's root does the same from
+ * launch). The Reconnect Oura alert needs the server to notice Oura going quiet, so it shows as coming later. */
 export function RemindersPage({ limited = false }: { limited?: boolean }) {
   const [p, set] = useSettingsPrefs();
   const repository = useOptionalAuth()?.repository ?? null;
   const [perm, setPerm] = useState<NotifyPermission | null>(null);
-  const r = limited ? REM_OFF : p.rem, n = (['workout', 'rest', 'weekly', 'food', 'oura'] as const).filter(key => r[key]).length;
+  const r = limited ? REM_OFF : p.rem, n = remindersOn(r);
   const times = ['6:00 AM', '7:00 AM', '12:00 PM', '5:30 PM', '7:00 PM'].map(v => ({ v, l: clock(v, p) }));
-  const days = plannedWorkoutDays(repository), plan = JSON.stringify(planReminders(p.rem, days));
   // Reads what iOS allows (never asks), then keeps the schedule in step with the switches while it is allowed.
   useEffect(() => {
     if (limited) return;
@@ -308,23 +309,19 @@ export function RemindersPage({ limited = false }: { limited?: boolean }) {
     void notifier().permission().then(s => { if (live) setPerm(s); });
     return () => { live = false; };
   }, [limited]);
-  useEffect(() => {
-    if (!limited && perm === 'granted') void syncReminders(JSON.parse(plan) as PlannedReminder[]);
-  }, [limited, perm, plan]);
+  useReminderSync(repository, p.rem, !limited && perm === 'granted');
   const turn = (key: keyof SettingsPrefs['rem'], on: boolean) => {
     set(`rem.${key}`, on);
     if (!on || !isReminderSwitch(key)) return;
     void (async () => {
-      const n = notifier();
-      let s = perm ?? await n.permission();
-      if (s === 'undetermined') s = await n.request();
+      const s = perm && perm !== 'undetermined' ? perm : await askForReminders();
       setPerm(s);
       // Without notifications in this build the choice is only kept; once iOS has said no, it would never arrive.
       if (s === 'denied') { set(`rem.${key}`, false); showToast(st('settingsRemNeedsIos'), { color: 'warning' }); }
     })();
   };
-  const tog = (title: string, key: keyof SettingsPrefs['rem'], sub?: string, value?: string) =>
-    <ListRow key={key} testID={`reminders-${key}`} title={title} sub={sub} value={value} toggle={!!r[key]} disabled={limited} onToggle={v => turn(key, v)} />;
+  const tog = (title: string, key: keyof SettingsPrefs['rem'], sub?: string, value?: string, later = false) =>
+    <ListRow key={key} testID={`reminders-${key}`} title={title} sub={sub} value={value} toggle={!later && !!r[key]} disabled={limited || later} onToggle={v => { if (!later) turn(key, v); }} />;
   return <SetPage back={st('settings')} title={st('settingsRemindersTitle')} testID="settings-reminders">
     <Hero icon="bell" color="danger" title={st('settingsOnlyWhatHelps')} body={limited ? st('settingsRemHeroLater') : st(r.cap ? 'settingsRemHeroCap' : 'settingsRemHero', { n })} />
     <Gap />
@@ -345,7 +342,7 @@ export function RemindersPage({ limited = false }: { limited?: boolean }) {
       {r.food ? tog(st('settingsDinner'), 'dinner', undefined, clock('8:00 PM', p)) : null}
     </List>
     <H>{st('settingsConnectionsTitle')}</H>
-    <List>{tog(st('settingsOuraAlert'), 'oura', st('settingsOuraAlertSub'))}</List>
+    <List>{tog(st('settingsOuraAlert'), 'oura', st(OURA_ALERT_AVAILABLE || limited ? 'settingsOuraAlertSub' : 'settingsOuraAlertLater'), undefined, !OURA_ALERT_AVAILABLE)}</List>
     {limited ? null : <>
       <Gap />
       <List footer={st('settingsIosNotifFoot')}>

@@ -5,6 +5,7 @@ import { WorkoutOptions } from '../../data/workout/options';
 import { WorkoutStore, type Draft } from '../../data/workout/store';
 import { PlanStore } from '../plans/store';
 import { SplitStore } from '../splits/store';
+import { loadSettingsPrefs, SETTINGS_PREFS_KEY, withPref } from '../settings/prefs-model';
 
 /** The ten muscle groups the Training tab counts, and the library muscles each one gathers. */
 export const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'] as const;
@@ -83,8 +84,9 @@ export class TrainingData {
   }
   kg(kg: number) { return displayWeight(kg, this.unit); }
 
-  goalMin() { const g = this.repo.localGet<number>('training.goalMin'); return typeof g === 'number' && g > 0 ? g : 60; }
-  setGoalMin(min: number) { this.repo.localSave('training.goalMin', Math.max(5, Math.min(600, Math.round(min)))); }
+  /** The daily training goal in minutes: the one set in Settings, so Training, Home and Settings agree. */
+  goalMin() { return loadSettingsPrefs(this.repo).goals.train; }
+  setGoalMin(min: number) { this.repo.localSave(SETTINGS_PREFS_KEY, withPref(loadSettingsPrefs(this.repo), 'goals.train', Math.max(10, Math.min(180, Math.round(min))))); }
   planName() { return this.repo.localGet<string>('plans:name') || ''; }
 
   live(): LiveView | null {

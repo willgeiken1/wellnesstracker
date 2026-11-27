@@ -1,6 +1,8 @@
 import type { Repository } from '../../data/repository';
 import { compareRows } from '../../data/rows';
 import { t } from '../../i18n/en';
+import { WorkoutStore } from '../../data/workout/store';
+import { displayWeight, toKg } from '../../core/workout/rules';
 export const ONBOARDING_STEPS = ['welcome', 'about', 'start'] as const;
 export type Unit = 'kg' | 'lb';
 export type Activity = 'sitting' | 'light' | 'active' | 'very';
@@ -80,7 +82,19 @@ export function saveProfileName(repo:Repository,name:string) {
 export function saveProfileUnit(repo:Repository,unit:Unit) {
   const current=repo.list('profile').sort(compareRows).at(-1);
   if(!current||current.data.weight_unit===unit)return;
-  repo.save('profile',{...current.data,weight_unit:unit},current.id);
+  // Weights typed but not yet logged in a workout that's going are shown in the new unit, as the same load.
+  const store=new WorkoutStore(repo),live=store.active(),entries=live?store.entries(live.id):[];
+  const before=new Map(entries.map(e=>[e.id,store.unit(e.id)]));
+  repo.atomic(()=>{
+    repo.save('profile',{...current.data,weight_unit:unit},current.id);
+    for(const e of entries){
+      const from=before.get(e.id)!,to=store.unit(e.id),drafts=repo.localGet<{weight:string;rightWeight?:string}[]>(`draft:${e.id}`);
+      if(from===to||!drafts)continue;
+      const convert=(w:string)=>w&&Number.isFinite(Number(w))?String(displayWeight(toKg(Number(w),from),to)):w;
+      repo.localSave(`draft:${e.id}`,drafts.map(d=>({...d,weight:convert(d.weight),...(d.rightWeight!==undefined?{rightWeight:convert(d.rightWeight)}:{})})));
+      drafts.forEach((_,i)=>{repo.localSave(`input:${e.id}:${i}:weight`,null);repo.localSave(`input:${e.id}:${i}:right:weight`,null);});
+    }
+  });
 }
 export function finishOnboarding(repo:Repository,input:ProfileInput,template:'empty'|'fullBody',targets:Targets|null,day=today()) {
   if(!validProfile(input,day))throw new Error('Invalid profile.');

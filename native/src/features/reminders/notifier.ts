@@ -3,7 +3,8 @@
  *
  * expo-notifications is loaded only if it is in the build: until it is installed, every reminder choice is still saved
  * and shown, `permission()` reads 'unavailable', and nothing is asked or scheduled. iOS is only ever asked by
- * `request()`, which only the Reminders page calls, when the person turns a reminder on (never at launch or during setup). */
+ * `request()`, through `askForReminders()`, when the person turns a reminder on: on the Reminders page or a routine's
+ * Remind me (never at launch or during setup). The app-wide sync only reads what iOS allows. */
 import type { PlannedReminder } from './plan';
 
 export type NotifyPermission = 'granted' | 'denied' | 'undetermined' | 'unavailable';
@@ -25,8 +26,11 @@ interface ExpoNotifications {
   requestPermissionsAsync(p?: { ios?: { allowAlert?: boolean; allowSound?: boolean; allowBadge?: boolean } }): Promise<{ status: string; granted: boolean; ios?: { status?: number } }>;
   getAllScheduledNotificationsAsync(): Promise<{ identifier: string }[]>;
   cancelScheduledNotificationAsync(identifier: string): Promise<void>;
-  scheduleNotificationAsync(r: { identifier: string; content: { title: string; body: string; sound?: boolean }; trigger: { type: 'weekly'; weekday: number; hour: number; minute: number } }): Promise<string>;
+  scheduleNotificationAsync(r: { identifier: string; content: { title: string; body: string; sound?: boolean }; trigger: WeeklyTrigger | DateTrigger }): Promise<string>;
 }
+/** SDK 58's SchedulableTriggerInputTypes.WEEKLY ('weekly') and .DATE ('date') trigger inputs. */
+type WeeklyTrigger = { type: 'weekly'; weekday: number; hour: number; minute: number };
+type DateTrigger = { type: 'date'; date: number };
 
 const unavailable: Notifier = {
   permission: async () => 'unavailable',
@@ -49,9 +53,12 @@ function expoNotifier(N: ExpoNotifications): Notifier {
     replace: async list => {
       const scheduled = await N.getAllScheduledNotificationsAsync();
       for (const s of scheduled) if (s.identifier.startsWith(REMINDER_ID_PREFIX)) await N.cancelScheduledNotificationAsync(s.identifier);
+      const now = Date.now();
       for (const r of list) {
+        // A one-off whose moment has passed has nothing left to say.
+        if (r.at != null && !(r.at > now)) continue;
         await N.scheduleNotificationAsync({ identifier: REMINDER_ID_PREFIX + r.id, content: { title: r.title, body: r.body, sound: true },
-          trigger: { type: 'weekly', weekday: expoWeekday(r.weekday), hour: r.hour, minute: r.minute } });
+          trigger: r.at != null ? { type: 'date', date: r.at } : { type: 'weekly', weekday: expoWeekday(r.weekday), hour: r.hour, minute: r.minute } });
       }
     },
   };
@@ -71,11 +78,42 @@ export function notifier(): Notifier { return override ?? (loaded ??= load()); }
 /** Test hook: stand in for the phone's notifications (null goes back to the real one). */
 export function setNotifierForTests(n: Notifier | null) { override = n; }
 
-/** Puts the planned reminders on the phone, only if iOS already allows notifications. Never asks. */
-export async function syncReminders(list: readonly PlannedReminder[], n: Notifier = notifier()): Promise<boolean> {
+/* Someone answered the iOS prompt: the app-wide sync listens, so what was turned on before the answer goes on now. */
+let asked = 0;
+const askedListeners = new Set<() => void>();
+export const askedCount = () => asked;
+export function subscribeAsked(l: () => void) { askedListeners.add(l); return () => { askedListeners.delete(l); }; }
+
+/**
+ * For a switch the person just turned on: what iOS allows, asking once (the system prompt) only if it has never been
+ * asked. 'denied' means the reminder can never arrive, so the caller turns it back off and says where to allow it.
+ */
+export async function askForReminders(n: Notifier = notifier()): Promise<NotifyPermission> {
+  let s: NotifyPermission;
   try {
-    if (await n.permission() !== 'granted') return false;
-    await n.replace(list);
-    return true;
-  } catch { return false; }
+    s = await n.permission();
+    if (s === 'undetermined') { s = await n.request(); asked++; askedListeners.forEach(l => l()); }
+  } catch { s = 'unavailable'; }
+  return s;
+}
+
+/** What each notifier was last given, so a plan that has not changed is not put on the phone again. */
+const lastSynced = new WeakMap<Notifier, string>();
+let queue: Promise<unknown> = Promise.resolve();
+/** Puts the planned reminders on the phone, only if iOS already allows notifications. Never asks. Calls run one after
+ * another, so two screens syncing at once cannot cross. */
+export function syncReminders(list: readonly PlannedReminder[], n: Notifier = notifier()): Promise<boolean> {
+  const key = JSON.stringify(list);
+  const run = async () => {
+    try {
+      if (await n.permission() !== 'granted') { lastSynced.delete(n); return false; }
+      if (lastSynced.get(n) === key) return true;
+      await n.replace(list);
+      lastSynced.set(n, key);
+      return true;
+    } catch { lastSynced.delete(n); return false; }
+  };
+  const next = queue.then(run, run);
+  queue = next;
+  return next;
 }

@@ -9,6 +9,8 @@ export type DaySeries = (number | null)[];
 export type HealthDays = {
   steps: DaySeries | null; sleepHours: DaySeries | null; activeKcal: DaySeries | null; exerciseMinutes: DaySeries | null;
   waterMl: DaySeries | null; mindfulMinutes: DaySeries | null;
+  /** Where each day's sleep came from, beside `sleepHours`, once Apple Health and Oura are merged a day at a time. */
+  sleepFrom?: ('oura' | 'apple' | null)[];
   /** Body-fat readings from the last 90 days, oldest first, as percentages to one decimal. Null when unread. */
   bodyFat: number[] | null;
   /** When the newest body-fat reading was taken, so an old one is shown with its date. Null with no reading. */
@@ -97,5 +99,5 @@ export async function readHealthDays(source: HealthSource | null, days: readonly
     // A night with nothing asleep recorded is no reading, not a night of zero hours.
     sleepHours = days.map(day => { const night = nightOf(day), to = cap(night.to), hours = to > night.from ? hoursAsleep(spans, night.from, to) : 0; return hours > 0 ? hours : null; });
   } catch { sleepHours = null; }
-  return { steps, sleepHours, activeKcal, exerciseMinutes, waterMl, mindfulMinutes, bodyFat, bodyFatAt };
+  return { steps, sleepHours, sleepFrom: sleepHours?.map(h => h == null ? null : 'apple'), activeKcal, exerciseMinutes, waterMl, mindfulMinutes, bodyFat, bodyFatAt };
 }

@@ -29,6 +29,8 @@ export function repeatSession(repo: Repository, sessionId: string) {
   const w = new WorkoutStore(repo), last = repo.get('sessions', sessionId);
   if (!last) return startTraining(repo);
   const routine = last.data.routine_id ? String(last.data.routine_id) : undefined;
+  // With another workout going, the sheet offers to resume it, and Resume opens the logger.
+  if (w.active()) return startTraining(repo);
   if (routine && repo.get('routines', routine)?.deleted_at === null) return startTraining(repo, routine);
   const s = startTraining(repo, undefined, () => {});
   if (s) {
