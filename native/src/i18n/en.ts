@@ -1511,7 +1511,7 @@ export const en = {
   settingsDevices: 'Devices', settingsThisIphone: 'This iPhone', settingsActiveNow: 'Active now', settingsThisDevice: 'This device', settingsUsingIphone: 'You are using this iPhone',
   settingsMemberSince: 'Member since {v}.', settingsPhoneOnlyFoot: 'Everything you log is kept on this iPhone.', settingsExampleFoot: 'You are looking around with example data. Nothing is saved.',
   settingsBackToLog: 'Leave the example data', settingsLookAround: 'Look around first', settingsLookAroundSub: 'Explore with example data',
-  settingsSignOut: 'Sign out', settingsSignOutQ: 'Sign out of Insight?', settingsSignOutMsg: 'Your data stays in your account. This iPhone’s copy is removed until you sign in again.', settingsSignedOut: 'Signed out',
+  settingsSignOut: 'Sign out', settingsSignOutQ: 'Sign out of Insight?', settingsSignOutMsg: 'Your data stays in your account. This iPhone’s copy is removed until you sign in again. Routines are kept only on this iPhone, so signing out erases them, and a backup can’t bring them back.', settingsSignedOut: 'Signed out',
   settingsRemindersTitle: 'Reminders', settingsOnlyWhatHelps: 'Only what helps',
   settingsRemHero: 'Every reminder here is tied to something you planned. {n} are on.',
   settingsRemHeroCap: 'Every reminder here is tied to something you planned. {n} are on, and you will get at most 2 a day.',
