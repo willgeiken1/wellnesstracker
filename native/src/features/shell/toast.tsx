@@ -12,13 +12,21 @@ import { alpha, mix, shellColors } from './colors';
 export interface ToastOptions { color?: 'success' | 'warning' | 'accent' | 'training' | 'food' | 'recovery' | 'sleep' | 'water'; ms?: number;
   /** A button at the right, such as Undo. Pressing it runs `onAction` and closes the toast. */
   action?: { label: string; onAction: () => void } }
-let current: { text: string; color: NonNullable<ToastOptions['color']>; ms: number; id: number; action?: ToastOptions['action'] } | null = null;
+let current: { text: string; color: NonNullable<ToastOptions['color']>; ms: number; at: number; id: number; action?: ToastOptions['action'] } | null = null;
 let seq = 0;
 const listeners = new Set<() => void>();
+const changed = () => listeners.forEach(l => l());
 export function showToast(text: string, options: ToastOptions = {}) {
-  current = { text, color: options.color ?? 'success', ms: options.ms ?? 2600, id: ++seq, action: options.action };
-  listeners.forEach(l => l());
+  current = { text, color: options.color ?? 'success', ms: options.ms ?? 2600, at: Date.now(), id: ++seq, action: options.action };
+  changed();
 }
+/**
+ * Ends a toast for every screen, not just the one showing it: once it has faded or its button was pressed, a screen that
+ * mounts later never shows it again, and its action (an Undo that restores a snapshot) can't run a second time.
+ */
+function expireToast(id: number) { if (current?.id === id) { current = null; changed(); } }
+/** Takes a toast's action once: the first press gets it and ends the toast, any later press gets nothing. */
+function takeAction(id: number) { const act = current?.id === id ? current.action : undefined; expireToast(id); return act; }
 const useToast = () => useSyncExternalStore(cb => { listeners.add(cb); return () => { listeners.delete(cb); }; }, () => current, () => current);
 
 /** How the toast moves (motion.css): it springs up 16 pt from 96 percent on the toast spring while it fades in over 180 ms, and
@@ -47,11 +55,12 @@ export function ShellToast({ bottom }: { bottom: number }) {
     o.value = withTiming(1, t.in.fade);
     m.value = t.in.move ? withSpring(1, t.in.move) : 1;
     let gone: ReturnType<typeof setTimeout> | undefined;
+    // A screen that mounts while a toast is up shows it only for what is left of its time.
     const timer = setTimeout(() => {
       o.value = withTiming(0, t.out.fade);
       if (t.out.move) m.value = withTiming(0, t.out.move);
-      gone = setTimeout(() => setGoneId(toast.id), t.out.ms);
-    }, toast.ms);
+      gone = setTimeout(() => { setGoneId(toast.id); expireToast(toast.id); }, t.out.ms);
+    }, Math.max(0, toast.at + toast.ms - Date.now()));
     return () => { clearTimeout(timer); if (gone) clearTimeout(gone); };
   }, [toast, o, m, reduceMotion]);
   const motion = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: DISTANCES.toastRise * (1 - m.value) }, { scale: DISTANCES.toastScale + (1 - DISTANCES.toastScale) * m.value }] }));
@@ -64,7 +73,7 @@ export function ShellToast({ bottom }: { bottom: number }) {
     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
     <ThemedText style={{ flex: 1, color: shell.pillInk, fontFamily: tokens.font.bodyStrong, fontSize: 14, lineHeight: 18, letterSpacing: -0.07 }}>{shown.text}</ThemedText>
     {shown.action && <Tappable dim="text" accessibilityRole="button" accessibilityLabel={shown.action.label} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-      onPress={() => { const act = shown.action; setGoneId(shown.id); act?.onAction(); }}
+      onPress={() => { setGoneId(shown.id); takeAction(shown.id)?.onAction(); }}
       style={{ minHeight: 44, marginVertical: -6, marginRight: -8, paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center' }}>
       <ThemedText style={{ color: shell.dark ? colors.accent : mix(colors.accent, 0.45, shell.pillInk), fontFamily: tokens.font.heading, fontSize: 14, lineHeight: 18 }}>{shown.action.label}</ThemedText>
     </Tappable>}
