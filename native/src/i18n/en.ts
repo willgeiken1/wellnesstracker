@@ -1263,7 +1263,7 @@ export const en = {
  foodOverCap: 'Over', foodUnderCap: 'Under',
   // P5 progress
   progressNoData: 'No data', progressThisWeek: 'This week', progressThisWeekLower: 'this week', progress30Days: '30 days', progress12Months: '12 months',
-  progressLast30: 'Last 30 days', progressLast12: 'Last 12 months', progressIn30: 'in 30 days', progressIn12: 'in 12 months',
+  progressLast30: 'Last 30 days', progressLast12: 'Last 12 months', progressIn30: 'in 30 days', progressIn12: 'in 12 months', progressNoChangeIn: 'Not enough weigh-ins {range} to compare',
   progressMWeight: 'Weight', progressMSleep: 'Sleep', progressMRhr: 'Resting heart rate', progressMSteps: 'Steps', progressMKcal: 'Calories', progressMTraining: 'Training', progressMScore: 'Day score',
   progressRhrShort: 'Resting HR', progressGoalIs: 'Goal {v}', progressGoalLower: 'goal {v}', progressGoal: 'Goal', progressGoalMet: 'Goal met',
   progressSrcOura: 'Oura', progressSrcApple: 'Apple Health', progressSrcInsight: 'Logged in Insight',
@@ -1293,7 +1293,7 @@ export const en = {
   progressWeightEmpty: 'Log a weigh-in, or connect a scale through Apple Health.', progressWeightAria: 'Weight {w}, {ch}.', progressWeightAriaGoal: 'Goal {goal}, {toGo} to go.', progressWeightAriaEta: 'At this pace you reach it around {when}.',
   progressToLower: 'to', progressAround: 'Around {when}', progressToGo: 'to go', progressNoGoal: 'Set a weight goal in Goals to see your pace.', progressNoGoalShort: 'No goal yet', progressToYourGoal: 'to your goal',
   progressStart: 'Start', progressOfLost: 'of {total} lost',
-  progressFatEmpty: 'Body fat shows here from a smart scale or a reading you add.', progressFatAria: 'Body fat {pct} percent, {ch} since {since}.', progressFatAriaMass: 'Fat mass {fat}, lean mass {lean}.',
+  progressFatEmpty: 'Body fat shows here from a smart scale or a reading you add.', progressFatAria: 'Body fat {pct} percent, {ch} since {since}.', progressFatAriaFirst: 'Body fat {pct} percent, the first reading.', progressFatOneReading: 'First reading', progressFatAriaMass: 'Fat mass {fat}, lean mass {lean}.',
   progressLeanFat: 'lean mass, {pct}% fat', progressLeanMass: 'lean mass', progressSince: 'since', progressSmartScale: 'Smart scale', progressFat: 'Fat', progressLean: 'Lean',
   progressMeasWaist: 'Waist', progressMeasChest: 'Chest', progressMeasHips: 'Hips', progressMeasNeck: 'Neck', progressMeasArm: 'Arm', progressMeasThigh: 'Thigh',
   progressMeasureEmpty: 'Add your first measurements with a soft tape.', progressMeasureAria: 'Measurements, {day}, change since {since}:', progressMeasNoThen: 'not measured then',

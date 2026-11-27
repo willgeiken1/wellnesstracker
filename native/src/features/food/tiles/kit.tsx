@@ -12,6 +12,7 @@ import { useFoodRevision } from '../use-food-revision';
 import { readWater } from '../water';
 import { capitals } from '@/components/kit-style';
 import { useEnergyUnit } from '../energy';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 
 /* The Food tiles' own type and parts (pagetiles-food.js: fdt-n, fdt-s, fdt-t, fdt-k, fdt-plus, fdt-btn, fdt-ic, cols). */
 
@@ -149,6 +150,6 @@ export function useDayData(repo: Repository) {
   const sel = useFoodDay();
   const view = dayView(repo, sel.day, { today: sel.today, burned: sel.burned });
   const water = readWater(repo);
-  const eu = useEnergyUnit();
-  return { ...sel, view, water, eu, next: nextMealId(dayView(repo, sel.today, { today: sel.today })) };
+  const eu = useEnergyUnit(), wk = useSettingsPrefs()[0].units.week;
+  return { ...sel, view, water, eu, wk, next: nextMealId(dayView(repo, sel.today, { today: sel.today })) };
 }

@@ -27,9 +27,10 @@ export function weightNow(d: ProgressData) {
 function WeightTile({ size, options, body }: TileRenderProps) {
   const d = useProgressData(), r = rangeOf(options, usePageRange()), se = series(d, 'weight', r), { w, u, done, total, frac, toGo, eta } = weightNow(d);
   if (w.kg == null) return <Empty size={size} text={t('progressWeightEmpty')} />;
-  const li = lastIndex(se.v), first = se.v.find(finite), ch = finite(se.v[li]) && finite(first) ? r1((se.v[li] as number) - first) : 0;
+  // A change needs two weigh-ins in the range; with fewer there is nothing to compare, not a change of zero.
+  const li = lastIndex(se.v), got = se.v.filter(finite), ch = got.length >= 2 && finite(se.v[li]) ? r1((se.v[li] as number) - got[0]) : null;
   const gV = w.goalKg != null ? wtV(w.goalKg, u) : null, pace = options.show !== 'change' && gV != null;
-  const chText = `${signed(ch, 1)} ${u} ${rangeWords(r)}`;
+  const chText = ch == null ? fill(t('progressNoChangeIn'), { range: rangeWords(r) }) : `${signed(ch, 1)} ${u} ${rangeWords(r)}`;
   const aria = fill(t('progressWeightAria'), { w: wtS(w.kg, u), ch: chText }) + (w.goalKg != null ? ' ' + fill(t('progressWeightAriaGoal'), { goal: wtS(w.goalKg, u), toGo: `${toGo}` }) : '') + (eta ? ' ' + fill(t('progressWeightAriaEta'), { when: dShort(eta) }) : '');
   const chart = (W: number, H: number, tk: boolean) => <Chart values={se.v} kind="line" color="recovery" mini W={W} H={H} goal={pace ? null : gV}
     project={pace && eta && gV != null ? { to: gV, label: `${wGoal(w.goalKg!, u)} ${u}`, tick: dShort(eta) } : null} ticks={tk ? shortTicks(se, r, true) : null} />;
@@ -38,7 +39,7 @@ function WeightTile({ size, options, body }: TileRenderProps) {
     <Sub style={{ marginTop: 4 }}>{pace ? goalTxt : chText}</Sub>
     <View style={{ marginTop: 'auto' }}><Chart values={se.v} kind="line" color="recovery" mini W={body.w} H={54} goal={gV} /></View></View>;
   if (size === 'M') return <View style={{ flex: 1, flexDirection: 'row', gap: 14 }} accessible accessibilityRole="image" accessibilityLabel={aria}>
-    <View style={{ width: 100 }}><Num v={wtN(w.kg, u)} unit={u} fs={28} /><Sub style={{ marginTop: 4 }}>{signed(ch, 1)} {u}</Sub>
+    <View style={{ width: 100 }}><Num v={wtN(w.kg, u)} unit={u} fs={28} /><Sub style={{ marginTop: 4 }}>{ch == null ? '–' : `${signed(ch, 1)} ${u}`}</Sub>
       {w.goalKg != null ? <><Sub style={{ marginTop: 'auto' }}>{t('progressGoal')} <B>{wGoal(w.goalKg, u)} {u}</B></Sub><Sub>{pace && eta ? fill(t('progressAround'), { when: dShort(eta) }) : `${toGo} ${u} ${t('progressToGo')}`}</Sub></>
         : <Sub wrap style={{ marginTop: 'auto' }}>{t('progressNoGoal')}</Sub>}</View>
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>{chart(body.w - 114, 112, true)}</View>
@@ -59,9 +60,9 @@ function WeightTile({ size, options, body }: TileRenderProps) {
 function BodyFatTile({ size, options, body }: TileRenderProps) {
   const d = useProgressData(), k = useKit(), log = d.bodyFat, u = d.unit, c = k.tok('recovery');
   if (!log.length) return <Empty size={size} text={t('progressFatEmpty')} />;
-  const bf = log[log.length - 1].pct, kg = d.weight.kg, fat = kg != null ? kg * bf / 100 : null, lean = kg != null && fat != null ? kg - fat : null, ch = r1(bf - log[0].pct);
+  const bf = log[log.length - 1].pct, kg = d.weight.kg, fat = kg != null ? kg * bf / 100 : null, lean = kg != null && fat != null ? kg - fat : null, ch = log.length >= 2 ? r1(bf - log[0].pct) : null;
   const since = dShort(log[0].day);
-  const aria = fill(t('progressFatAria'), { pct: fmt(bf, 1), ch: signed(ch, 1), since }) + (fat != null && lean != null ? ' ' + fill(t('progressFatAriaMass'), { fat: wtS(fat, u), lean: wtS(lean, u) }) : '');
+  const aria = (ch == null ? fill(t('progressFatAriaFirst'), { pct: fmt(bf, 1) }) : fill(t('progressFatAria'), { pct: fmt(bf, 1), ch: signed(ch, 1), since })) + (fat != null && lean != null ? ' ' + fill(t('progressFatAriaMass'), { fat: wtS(fat, u), lean: wtS(lean, u) }) : '');
   const dots = (W: number, H: number, lab: boolean) => {
     const v = log.map(x => x.pct), lo = Math.min(...v) - 0.3, hi = Math.max(...v) + 0.3, pb = lab ? 16 : 4, every = W / log.length < 46 ? 2 : 1;
     const X = (i: number) => v.length < 2 ? W / 2 : 6 + (W - 12) * i / (v.length - 1), Y = (x: number) => 6 + (H - 6 - pb) * (1 - (x - lo) / (hi - lo));
@@ -73,7 +74,7 @@ function BodyFatTile({ size, options, body }: TileRenderProps) {
   };
   const leanLead = options.show === 'lean' && lean != null;
   const lead = leanLead ? <Num v={wtN(lean!, u)} unit={u} fs={30} /> : <Num v={fmt(bf, 1)} unit="%" fs={30} />;
-  const leadS = leanLead ? (size === 'S' ? fill(t('progressLeanFat'), { pct: fmt(bf, 1) }) : t('progressLeanMass')) : `${signed(ch, 1)} ${t('progressSince')} ${since}`;
+  const leadS = leanLead ? (size === 'S' ? fill(t('progressLeanFat'), { pct: fmt(bf, 1) }) : t('progressLeanMass')) : ch == null ? t('progressFatOneReading') : `${signed(ch, 1)} ${t('progressSince')} ${since}`;
   if (size === 'S') return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>{lead}<Sub style={{ marginTop: 4 }}>{leadS}</Sub><View style={{ marginTop: 'auto' }}>{dots(body.w, 46, false)}</View></View>;
   const leanC = mix(c, k.c['surface-2'], 0.3);
   return <View style={{ flex: 1, flexDirection: 'row', gap: 16 }} accessible accessibilityRole="image" accessibilityLabel={aria}>

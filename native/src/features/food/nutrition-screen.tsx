@@ -7,6 +7,7 @@ import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import { dayView, daySums, known, monthDay, num, weekDays, weekdayName } from './day';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 import { EnergyLegend } from './item-sheet';
 import { FoodPage } from './meal-screen';
 import { useFoodDay } from './selection';
@@ -109,7 +110,7 @@ function NuRow({ x, first }: { x: Nu; first: boolean }) {
 
 function WeekPart({ repo }: { repo: Repository }) {
   const { day, today } = useFoodDay(), u = useEnergyUnit();
-  const days = weekDays(day), sums = daySums(repo, days), goal = dayView(repo, day, { today }).goal, pGoal = Math.round(dayView(repo, day, { today }).goals.p);
+  const days = weekDays(day, useSettingsPrefs()[0].units.week), sums = daySums(repo, days), goal = dayView(repo, day, { today }).goal, pGoal = Math.round(dayView(repo, day, { today }).goals.p);
   const water = readWater(repo);
   // An unlogged day, or one whose food gave no protein, is unknown: it draws no stalk and stays out of the averages.
   const kc = sums.map(s => s.day > today ? null : s.kcal), pr = sums.map(s => s.day > today || s.p == null ? null : Math.round(s.p));

@@ -7,7 +7,7 @@ import { t } from '@/i18n/en';
 import { fill } from '../../tiles/ui';
 import type { TileRenderProps } from '../../tiles/types';
 import { addSaved, addWater, comboKcal, comboProtein, mealName, quickAdd } from '../actions';
-import { clock, daySums, known, roundOr, eatingWindow, foodsLine, grams, kcalOf, num, oftenFoods, plural, shortDate, streak, weekDays, weekday, type DayView } from '../day';
+import { clock, daySums, known, roundOr, eatingWindow, foodsLine, grams, kcalOf, num, oftenFoods, plural, shortDate, streak, weekDays, weekday, weekLetters, weekNames, type DayView, type WeekFirst } from '../day';
 import { combos, recentFoods, shiftDay, type Food } from '../model';
 import { foodRoutes } from '../nav';
 import { burnedOn, pickFoodDay } from '../selection';
@@ -26,8 +26,6 @@ const EL = (d: Data) => enLabel(d.eu);
 /** "24 g protein", or "– g protein" when no food gives it. */
 const gramsOrDash = (g: number | null) => g == null ? tx('foodGProtein', { g: '–' }) : tx('foodGProtein', { g: Math.round(g) });
 const txe = (d: Data, key: Parameters<typeof t>[0], v: Record<string, string | number> = {}) => fill(enText(t(key), d.eu), v);
-const WD1 = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const DAYN = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function Host({ p, Body }: { p: TileRenderProps; Body: TileBody }) {
   const repo = useTileDay();
@@ -49,12 +47,12 @@ const live = (p: TileRenderProps) => !p.editing && !p.preview;
 /** The day picked in the strip, as the tile headers read it: Today, or Sat, Nov 21. */
 export const dayLabel = (d: { isToday: boolean; day: string }) => d.isToday ? t('foodToday') : shortDate(d.day);
 /** Nov 16 to 22. */
-export function weekOf(day: string) {
-  const days = weekDays(day), [a, b] = [days[0], days[6]].map(x => new Date(`${x}T12:00:00`));
+export function weekOf(day: string, wk?: WeekFirst) {
+  const days = weekDays(day, wk), [a, b] = [days[0], days[6]].map(x => new Date(`${x}T12:00:00`));
   const m = (x: Date) => x.toLocaleDateString('en-US', { month: 'short' });
   return m(a) === m(b) ? `${m(a)} ${a.getDate()} to ${b.getDate()}` : `${m(a)} ${a.getDate()} to ${m(b)} ${b.getDate()}`;
 }
-const dayIndexTap = (d: Data) => (i: number) => { const day = weekDays(d.day)[i]; if (day <= d.today) pickFoodDay(day); };
+const dayIndexTap = (d: Data) => (i: number) => { const day = weekDays(d.day, d.wk)[i]; if (day <= d.today) pickFoodDay(day); };
 
 /* 1. Calories */
 const Calories: TileBody = ({ p, d }) => {
@@ -153,7 +151,7 @@ const Macros: TileBody = ({ p, d }) => {
 
 /* 3. Protein */
 const PER_MEAL = 40;
-function proteinWeek(repo: Repository, d: Data) { return daySums(repo, weekDays(d.day)).map((x, i) => weekDays(d.day)[i] > d.today ? null : x.p); }
+function proteinWeek(repo: Repository, d: Data) { return daySums(repo, weekDays(d.day, d.wk)).map((x, i) => weekDays(d.day, d.wk)[i] > d.today ? null : x.p); }
 function MealBars({ d, rowH, gap, w }: { d: Data; rowH: number; gap: number; w: number }) {
   const k = useKit(), meals = d.view.meals, mx = Math.max(PER_MEAL * 1.6, Math.max(...meals.map(m => known(m.p))) * 1.05);
   return <View style={{ gap }}>{meals.map(m => <View key={m.id} accessible accessibilityLabel={`${m.name} ${m.empty ? t('foodNotLogged') : m.p == null ? t('foodUnknownLower') : tx('foodGramsProtein', { g: Math.round(m.p) })}`}
@@ -169,9 +167,9 @@ const Protein: TileBody = ({ p, repo, d }) => {
   // Food logged without protein on it leaves the day's protein unknown, not 0 g.
   const prText = pr == null ? '–' : String(pr), prFrac = (pr ?? 0) / goal;
   const hitM = v.meals.filter(m => known(m.p) >= PER_MEAL).length, nMeals = v.meals.length;
-  const wk = proteinWeek(repo, d), sel = weekday(d.day);
+  const wk = proteinWeek(repo, d), sel = weekday(d.day, d.wk);
   const wkCols = (H: number, cw: number) => <Cols vals={wk} H={H} cw={cw} max={Math.max(goal * 1.15, Math.max(0, ...wk.map(x => x ?? 0)) * 1.04)} goal={goal} sel={sel}
-    live={weekDays(d.day).indexOf(d.today)} labels={WD1} onDay={live(p) ? dayIndexTap(d) : undefined} aria={(i, x) => `${DAYN[i]}, ${x == null ? t('foodNothingLogged') : tx('foodGramsProtein', { g: Math.round(x) })}`}
+    live={weekDays(d.day, d.wk).indexOf(d.today)} labels={weekLetters(d.wk)} onDay={live(p) ? dayIndexTap(d) : undefined} aria={(i, x) => `${weekNames(d.wk)[i]}, ${x == null ? t('foodNothingLogged') : tx('foodGramsProtein', { g: Math.round(x) })}`}
     label={tx('foodProteinByDay', { g: goal })} />;
   const toGo = togo == null ? t('foodNotOnFoods') : togo > 0 ? <><B>{togo} g</B> {t('foodToGoWord')}</> : t('foodTargetMet');
   if (p.size === 'S') {
@@ -300,7 +298,7 @@ const Water: TileBody = ({ p, repo, d }) => {
     return <View style={col}>{big}<Sub style={{ marginTop: 4 }}>{togo}</Sub><View style={{ marginTop: 'auto' }}>{cells(12)}</View>
       {d.isToday ? <WaterRow cs={qs.slice(0, 2)} repo={repo} d={d} compact style={{ marginTop: 10 }} /> : <Sub style={{ marginTop: 12 }}>{dayLabel(d)}</Sub>}</View>;
   }
-  const days = weekDays(d.day), ww = days.map(x => x > d.today ? null : litresOn(W, x));
+  const days = weekDays(d.day, d.wk), ww = days.map(x => x > d.today ? null : litresOn(W, x));
   const past = ww.slice(0, 6).filter((x): x is number => x != null);
   const head = <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
     <View style={{ flex: 1 }}>{big}<Sub style={{ marginTop: 4 }}>{togo}</Sub></View>
@@ -310,8 +308,8 @@ const Water: TileBody = ({ p, repo, d }) => {
   if (p.size === 'M') return <View style={col}>{head}<View style={{ marginTop: 12 }}>{cells(20)}</View>
     {d.isToday ? <WaterRow cs={qs} repo={repo} d={d} style={{ marginTop: 'auto' }} /> : <Sub style={{ marginTop: 'auto' }}>{shortDate(d.day)}</Sub>}</View>;
   return <View style={col}>{head}<View style={{ marginTop: 12 }}>{cells(20)}</View>
-    <View style={{ marginTop: 14 }}><Cols vals={ww} H={100} cw={18} max={goal * 1.25} goal={goal} sel={weekday(d.day)} live={days.indexOf(d.today)} color="water" labels={WD1}
-      onDay={live(p) ? dayIndexTap(d) : undefined} vfmt={x => waterNum(x, u)} aria={(i, x) => `${DAYN[i]}, ${x == null ? t('foodNothingLogged') : waterAmt(x, u)}`} label={tx('foodWaterByDay', { goal: waterAmt(goal, u) })} /></View>
+    <View style={{ marginTop: 14 }}><Cols vals={ww} H={100} cw={18} max={goal * 1.25} goal={goal} sel={weekday(d.day, d.wk)} live={days.indexOf(d.today)} color="water" labels={weekLetters(d.wk)}
+      onDay={live(p) ? dayIndexTap(d) : undefined} vfmt={x => waterNum(x, u)} aria={(i, x) => `${weekNames(d.wk)[i]}, ${x == null ? t('foodNothingLogged') : waterAmt(x, u)}`} label={tx('foodWaterByDay', { goal: waterAmt(goal, u) })} /></View>
     {d.isToday ? <WaterRow cs={qs} repo={repo} d={d} style={{ marginTop: 'auto' }} /> : <Sub style={{ marginTop: 'auto' }}>{tx('foodLoggedClosed', { day: shortDate(d.day) })}</Sub>}
   </View>;
 };
@@ -320,7 +318,7 @@ const Water: TileBody = ({ p, repo, d }) => {
 const Week: TileBody = ({ p, repo, d }) => {
   const k = useKit();
   const pv = p.options.measure === 'p', lastMode = p.options.compare === 'last', u = pv ? 'g' : EL(d), goal = pv ? d.view.goals.p : d.view.goal;
-  const days = weekDays(d.day), cur = daySums(repo, days), prevS = daySums(repo, days.map(x => shiftDay(x, -7)));
+  const days = weekDays(d.day, d.wk), cur = daySums(repo, days), prevS = daySums(repo, days.map(x => shiftDay(x, -7)));
   const vals = cur.map((x, i) => days[i] > d.today ? null : pv ? x.p : x.kcal), prev = prevS.map(x => pv ? x.p : x.kcal);
   const liveI = days.indexOf(d.today), full = liveI >= 0 ? liveI : 7;
   const known = (a: (number | null)[]) => a.slice(0, full).filter((x): x is number => x != null);
@@ -330,9 +328,9 @@ const Week: TileBody = ({ p, repo, d }) => {
   const mx = Math.max(goal * 1.18, ...[...vals, ...(lastMode ? prev : [])].map(x => (x ?? 0) * 1.04));
   const VF = (x: number) => pv ? num(x) : EN(d, x), AV = avg == null ? '–' : VF(avg), dlt = avg != null && pavg != null ? avg - pavg : null, logged = known(vals).length;
   const C = (H: number, cw: number, vl?: boolean, ls?: number) => <Cols vals={vals} H={H} cw={cw} max={mx} goal={lastMode ? null : goal} band={lastMode ? null : 0.1} last={lastMode ? prev : null}
-    sel={weekday(d.day)} live={liveI >= 0 ? liveI : null} vlab={vl} labels={WD1} labelSize={ls} vfmt={x => pv ? String(Math.round(x)) : `${(enValue(x, d.eu) / 1000).toFixed(1)}k`}
+    sel={weekday(d.day, d.wk)} live={liveI >= 0 ? liveI : null} vlab={vl} labels={weekLetters(d.wk)} labelSize={ls} vfmt={x => pv ? String(Math.round(x)) : `${(enValue(x, d.eu) / 1000).toFixed(1)}k`}
     onDay={live(p) ? dayIndexTap(d) : undefined} label={pv ? t('foodProteinByDayPlain') : t('foodCaloriesByDay')}
-    aria={(i, x) => `${DAYN[i]}, ${x == null ? t('foodNothingLogged') : `${VF(x)} ${u}${i === liveI ? ` ${t('foodSoFar')}` : ''}`}${lastMode ? `, ${t('foodWeekBefore')} ${prev[i] == null ? t('foodNothingLogged') : VF(prev[i]!)}` : ''}`} />;
+    aria={(i, x) => `${weekNames(d.wk)[i]}, ${x == null ? t('foodNothingLogged') : `${VF(x)} ${u}${i === liveI ? ` ${t('foodSoFar')}` : ''}`}${lastMode ? `, ${t('foodWeekBefore')} ${prev[i] == null ? t('foodNothingLogged') : VF(prev[i]!)}` : ''}`} />;
   const cmp = dlt == null ? t('foodNoWeekCompare') : tx(dlt >= 0 ? 'foodMoreADay' : 'foodLessADay', { v: VF(Math.abs(dlt)), u });
   if (p.size === 'S') return <View style={col}>
     {lastMode ? <><Num v={AV} unit={u} fs={26} /><Sub style={{ marginTop: 4 }}>{dlt == null ? t('foodNoWeekCompare') : `${dlt >= 0 ? '+' : '−'}${VF(Math.abs(dlt))} ${u} ${t('foodADay')}`}</Sub></>
@@ -454,16 +452,16 @@ const Timing: TileBody = ({ p, repo, d }) => {
   const stats = <View style={{ alignItems: 'flex-end' }}><Sub>{t('foodFirst')} <B>{W.first != null ? hm(W.first) : t('foodNone')}</B></Sub><Sub style={{ marginTop: 3 }}>{t('foodLast')} <B>{W.last != null ? hm(W.last) : t('foodNone')}</B></Sub></View>;
   const top = <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}><View style={{ flex: 1 }}><Num v={dur(span)} unit={W.live ? t('foodSoFar') : t('foodWindowWord')} fs={28} /><Sub style={{ marginTop: 4 }}>{note}</Sub></View>{stats}</View>;
   if (p.size === 'M') return <View style={col}>{top}<View style={{ marginTop: 'auto' }}><Timeline d={d} w={p.body.w} h={32} mh={26} mw={7} target={tg} ticks /></View></View>;
-  const days = weekDays(d.day), gw = p.body.w - 22, liveI = days.indexOf(d.today);
+  const days = weekDays(d.day, d.wk), gw = p.body.w - 22, liveI = days.indexOf(d.today);
   const rows = days.slice(0, liveI >= 0 ? liveI : 7).map(day => { const items = repo.list('food_entries').filter(r => r.data.day === day).map(r => hours(r.updated_at)); return items.length ? [Math.min(...items), Math.max(...items)] as const : null; });
   const lens = rows.filter((x): x is readonly [number, number] => !!x).map(x => x[1] - x[0]), avgL = lens.length ? lens.reduce((a, b) => a + b, 0) / lens.length : null;
   return <View style={col}>{top}
     <View style={{ marginTop: 'auto' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8 }}><KitText weight={700} size={10} color={k.c.food} style={{ width: 14, textAlign: 'center' }}>{WD1[weekday(d.day)]}</KitText><Timeline d={d} w={gw} h={32} mh={26} mw={7} target={tg} /></View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8 }}><KitText weight={700} size={10} color={k.c.food} style={{ width: 14, textAlign: 'center' }}>{weekLetters(d.wk)[weekday(d.day, d.wk)]}</KitText><Timeline d={d} w={gw} h={32} mh={26} mw={7} target={tg} /></View>
       <View style={{ height: 1, backgroundColor: k.c.hair, marginTop: 12, marginBottom: 10 }} />
       <View style={{ flexDirection: 'row' }}><Kick style={{ flex: 1 }}>{d.isToday || liveI >= 0 ? t('foodEarlierWeek') : t('foodThatWeek')}</Kick><Sub size={11.5}>{t('foodAverage')} <B>{avgL == null ? '–' : dur(avgL)}</B> {t('foodADay')}</Sub></View>
       <View style={{ gap: 6, marginTop: 9 }}>{rows.map((x, i) => <View key={i} style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8 }}>
-        <KitText weight={700} size={10} color={weekday(d.day) === i ? k.c.food : 'text-muted'} style={{ width: 14, textAlign: 'center' }}>{WD1[i]}</KitText>
+        <KitText weight={700} size={10} color={weekday(d.day, d.wk) === i ? k.c.food : 'text-muted'} style={{ width: 14, textAlign: 'center' }}>{weekLetters(d.wk)[i]}</KitText>
         <View style={{ height: 10, width: gw }}>
           <View style={{ position: 'absolute', left: 0, right: 0, top: 4, height: 2, borderRadius: 1, backgroundColor: k.c.hair }} />
           {x ? <View style={{ position: 'absolute', top: 0, bottom: 0, left: X(x[0], gw), width: Math.max(10, X(x[1], gw) - X(x[0], gw)), borderRadius: 999, overflow: 'hidden', opacity: tg && x[1] - x[0] > tg ? 0.5 : 1 }}>
@@ -479,7 +477,7 @@ const Timing: TileBody = ({ p, repo, d }) => {
 /* 9. Logging streak */
 function CalGrid({ repo, d, cell, gap, nums, full, weeks, w }: { repo: Repository; d: Data; cell: number; gap: number; nums: boolean; full: boolean; weeks: number; w: number }) {
   const k = useKit(), s = streak(repo, d.today, full), any = streak(repo, d.today, false), every = streak(repo, d.today, true);
-  const start = shiftDay(weekDays(d.today)[0], -7 * (weeks - 1)), cw = (w - gap * 6) / 7;
+  const start = shiftDay(weekDays(d.today, d.wk)[0], -7 * (weeks - 1)), cw = (w - gap * 6) / 7;
   const cells = Array.from({ length: weeks * 7 }, (_, i) => shiftDay(start, i));
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>{cells.map(day => {
     const future = day > d.today, now = day === d.today, lvl = future ? -1 : every.done(day) ? 2 : any.done(day) ? (full ? 0 : 1) : 0;
@@ -513,7 +511,7 @@ const Streak: TileBody = ({ p, repo, d }) => {
       <View style={{ alignItems: 'flex-end' }}><Num v={String(full ? all : logged)} unit={tx('foodOfN', { n: 35 })} fs={20} /><Sub style={{ marginTop: 3 }}>{t('foodDays')}</Sub></View>
     </View>
     <View style={{ marginTop: 'auto' }}>
-      <View style={{ flexDirection: 'row', gap: 5, marginBottom: 6 }}>{WD1.map((l, i) => <KitText key={i} weight={700} size={9.5} lineHeight={1} tracking={0.04} color="text-muted" style={{ flex: 1, textAlign: 'center' }}>{l}</KitText>)}</View>
+      <View style={{ flexDirection: 'row', gap: 5, marginBottom: 6 }}>{weekLetters(d.wk).map((l, i) => <KitText key={i} weight={700} size={9.5} lineHeight={1} tracking={0.04} color="text-muted" style={{ flex: 1, textAlign: 'center' }}>{l}</KitText>)}</View>
       <CalGrid repo={repo} d={d} cell={29} gap={5} nums full={full} weeks={5} w={p.body.w} />
       <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
         {full ? null : <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>{sw(k.dark ? mix(k.c.food, k.c['surface-2'], 0.42) : mix(k.c.food, k.c.surface, 0.3))}<KitText weight={600} size={11} color="text-muted">{t('foodSomeMeals')}</KitText></View>}
@@ -564,7 +562,7 @@ function QuickRow({ f, first, h, repo, d, sub, title, size }: { f: Food; first: 
 /* 11. Net calories */
 const Net: TileBody = ({ p, repo, d }) => {
   const k = useKit(), v = d.view, burned = v.burned, net = burned == null || v.eaten == null ? null : v.eaten - burned, week = p.options.range === 'week';
-  const days = weekDays(d.day), sums = daySums(repo, days), liveI = days.indexOf(d.today), full = liveI >= 0 ? liveI : 7;
+  const days = weekDays(d.day, d.wk), sums = daySums(repo, days), liveI = days.indexOf(d.today), full = liveI >= 0 ? liveI : 7;
   const eat = sums.map((x, i) => days[i] > d.today ? null : x.kcal), bw = days.map(x => x > d.today ? null : burnedOn(x));
   const nets = eat.map((x, i) => x == null || bw[i] == null ? null : x - bw[i]!);
   const knownN = nets.slice(0, full).filter((x): x is number => x != null), avg = knownN.length ? Math.round(knownN.reduce((a, b) => a + b, 0) / knownN.length) : null;
@@ -574,9 +572,9 @@ const Net: TileBody = ({ p, repo, d }) => {
     return <View style={{ gap: H > 8 ? 9 : 7 }}>{([[t('foodEatenCap'), v.eaten, k.c.food], [t('foodBurnedCap'), burned, k.c.warning]] as const).map(([name, x, c]) => <View key={name} style={{ flexDirection: 'row', alignItems: 'center', columnGap: 8 }}>
       <Sub size={12} style={{ width: 52 }}>{name}</Sub><WellBar frac={(x ?? 0) / m} h={H} color={c} /><KitText weight={700} size={13.5} lineHeight={1} numeric style={{ width: 62, textAlign: 'right' }}>{E(x)}</KitText></View>)}</View>; };
   const weekCols = (H: number, cw: number, vl?: boolean, ls = 10.5) => <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>{eat.map((x, i) => {
-    const hE = (x ?? 0) / mx * H, hB = Math.min(x ?? 0, bw[i] ?? 0) / mx * H, sel = weekday(d.day) === i, lv = i === liveI;
+    const hE = (x ?? 0) / mx * H, hB = Math.min(x ?? 0, bw[i] ?? 0) / mx * H, sel = weekday(d.day, d.wk) === i, lv = i === liveI;
     return <Tappable key={i} dim="fill" disabled={!live(p) || days[i] > d.today} accessibilityRole="button" accessibilityState={{ selected: sel }} onPress={() => pickFoodDay(days[i])}
-      accessibilityLabel={`${DAYN[i]}, ${x == null ? t('foodNothingLogged') : txe(d, 'foodNetA11y', { eaten: E(x), burned: E(bw[i]), net: E(nets[i]) })}`} style={{ flex: 1, alignItems: 'center', gap: 5 }}>
+      accessibilityLabel={`${weekNames(d.wk)[i]}, ${x == null ? t('foodNothingLogged') : txe(d, 'foodNetA11y', { eaten: E(x), burned: E(bw[i]), net: E(nets[i]) })}`} style={{ flex: 1, alignItems: 'center', gap: 5 }}>
       {vl ? <KitText weight={700} size={10.5} lineHeight={1} numeric color={sel ? k.c.food : 'text-muted'} style={{ height: 11 }}>{nets[i] == null ? '' : `${(enValue(nets[i]!, d.eu) / 1000).toFixed(1)}k`}</KitText> : null}
       <View style={[{ width: cw, height: H, borderRadius: cw / 2, overflow: 'hidden' }, sel && { boxShadow: `0px 0px 0px 2px ${k.c.surface}, 0px 0px 0px 3.5px ${k.c.food}` }]}>
         <WellBar frac={0} h={H} color={k.c.food} width={cw} />
@@ -584,7 +582,7 @@ const Net: TileBody = ({ p, repo, d }) => {
         {hB ? <View style={{ position: 'absolute', left: 0, bottom: hE - hB, width: cw, height: hB, borderTopLeftRadius: cw / 2, borderTopRightRadius: cw / 2, overflow: 'hidden', borderWidth: 1.5, borderColor: k.c.warning }}>
           <Stripes w={cw} h={hB} color={k.c.warning} a={0.55} b={0} step={5} /></View> : null}
       </View>
-      <KitText weight={700} size={ls} lineHeight={1} color={sel ? k.c.food : 'text-muted'}>{WD1[i]}</KitText>
+      <KitText weight={700} size={ls} lineHeight={1} color={sel ? k.c.food : 'text-muted'}>{weekLetters(d.wk)[i]}</KitText>
     </Tappable>;
   })}</View>;
   const math = (fs: number) => { const c = (name: string, x: number | null, color?: string) => <View style={{ minWidth: 0 }}><Sub size={11.5}>{name}</Sub>

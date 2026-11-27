@@ -14,6 +14,7 @@ import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import { addWater, mealName } from './actions';
 import { daySums, dayView, fullDate, monthDay, nextMealId, plural, stripDays, weekdayName } from './day';
+import { useSettingsPrefs } from '@/features/settings/prefs';
 import { combos, shiftDay } from './model';
 import { foodRoutes } from './nav';
 import { pickFoodDay, setBurned, useFoodDay } from './selection';
@@ -85,10 +86,10 @@ export function FoodTab({ repo }: { repo: Repository }) {
   </Animated.ScrollView>;
 }
 
-/** Two weeks of days, Monday first, paged by week; it opens on this week. */
+/** Two weeks of days, from the first day of the week the person chose, paged by week; it opens on this week. */
 function DayStrip({ repo, day, today, goal }: { repo: Repository; day: string; today: string; goal: number }) {
   const k = useKit(), haptic = useSelectionHaptic(), { width } = useWindowDimensions(), eu = useEnergyUnit();
-  const days = useMemo(() => stripDays(today), [today]);
+  const wk = useSettingsPrefs()[0].units.week, days = useMemo(() => stripDays(today, wk), [today, wk]);
   const sums = daySums(repo, days.map(d => d.day));
   // contentOffset opens on this week on iOS; the web ignores it, so the first layout scrolls there too.
   const strip = useRef<ComponentRef<typeof ScrollView>>(null);

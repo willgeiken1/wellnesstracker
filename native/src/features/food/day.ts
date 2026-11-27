@@ -90,24 +90,35 @@ export const foodsLine = (items: FoodItem[]) => items.map((i, k) => { const n = 
 
 const WD = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const parts = (day: string) => day.split('-').map(Number) as [number, number, number];
-export const weekday = (day: string) => { const [y, m, d] = parts(day); return (new Date(y, m - 1, d).getDay() + 6) % 7; };
+/** The day the person's week starts on, from Settings › Units. */
+export type WeekFirst = 'mon' | 'sun' | 'sat';
+const FIRST: Record<WeekFirst, number> = { sun: 0, mon: 1, sat: 6 };
+const firstOf = (wk: WeekFirst | undefined) => FIRST[wk ?? 'mon'] ?? 1;
+/** Where `day` falls in its week, 0 for the first day of the week the person chose. */
+export const weekday = (day: string, wk?: WeekFirst) => { const [y, m, d] = parts(day); return (new Date(y, m - 1, d).getDay() - firstOf(wk) + 7) % 7; };
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const rotate = <T,>(list: readonly T[], wk?: WeekFirst) => { const off = (firstOf(wk) + 6) % 7; return list.map((_, i) => list[(i + off) % 7]); };
+/** One letter for each day of the week, in the order the person's week runs. */
+export const weekLetters = (wk?: WeekFirst) => rotate(WD, wk);
+/** Each day's name, in the order the person's week runs. */
+export const weekNames = (wk?: WeekFirst) => rotate(DAY_NAMES, wk);
 export const fullDate = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); };
 export const shortDate = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); };
 export const weekdayName = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long' }); };
 export const monthDay = (day: string) => { const [y, m, d] = parts(day); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }); };
 
-/** The Monday that starts the week holding `day`. */
-export const weekStart = (day: string) => shiftDay(day, -weekday(day));
-/** The day strip: last week and this week, Monday first. Days after today are shown but cannot be picked. */
-export function stripDays(today: string) {
-  const start = shiftDay(weekStart(today), -7);
+/** The first day of the week holding `day`: Monday unless the person chose another. */
+export const weekStart = (day: string, wk?: WeekFirst) => shiftDay(day, -weekday(day, wk));
+/** The day strip: last week and this week, from the first day of the week. Days after today are shown but cannot be picked. */
+export function stripDays(today: string, wk?: WeekFirst) {
+  const start = shiftDay(weekStart(today, wk), -7), letters = weekLetters(wk);
   return Array.from({ length: 14 }, (_, i) => {
     const day = shiftDay(start, i);
-    return { day, wd: WD[i % 7], date: parts(day)[2], today: day === today, future: day > today };
+    return { day, wd: letters[i % 7], date: parts(day)[2], today: day === today, future: day > today };
   });
 }
-/** This week, Monday to Sunday. */
-export const weekDays = (day: string) => Array.from({ length: 7 }, (_, i) => shiftDay(weekStart(day), i));
+/** The week holding `day`, from its first day. */
+export const weekDays = (day: string, wk?: WeekFirst) => Array.from({ length: 7 }, (_, i) => shiftDay(weekStart(day, wk), i));
 
 /** Calories and protein a day, for charts. Days with nothing logged are null so they draw as no reading. */
 export function daySums(repo: Repository, days: readonly string[]) {
