@@ -22,6 +22,7 @@ import { readHealthDetail } from './health-detail';
 import { readAppData, windowDays } from './read';
 import { buildState, setHomeTileState, type HomeTileState } from './state';
 import { DEFAULT_UNITS } from './studio';
+import { weightGoalKg } from '@/features/settings/goals-data';
 
 /** Daily goals the tiles measure against until the app keeps its own for these readings. */
 export const HOME_GOALS: HomeInput['goals'] = { steps: STEP_GOAL, exercise: 30, active: 500, sleepHours: 8, mindful: 10 };
@@ -116,14 +117,14 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
   const repo = store?.repo ?? null;
   // The Apple read is a new object on each draw until it lands, so only its parts are watched.
   const appleAccess = apple.access, appleRecovery = apple.recovery;
-  const prefs = useSettingsPrefs()[0], hide = prefs.priv.hide, sleepGoal = prefs.goals.sleep;
+  const prefs = useSettingsPrefs()[0], hide = prefs.priv.hide, sleepGoal = prefs.goals.sleep, energy = prefs.units.energy, clock = prefs.units.clock;
   const state = useMemo(() => {
     if (!reader) return null;
     const now = new Date(minute * 60_000);
     const app = readAppData(reader, now, health);
     const recovery = pickRecovery(oura, { access: appleAccess, recovery: appleRecovery });
     const input: HomeInput = {
-      now, ...app, weightGoalKg: null,
+      now, ...app, weightGoalKg: weightGoalKg(reader.repo),
       health: health ? { steps: health.steps, activeKcal: health.activeKcal, exerciseMinutes: health.exerciseMinutes, sleepHours: health.sleepHours, mindfulMinutes: health.mindfulMinutes } : null,
       detail: detailFor(detailRaw, !!oura), recovery,
       sources: { activity: appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura', sleep: oura ? 'Oura' : 'Apple Health', body: 'Apple Health' },
@@ -131,8 +132,8 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
     };
     const nextMeal = input.nextMeal;
     const scores = weekScores(reader, now, health);
-    return { ...buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit }, data => homeTileAction(repo, nextMeal, data), hide), scores };
-  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide, sleepGoal]);
+    return { ...buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit, energy: energy === 'kJ' ? 'kJ' : 'kcal', clock: clock === '24' ? '24' : '12' }, data => homeTileAction(repo, nextMeal, data), hide), scores };
+  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide, sleepGoal, energy, clock]);
   useEffect(() => { setHomeTileState(state); }, [state]);
   return state;
 }

@@ -16,6 +16,9 @@ import { pageHandlers, useShellEdit } from '../src/features/shell/registry';
 import { showToast } from '../src/features/shell/toast';
 import { tileEdit } from '../src/features/tiles/store';
 import { resetTileStores } from '../src/features/tiles';
+import { homeTileState } from '../src/features/home/tiles/state';
+import { DEFAULT_PREFS, SETTINGS_PREFS_KEY, withPref } from '../src/features/settings/prefs';
+import { saveGoalWeight } from '../src/features/settings/goals-data';
 
 jest.mock('../src/auth/provider', () => ({ useAuth: jest.fn() }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), canGoBack: () => true } }));
@@ -146,6 +149,17 @@ test('logged food and targets fill the Protein and Next tiles from real entries'
   expect(screen.getAllByText('37').length).toBeGreaterThan(0);
   expect(screen.queryByText('Set your food targets in Food to see this.')).toBeNull();
   expect(screen.getByText('Log lunch')).toBeTruthy();
+});
+
+test('Home follows the energy unit, the clock and the goal weight saved in Settings', async () => {
+  const repo = open();
+  repo.localSave(SETTINGS_PREFS_KEY, withPref(withPref(DEFAULT_PREFS, 'units.energy', 'kJ'), 'units.clock', '24'));
+  saveGoalWeight(repo, 170, 'lb');
+  await render(<Home />, { wrapper });
+  await settle();
+  const st = homeTileState()!;
+  expect(st.units).toMatchObject({ energy: 'kJ', clock: '24' });
+  expect(st.has.weightGoal).toBe(true);
 });
 
 describe('the + actions and edit mode', () => {
