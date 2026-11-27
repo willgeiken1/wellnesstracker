@@ -88,7 +88,7 @@ export function GoalsPage() {
         right={<RowStepper label={st('settingsDailyCalories')} value={kj ? Math.round(kcal * 4.184 / 10) * 10 : kcal}
         step={kj ? 250 : 50} snap min={kj ? 4000 : 1000} max={kj ? 20000 : 5000} unit={kj ? 'kJ' : ''}
         onChange={v => { const next = kj ? Math.round(v / 4.184) : v; if (repo) save(() => saveFoodTarget(repo, 'kcal', next)); else set('goals.kcal', next); }} />} />
-      <ListRow title={st('settingsProtein')} sub={g ? st('settingsSoFarG', { v: g.proteinSoFar }) : undefined}
+      <ListRow title={st('settingsProtein')} sub={g && g.proteinSoFar != null ? st('settingsSoFarG', { v: g.proteinSoFar }) : undefined}
         right={<RowStepper label={st('settingsDailyProtein')} value={protein} step={5} min={40} max={300} unit="g"
         onChange={v => { if (repo) save(() => saveFoodTarget(repo, 'protein', v)); else set('goals.protein', v); }} />} />
       <ListRow title={st('settingsTraining')} sub={trained != null ? st('settingsMinToday', { v: trained }) : undefined} right={<RowStepper label={st('settingsDailyTraining')} value={p.goals.train} step={5} min={10} max={180} unit="min" onChange={v => set('goals.train', v)} />} />

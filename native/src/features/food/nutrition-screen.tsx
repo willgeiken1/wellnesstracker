@@ -6,7 +6,7 @@ import { Badge, Card, Icon, KitText, List, ListFooter, ListRow, SectionHeader, S
 import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
-import { dayView, daySums, monthDay, num, weekDays, weekdayName } from './day';
+import { dayView, daySums, known, monthDay, num, weekDays, weekdayName } from './day';
 import { EnergyLegend } from './item-sheet';
 import { FoodPage } from './meal-screen';
 import { useFoodDay } from './selection';
@@ -43,11 +43,12 @@ function DayPart({ repo }: { repo: Repository }) {
   const k = useKit();
   const { day, today, isToday, burned } = useFoodDay();
   const v = dayView(repo, day, { today, burned });
-  const cells = waffleCells(v.p, v.c, v.f), N = nutrients(v), pcs = macroPercents(v.p, v.c, v.f).pc;
-  const macros: Nu[] = [{ key: t('foodMacroProtein'), v: Math.round(v.p), goal: Math.round(v.goals.p), u: 'g', color: MACRO_COLOR.p },
-    { key: t('foodMacroCarbs'), v: Math.round(v.c), goal: Math.round(v.goals.c), u: 'g', color: MACRO_COLOR.c },
-    { key: t('foodMacroFat'), v: Math.round(v.f), goal: Math.round(v.goals.f), u: 'g', color: MACRO_COLOR.f },
-    { key: t('foodMacroFiber'), v: Math.round(v.fib), goal: v.goals.fib, u: 'g', color: MACRO_COLOR.fib }];
+  const cells = waffleCells(known(v.p), known(v.c), known(v.f)), N = nutrients(v), pcs = macroPercents(known(v.p), known(v.c), known(v.f)).pc;
+  const round = (x: number | null) => x == null ? null : Math.round(x);
+  const macros: Nu[] = [{ key: t('foodMacroProtein'), v: round(v.p), goal: Math.round(v.goals.p), u: 'g', color: MACRO_COLOR.p },
+    { key: t('foodMacroCarbs'), v: round(v.c), goal: Math.round(v.goals.c), u: 'g', color: MACRO_COLOR.c },
+    { key: t('foodMacroFat'), v: round(v.f), goal: Math.round(v.goals.f), u: 'g', color: MACRO_COLOR.f },
+    { key: t('foodMacroFiber'), v: round(v.fib), goal: v.goals.fib, u: 'g', color: MACRO_COLOR.fib }];
   const more = [...N.limit, ...N.reach.slice(1)];
   return <>
     <Card>

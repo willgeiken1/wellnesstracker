@@ -4,6 +4,8 @@ import { randomUUID } from 'expo-crypto';
 import type { Repository } from '@/data/repository';
 import type { Row } from '@/data/rows';
 import { meals } from '@/features/food/model';
+import { normalize, type RoutinesState } from '@/features/routines/model';
+import { ROUTINES_KEY } from '@/features/routines/store';
 import { rpeKey } from '@/features/workout/logger/model';
 import { addDays, finite, type ProgressData } from './model';
 import { metricView } from './metric';
@@ -88,10 +90,32 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
       for (const r of repo.list('routines').sort(byPos)) for (const e of (ex.get(r.id) ?? []).sort(byPos))
         rows.push([r.data.name, e.data.exercise, num(e.data.target_sets), num(e.data.target_reps), num(e.data.rep_min), num(e.data.rep_max)]);
       files.push({ name: 'routines.csv', csv: csv(['routine', 'exercise', 'target_sets', 'target_reps', 'rep_min', 'rep_max'], rows) });
+      // The Routines tab keeps its own routines, items and check-offs in this phone's local storage.
+      const tab = routinesTab(repo);
+      if (tab) {
+        const all = [...tab.routines, ...tab.hidden], hidden = new Set(tab.hidden.map(r => r.id)), name = new Map(all.map(r => [r.id, r.name])), item = new Map(tab.items.map(i => [i.id, i]));
+        const itemRows: unknown[][] = [];
+        for (const r of all) for (const i of tab.items.filter(x => x.routines.includes(r.id)))
+          itemRows.push([r.name, hours(r.from), hours(r.to), weekdays(r.days), hidden.has(r.id) ? 'hidden' : pausedOn(r, d.today) ? 'paused' : 'on',
+            i.name, i.type, i.dose, hours(i.h), weekdays(i.days), i.left ?? null, i.note ?? '']);
+        files.push({ name: 'routine-items.csv', csv: csv(['routine', 'routine_from', 'routine_to', 'routine_days', 'routine_state', 'item', 'type', 'dose', 'time', 'item_days', 'on_hand', 'note'], itemRows) });
+        const history: unknown[][] = [];
+        for (const day of Object.keys(tab.log).filter(keep).sort()) for (const [id, mark] of Object.entries(tab.log[day])) {
+          const i = item.get(id);
+          history.push([day, i?.name ?? '', (i?.routines ?? []).map(r => name.get(r) ?? '').filter(Boolean).join('; '), mark === 'd' ? 'done' : 'skipped', tab.used?.[day]?.[id] ?? null]);
+        }
+        files.push({ name: 'routine-history.csv', csv: csv(['date', 'item', 'routines', 'status', 'used_from_on_hand'], history) });
+      }
     }
   }
   return files;
 }
+/** The Routines tab's saved state for this account, or null when it has none. */
+function routinesTab(repo: Repository): RoutinesState | null { try { return normalize(repo.localGet<unknown>(ROUTINES_KEY)); } catch { return null; } }
+const hours = (h: unknown) => typeof h === 'number' && Number.isFinite(h) ? `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}` : null;
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const weekdays = (days: number[] | null) => !days || days.length >= 7 ? 'every day' : [...days].sort().map(x => WEEKDAY[x] ?? '').join(' ');
+const pausedOn = (r: { pauses: { from: string; until: string }[] }, day: string) => r.pauses.some(p => p.from <= day && day < p.until);
 function localRpe(repo: Repository, entryId: string, position: number): unknown { try { return repo.localGet<unknown>(rpeKey(entryId, position)); } catch { return null; } }
 const cap = (s: string) => s === 'arm' ? 'Upper arm' : s.charAt(0).toUpperCase() + s.slice(1);
 const byDay = (a: Row, b: Row) => String(a.data.day).localeCompare(String(b.data.day)) || a.id.localeCompare(b.id);

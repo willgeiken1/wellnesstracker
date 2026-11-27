@@ -7,7 +7,7 @@ import type { Repository } from '@/data/repository';
 import { t } from '@/i18n/en';
 import { fill } from '../tiles/ui';
 import { removeFood } from './actions';
-import { clock, dayView, monthDay, num, plural, shortDate, weekdayName, type FoodItem } from './day';
+import { clock, dayView, known, monthDay, num, plural, shortDate, weekdayName, type FoodItem } from './day';
 import { combos, saveCombo, shiftDay } from './model';
 import { foodRoutes } from './nav';
 import { useFoodDay } from './selection';
@@ -30,7 +30,7 @@ export function FoodPage({ back, title, right, children, testID }: { back: strin
 }
 
 const DEL = 88;
-const g = (v: number) => `${num(v)} g`;
+const g = (v: number | null) => v == null ? '–' : `${num(v)} g`;
 
 /**
  * A meal (`meal-detail`): what it came to against the day, its foods (tap to change one, swipe left or tap Edit to
@@ -83,7 +83,7 @@ export function MealScreen({ repo, meal: id }: { repo: Repository; meal: string 
             <KitText weight={600} size={12.5} color="text-muted" style={{ marginTop: 4 }}>{l}</KitText>
           </View>)}
       </View>
-      <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: m.p * 4, color: k.tok(MACRO_COLOR.p) }, { v: m.c * 4, color: k.tok(MACRO_COLOR.c) }, { v: m.f * 9, color: k.tok(MACRO_COLOR.f) }]} />
+      <SplitBar h={10} gap={3} radius={5} track={k.c['surface-2']} parts={[{ v: known(m.p) * 4, color: k.tok(MACRO_COLOR.p) }, { v: known(m.c) * 4, color: k.tok(MACRO_COLOR.c) }, { v: known(m.f) * 9, color: k.tok(MACRO_COLOR.f) }]} />
       <KitText weight={500} size={12.5} lineHeight={1.4} tracking={-0.02} numeric color="text-muted" style={{ marginTop: 10, marginHorizontal: 2 }}>{fill(t('foodShareOfDay'), { pct: share, goal: num(view.goal) })}</KitText>
     </Card>
     <SectionHeader title={t('foodFoodsCap')} aside={plural(m.items.length, t('foodItemWord'), t('foodItemsWord'))} />
