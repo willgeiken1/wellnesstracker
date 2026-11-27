@@ -9,7 +9,7 @@ import { getAuthClient, clearLocalSession } from './client';
 import { openLocalDatabase } from '../data/database';
 import type { Repository } from '../data/repository';
 import { SyncEngine, syncTriggers, type SyncStatus } from '../data/sync/engine';
-import type { SyncState } from '../data/sync/status-line';
+import type { SyncState } from '../data/sync-line';
 import { SupabaseTransport } from '../data/sync/supabase';
 import { syncBeforeSignOut } from './sign-out-sync';
 import { beginSignOut, completeSignOut, recoverSignOut, escapeSignOut, UnreadableSignOutMarker, CorruptSignOutMarker, DepartureFailure, AccountDeletionFailed, AccountDeletionUncertain } from './sign-out';

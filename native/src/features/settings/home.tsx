@@ -6,7 +6,7 @@ import Svg, { Defs, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useAuth } from '@/auth/provider';
-import { syncLineKey } from '@/data/sync/status-line';
+import { syncLineKey } from '@/data/sync-line';
 import { t } from '@/i18n/en';
 import { readGoalsData } from './goals-data';
 import { EmptyState, Icon, KitText, LargeTitle, List, ListRow, NavBar, SearchField, StackGapContext, SurfaceContext, Tappable, mix, useKit } from '@/components/kit';

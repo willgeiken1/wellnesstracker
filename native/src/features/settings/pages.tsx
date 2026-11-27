@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { Badge, Eyebrow, Tappable, Icon, KitText, List, ListFooter, ProgressBar, SegmentedControl, alpha, useKit, type IconName } from '@/components/kit';
 import { formatNumber } from '@/components/stepper';
 import { useAuth, type AuthState } from '@/auth/provider';
-import { syncedClean, syncLineKey } from '@/data/sync/status-line';
+import { syncedClean, syncLineKey } from '@/data/sync-line';
 import { FLOZ, readWater, setWaterUnit } from '@/features/food/water';
 import { lastWeight } from '@/features/body/model';
 import { useWorkoutStore } from '@/features/workout/use-workout';

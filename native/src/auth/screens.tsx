@@ -1,4 +1,4 @@
-import { syncLineKey } from '../data/sync/status-line';
+import { syncLineKey } from '../data/sync-line';
 import { SyncRecovery } from './sync-recovery';
 import { BootRecovery } from './boot-recovery';
 import { AccountDeletionFailed, AccountDeletionUncertain, DepartureFailure } from './sign-out';

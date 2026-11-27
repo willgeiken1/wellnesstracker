@@ -1,5 +1,6 @@
+// Pure wording helper, outside src/data/sync/ so the phone-only build (which blocks that folder) can use it.
 import type { MessageKey } from '@/i18n/en';
-import type { SyncStatus } from './engine';
+import type { SyncStatus } from './sync/engine';
 
 /** Where sync stands, as one of the app's sync lines. Only a finished sync with nothing waiting reads as up to date. */
 export interface SyncState { status: SyncStatus; pending: number; conflicts: number }

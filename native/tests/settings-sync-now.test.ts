@@ -1,5 +1,5 @@
 import { syncAndSay } from '../src/features/settings/pages';
-import { syncedClean, syncLineKey } from '../src/data/sync/status-line';
+import { syncedClean, syncLineKey } from '../src/data/sync-line';
 import { showToast } from '../src/features/shell/toast';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn(), replace: jest.fn() } }));
