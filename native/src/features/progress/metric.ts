@@ -23,14 +23,20 @@ function weightSrc(d: ProgressData) {
   return from === 'both' ? t('progressSrcAppleAndInsight') : from === 'app' ? t('progressSrcInsight') : t('progressSrcApple');
 }
 
-/** Where the steps shown came from: Apple Health, Oura, or both, over the range when one is given. */
-function stepsSrc(d: ProgressData, range?: Range) {
-  const from = d.stepsFrom, v = d.days.steps;
-  if (!from || from.length !== v.length) return t('progressSrcApple');
+/** Where the readings shown came from: Apple Health, Oura, or both, over the range when one is given. `fallback` names
+ * the source when there is no per-day record or no reading in the range. */
+function shownSrc(from: ProgressData['stepsFrom'], v: readonly (number | null)[], range: Range | undefined, fallback: string) {
+  if (!from || from.length !== v.length) return fallback;
   const n = range === 'week' ? 7 : range === 'month' ? 30 : v.length;
   const shown = new Set(from.slice(-n).filter((f, i) => f && v[v.length - Math.min(n, v.length) + i] != null));
-  return shown.has('Oura') && shown.has('Apple Health') ? t('progressSrcAppleAndOura') : shown.has('Oura') ? t('progressSrcOura') : t('progressSrcApple');
+  return shown.has('Oura') && shown.has('Apple Health') ? t('progressSrcAppleAndOura') : shown.has('Oura') ? t('progressSrcOura') : shown.has('Apple Health') ? t('progressSrcApple') : fallback;
 }
+
+/** Where the steps shown came from. */
+const stepsSrc = (d: ProgressData, range?: Range) => shownSrc(d.stepsFrom, d.days.steps, range, t('progressSrcApple'));
+/** Where the nights shown came from. Each night is filled from Oura or Apple Health, so a connected Oura alone does not
+ * mean every night shown is Oura's. The example always reads as Oura. */
+const sleepSrc = (d: ProgressData, fallback: string, range?: Range) => d.demo ? t('progressSrcOura') : shownSrc(d.sleepFrom, d.days.sleep, range, fallback);
 
 /** How a metric reads. `range` narrows where the readings came from to the days shown. */
 export function metricView(d: ProgressData, key: MetricKey, range?: Range): MetricView {
@@ -43,7 +49,7 @@ export function metricView(d: ProgressData, key: MetricKey, range?: Range): Metr
       const g = d.weight.goalKg;
       return { key, name, short, unit: d.unit, goal: g == null ? null : d.unit === 'lb' ? g * 2.2046226218487757 : g, goalL: g == null ? null : fill(t('progressGoalIs'), { v: wGoal(g, d.unit) }), band: null, about: t('progressAboutWeight'), src: weightSrc(d) };
     }
-    case 'sleep': return { key, name, short, unit: '', goal: d.sleepGoalMin / 60, goalL: fill(t('progressGoalIs'), { v: hmShort(d.sleepGoalMin) }), band: null, tick: v => `${Math.round(v)}h`, about: t('progressAboutSleep'), src: ouraOrApple };
+    case 'sleep': return { key, name, short, unit: '', goal: d.sleepGoalMin / 60, goalL: fill(t('progressGoalIs'), { v: hmShort(d.sleepGoalMin) }), band: null, tick: v => `${Math.round(v)}h`, about: t('progressAboutSleep'), src: sleepSrc(d, ouraOrApple, range) };
     case 'hrv': return { key, name, short, unit: 'ms', goal: null, goalL: null, band: d.hrvBand, about: heartOura ? t('progressAboutHrv') : t('progressAboutHrvApple'), src: heartSrc };
     case 'rhr': return { key, name, short, unit: 'bpm', goal: null, goalL: null, band: d.rhrBand, about: t('progressAboutRhr'), src: heartSrc };
     case 'steps': return { key, name, short, unit: 'steps', goal: d.stepGoal, goalL: fill(t('progressGoalIs'), { v: fmt(d.stepGoal) }), band: null, tick: v => v ? `${Math.round(v / 1000)}k` : '0', about: fill(t('progressAboutSteps'), { goal: fmt(d.stepGoal) }), src: stepsSrc(d, range) };

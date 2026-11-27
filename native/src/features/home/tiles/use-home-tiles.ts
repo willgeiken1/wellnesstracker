@@ -36,8 +36,20 @@ export function pickRecovery(oura: OuraRecovery | null, apple: RecoveryRead): Re
 
 /** Last night's stages and bedtimes come from Apple Health; with Oura as the sleep source they would describe another night's
  * reading, so they are left out and the tile says why. */
-export function detailFor(detail: HealthDetailIn | null, ouraSleep: boolean): HealthDetailIn | null {
-  return detail && ouraSleep ? { ...detail, night: null, bedtimes: null } : detail;
+export function detailFor(detail: HealthDetailIn | null, ouraSleep: boolean, ouraSteps = false): HealthDetailIn | null {
+  if (!detail || (!ouraSleep && !ouraSteps)) return detail;
+  return { ...detail, ...(ouraSleep ? { night: null, bedtimes: null } : {}), ...(ouraSteps ? { stepsHourly: null } : {}) };
+}
+
+const named = (from: 'oura' | 'apple' | null | undefined) => from === 'oura' ? 'Oura' : from === 'apple' ? 'Apple Health' : null;
+
+/** Where today's steps and last night's sleep came from, read from the day the tile shows rather than from which
+ * services are connected, so a day filled from the other source is labelled by it. Apple Health's hourly steps and
+ * last night's stages describe Apple Health's reading, so they are left out when the shown total is Oura's. */
+export function todaySources(health: Pick<HealthDays, 'stepsFrom' | 'sleepFrom'> | null, oura: boolean, appleAccess: string | null) {
+  const steps = named(health?.stepsFrom?.at(-1)) ?? (appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura');
+  const sleep = named(health?.sleepFrom?.at(-1)) ?? (oura ? 'Oura' : 'Apple Health');
+  return { steps, sleep, ouraSteps: steps === 'Oura', ouraSleep: sleep === 'Oura' };
 }
 
 /** Today's finer Apple Health readings, read when Home comes to the front and when the app is reopened. Memory only. */
@@ -121,13 +133,14 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
   const state = useMemo(() => {
     if (!reader) return null;
     const now = new Date(minute * 60_000);
+    const today = todaySources(health, !!oura, appleAccess);
     const app = readAppData(reader, now, health);
     const recovery = pickRecovery(oura, { access: appleAccess, recovery: appleRecovery });
     const input: HomeInput = {
       now, ...app, weightGoalKg: weightGoalKg(reader.repo),
       health: health ? { steps: health.steps, activeKcal: health.activeKcal, exerciseMinutes: health.exerciseMinutes, sleepHours: health.sleepHours, mindfulMinutes: health.mindfulMinutes } : null,
-      detail: detailFor(detailRaw, !!oura), recovery,
-      sources: { activity: appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura', sleep: oura ? 'Oura' : 'Apple Health', body: 'Apple Health' },
+      detail: detailFor(detailRaw, today.ouraSleep, today.ouraSteps), recovery,
+      sources: { activity: appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura', steps: today.steps, sleep: today.sleep, body: 'Apple Health' },
       goals: { ...HOME_GOALS, sleepHours: Number.isFinite(sleepGoal) && sleepGoal > 0 ? sleepGoal / 60 : HOME_GOALS.sleepHours },
     };
     const nextMeal = input.nextMeal;

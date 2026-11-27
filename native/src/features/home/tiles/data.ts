@@ -75,7 +75,8 @@ export interface HomeInput {
   recovery: RecoveryIn | null;
   /** One per day in `days`. */
   score: ScoreDayIn[] | null;
-  sources: { activity: string; sleep: string; body: string };
+  /** `steps` names where today's steps came from, when it differs from the other activity readings. */
+  sources: { activity: string; steps?: string; sleep: string; body: string };
   goals: { steps: number; exercise: number; active: number; sleepHours: number; mindful: number };
 }
 export type TileReady = Record<string, boolean>;
@@ -224,7 +225,7 @@ export function buildTileData(input: HomeInput): HomeTileData {
     volume: { unit: 'lb', week: weekLb, lastWeek: Math.round(lb(input.volumeLastWeekKg)), daily: volLb, byGroup: Object.fromEntries(Object.entries(input.volumeByGroupKg).map(([k, v]) => [k, Math.round(lb(v))])), workouts: input.workoutsThisWeek },
     exercise: { unit: 'min', goal: goals.exercise, today: last(exercise) ?? 0, series: exercise as number[], hourly: hourly(detail?.exerciseHourly) },
     active: { unit: 'kcal', goal: goals.active, today: last(active) ?? 0, series: active as number[], hourly: hourly(detail?.activeHourly) },
-    steps: { unit: 'steps', goal: goals.steps, today: last(steps) ?? 0, series: steps as number[], hourly: hourly(detail?.stepsHourly), source: input.sources.activity },
+    steps: { unit: 'steps', goal: goals.steps, today: last(steps) ?? 0, series: steps as number[], hourly: hourly(detail?.stepsHourly), source: input.sources.steps ?? input.sources.activity },
     sleep: {
       unit: 'h', need: goals.sleepHours,
       last: { minutes: night ? nightMinutes : Math.round((last(sleepH) ?? 0) * 60), bed: night ? clock12(night.bed) : '', wake: night ? clock12(night.wake) : '', stages: night?.stages ?? [] },

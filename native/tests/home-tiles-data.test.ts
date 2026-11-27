@@ -3,7 +3,7 @@ import { nightTimeline } from '../src/features/home/tiles/health-detail';
 import { parseMarkup, parseStyle } from '../src/features/home/tiles/markup-parse';
 import { buildState, tileView } from '../src/features/home/tiles/state';
 import { DEFAULT_UNITS, drawTile, studioVersion } from '../src/features/home/tiles/studio';
-import { detailFor, pickRecovery } from '../src/features/home/tiles/use-home-tiles';
+import { detailFor, pickRecovery, todaySources } from '../src/features/home/tiles/use-home-tiles';
 import { createTheme } from '../src/design/tokens';
 import { tilePage } from '../src/features/tiles/registry';
 import type { TileSize } from '../src/features/tiles/types';
@@ -174,6 +174,31 @@ describe('health sources stay apart', () => {
       recovery: { hrv: series(54, 50), rhr: series(56, 57), sleepScore: series(86, 80), source: 'Oura' } }), DEFAULT_UNITS, () => {});
     expect(tileView(s, 'sleep', 'A', 'S', {})).toEqual({ empty: 'sleepStages' });
     expect(tileView(s, 'hrv', 'A', 'S', {})).toEqual({ options: {} });
+  });
+});
+
+describe('where today\'s steps and sleep came from', () => {
+  const hourly = Array.from({ length: 24 }, () => 300);
+  const detail = { stepsHourly: hourly, activeHourly: hourly, exerciseHourly: hourly, bedtimes: [23], mindful: null, bodyFat: null,
+    night: { bed: new Date(2026, 10, 21, 23), wake: new Date(2026, 10, 22, 6), stages: [['core', 0, 420]] as ['core', number, number][] } };
+  test('when today\'s steps are Oura\'s, the label says Oura and Apple Health\'s hourly steps are left out', () => {
+    const today = todaySources({ stepsFrom: ['apple', 'oura'], sleepFrom: ['oura', 'oura'] }, true, 'asked');
+    expect(today).toEqual({ steps: 'Oura', sleep: 'Oura', ouraSteps: true, ouraSleep: true });
+    const d = detailFor(detail, today.ouraSleep, today.ouraSteps)!;
+    expect(d.stepsHourly).toBeNull();
+    expect(d.activeHourly).toBe(hourly);
+    const data = buildTileData(input({ health: health({ steps: series(6400) }), detail: d, sources: { activity: 'Apple Health', steps: today.steps, sleep: today.sleep, body: 'Apple Health' } }));
+    expect(data.steps.source).toBe('Oura');
+    expect(tileView(buildState(input({ health: health({ steps: series(6400) }), detail: d }), DEFAULT_UNITS, () => {}), 'steps', 'A', 'S', {})).toEqual({ empty: expect.any(String) });
+  });
+  test('when today\'s steps and last night\'s sleep are Apple Health\'s, both keep Apple Health\'s detail even with Oura connected', () => {
+    const today = todaySources({ stepsFrom: ['oura', 'apple'], sleepFrom: ['oura', 'apple'] }, true, 'asked');
+    expect(today).toEqual({ steps: 'Apple Health', sleep: 'Apple Health', ouraSteps: false, ouraSleep: false });
+    expect(detailFor(detail, today.ouraSleep, today.ouraSteps)).toBe(detail);
+  });
+  test('with no per-day source, the labels follow what is connected, as before', () => {
+    expect(todaySources(null, false, 'asked')).toEqual({ steps: 'Apple Health', sleep: 'Apple Health', ouraSteps: false, ouraSleep: false });
+    expect(todaySources({}, true, 'ask')).toEqual({ steps: 'Oura', sleep: 'Oura', ouraSteps: true, ouraSleep: true });
   });
 });
 

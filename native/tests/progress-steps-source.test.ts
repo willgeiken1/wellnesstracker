@@ -29,3 +29,20 @@ describe('where the steps shown came from', () => {
     expect(metricView(progress(days(Array(N).fill(8000))), 'steps', 'month').src).toBe('Apple Health');
   });
 });
+
+describe('where the nights shown came from', () => {
+  const nights = (h: (number | null)[], from: 'oura' | 'apple'): HealthDays => ({ steps: null, sleepHours: h, sleepFrom: h.map(v => v == null ? null : from), ...none });
+  const withOura = (d: ReturnType<typeof progress>) => ({ ...d, sources: { ...d.sources, oura: true } });
+  test('with Oura connected, a week of nights filled from Apple Health reads as Apple Health', () => {
+    const apple = Array<number | null>(N).fill(7), ring = Array<number | null>(N).fill(null); ring[N - 20] = 6.5; apple[N - 20] = null;
+    const d = withOura(progress(mergeHealthDays(nights(apple, 'apple'), nights(ring, 'oura'))));
+    expect(metricView(d, 'sleep', 'week').src).toBe('Apple Health');
+    expect(metricView(d, 'sleep', 'month').src).toBe('Apple Health and Oura');
+  });
+  test('nights from Oura alone read as Oura, and with no per-night record the connected source is named', () => {
+    expect(metricView(progress(mergeHealthDays(null, nights(Array(N).fill(7), 'oura'))), 'sleep', 'week').src).toBe('Oura');
+    const bare = progress({ steps: null, sleepHours: Array(N).fill(7), ...none });
+    expect(metricView({ ...bare, sleepFrom: undefined }, 'sleep').src).toBe('Apple Health');
+    expect(metricView(withOura({ ...bare, sleepFrom: undefined }), 'sleep').src).toBe('Oura');
+  });
+});
