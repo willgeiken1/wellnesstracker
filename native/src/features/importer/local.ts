@@ -124,6 +124,8 @@ export function commitPendingAccountImport(guest: Repository, account: Repositor
     if (native && local && typeof local === "object" && !Array.isArray(local)) {
       const now = Object.fromEntries(
         Object.keys(local).flatMap((key) => {
+          // A workout removed since the restore takes its unsaved set rows with it.
+          if (key.startsWith("draft:") && guest.get("entries", key.slice(6))?.deleted_at !== null) return [];
           const value = guest.localGet<unknown>(key);
           return value === undefined || value === null ? [] : [[key, value]];
         }),
@@ -309,8 +311,12 @@ export interface RestorePhotos<T> {
 /** Photo addresses (as src/core/owner-files.ts keeps them). Their files belong to one person on this phone, so a
  * signed-out restore never hands them on to an account. */
 export const PHOTO_ADDRESS_KEYS = ["profilePhoto", "profilePhotoLeftovers", "progressPhotos", "progressPhotosPending"];
-/** What a Replace restore clears when the file doesn't hold it: the histories kept in local storage and the photo lists. */
-const REPLACE_CLEARS = ["foodWater", "routines", "progressNeck", "progressBodyFat", ...PHOTO_ADDRESS_KEYS];
+/**
+ * What a Replace restore clears when the file doesn't hold it: the histories kept in local storage, the split and the
+ * plan's days (whose templates the Replace may have removed) and the photo lists. A workout's unsaved set rows go too.
+ */
+const REPLACE_CLEARS = ["foodWater", "routines", "progressNeck", "progressBodyFat", "split:def", "split:state", "plans:definition", "plans:name",
+  ...PHOTO_ADDRESS_KEYS];
 /** Details a restore never takes from the file: the importer's own bookkeeping, AI photos and barcode caches. */
 const skipped = (key: string) => key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:");
 
@@ -381,14 +387,17 @@ export function restoreNativeLocal<T>(
     const before = photos.names(repo);
     // Replace puts the phone back as the file has it, so a history or photo list the file never had goes too, and the
     // photo files it named go with it below.
-    if (mode === "replace")
-      for (const key of REPLACE_CLEARS) if (!Object.hasOwn(backup.local, key) && repo.localGet(key) != null) repo.localSave(key, null);
+    if (mode === "replace") {
+      const drafts = typeof repo.localSnapshot === "function" ? Object.keys(repo.localSnapshot()).filter((key) => key.startsWith("draft:")) : [];
+      for (const key of [...REPLACE_CLEARS, ...drafts]) if (!Object.hasOwn(backup.local, key) && repo.localGet(key) != null) repo.localSave(key, null);
+    }
     for (const [key, value] of Object.entries(backup.local)) {
       if (skipped(key)) continue;
       const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));
       // Replace puts the file's details back over the phone's; a merge only fills in what the phone does not have.
       const mine = mode === "merge" && !fresh ? repo.localGet(key) : undefined;
-      if (mine !== undefined) {
+      // A history a Replace cleared is kept as null: nothing there, so the file's history comes in whole.
+      if (mine !== undefined && mine !== null) {
         const merged = mergeHistory(key, mine, value);
         if (merged != null) repo.localSave(key, merged);
         continue;
@@ -405,7 +414,7 @@ export function restoreNativeLocal<T>(
       const waiting: Record<string, unknown> = isObj(prior) ? { ...prior } : {};
       for (const [key, value] of kept) {
         const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));
-        if (!isObj(prior) || fresh || !Object.hasOwn(waiting, key)) waiting[key] = value;
+        if (!isObj(prior) || fresh || waiting[key] === undefined || waiting[key] === null) waiting[key] = value;
         else waiting[key] = mergeHistory(key, waiting[key], value) ?? waiting[key];
       }
       repo.localSave("pwaPendingAccountLocal", waiting);

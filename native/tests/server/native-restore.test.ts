@@ -223,10 +223,15 @@ test('Replace from a backup made before any water, routine or measurement clears
     const older = { format: 'insight-phone-only' as const, version: 1 as const, rows: {}, local: { timer: { seconds: 90 } } };
     for (const [key, value] of Object.entries(history)) repo.localSave(key, value);
     repo.localSave('settings-fixture', { on: true });
+    const plan = { 'split:def': { v: 1, key: 'ul', name: 'Fixture split', days: [] }, 'split:state': { focus: 0 }, 'plans:definition': { days: [] },
+      'plans:name': 'Fixture plan', 'draft:30000000-0000-4000-8000-000000000555': [{ weight: '50', reps: '5' }] };
+    for (const [key, value] of Object.entries(plan)) repo.localSave(key, value);
     restoreNativeLocal(repo, older, new Set(), 'merge', noPhotos);
     for (const [key, value] of Object.entries(history)) expect(repo.localGet(key)).toEqual(value);
     restoreNativeLocal(repo, older, new Set(), 'replace', noPhotos);
     for (const key of Object.keys(history)) expect(repo.localGet(key)).toBeNull();
+    // The split, the plan's days and a workout's unsaved sets the file never had go too.
+    for (const key of Object.keys(plan)) expect(repo.localGet(key)).toBeNull();
     expect(repo.localGet('timer')).toEqual({ seconds: 90 });
     // A detail that isn't a history stays as the phone has it.
     expect(repo.localGet('settings-fixture')).toEqual({ on: true });
@@ -250,5 +255,36 @@ test('a row deleted or changed after a signed-out restore reaches the first acco
     expect(account.get('custom_exercises', ids.custom)).toBeUndefined();
     expect(account.get('pauses', ids.pause)?.data.end_day).toBe('2026-01-12');
     expect(account.get('plans', ids.plan)?.data.days_per_week).toBe(4);
+  } finally { sqlite.close(); }
+});
+
+test('a merge after a Replace cleared a history brings the file\'s history in whole', async () => {
+  const { sqlite, repo } = await setup();
+  try {
+    const drink = { id: 'w1', c: 'glass', name: 'Glass', oz: 8, icon: 'glass', at: 1 };
+    repo.localSave('foodWater', { v: 1, unit: 'oz', goal: 2, containers: [], log: { '2026-01-08': [drink] } });
+    repo.localSave('progressNeck', [{ day: '2026-01-08', cm: 39 }]);
+    restoreNativeLocal(repo, { format: 'insight-phone-only', version: 1, rows: {}, local: {} }, new Set(), 'replace', noPhotos);
+    const water = { v: 1, unit: 'oz', goal: 2, containers: [], log: { '2026-01-10': [{ ...drink, id: 'w2' }] } };
+    restoreNativeLocal(repo, { format: 'insight-phone-only', version: 1, rows: {}, local: { foodWater: water, progressNeck: [{ day: '2026-01-10', cm: 38 }] } },
+      new Set(), 'merge', noPhotos);
+    expect(repo.localGet('foodWater')).toEqual(water);
+    expect(repo.localGet('progressNeck')).toEqual([{ day: '2026-01-10', cm: 38 }]);
+  } finally { sqlite.close(); }
+});
+
+test('the unsaved sets of a workout the guest no longer has stay behind when the first account takes the restore', async () => {
+  const { sqlite, repo: guest } = await setup();
+  try {
+    const db = drizzle(sqliteClient(sqlite));
+    const account = new Repository(db, '20000000-0000-4000-8000-000000000007', DEVICE_A, () => '30000000-0000-4000-8000-000000000892');
+    const gone = 'draft:30000000-0000-4000-8000-000000000556';
+    const backup = await backupOf((r) => r.save('custom_exercises', { name: 'Fixture press' }, ids.custom),
+      { [gone]: [{ weight: '50', reps: '5' }], progressNeck: [{ day: '2026-01-09', cm: 38 }] });
+    commitImport(guest, previewImport(guest, nativeBackupPlan(backup), 'merge', true), true);
+    restoreNativeLocal(guest, backup, new Set(), 'merge', noPhotos);
+    commitPendingAccountImport(guest, account);
+    expect(account.localGet(gone)).toBeUndefined();
+    expect(account.localGet('progressNeck')).toEqual([{ day: '2026-01-09', cm: 38 }]);
   } finally { sqlite.close(); }
 });
