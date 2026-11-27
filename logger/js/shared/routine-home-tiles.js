@@ -1,5 +1,5 @@
 import { app } from "../runtime.js";
-import { canMutateRoutines, isLive, normalizeDailyRoutines, projectDailyRoutines, putDailyRoutines } from "./daily-routines-store.js";
+import { canMutateRoutines, isLive, normalizeDailyRoutines, projectDailyRoutines, putDailyRoutines, routineParkedItemIds } from "./daily-routines-store.js";
 import { routineBlockRunsOn } from "./routine-dose.js";
 import { routineItemType } from "./routine-types.js";
 
@@ -205,8 +205,10 @@ function runsOn(block, day) {
 }
 
 /* An item in routines is due on a day one of them runs. One in no routine
-   lives on its type tab and is due every day. */
+   lives on its type tab and is due every day. One only hidden routines
+   hold is due on no day. */
 function itemDue(view, itemId, day) {
+  if (routineParkedItemIds(view).has(itemId)) return false;
   const blocks = (view.placements || []).filter((row) => row && row.itemId === itemId)
     .map((row) => (view.blocks || []).find((block) => block && block.id === row.blockId))
     .filter(Boolean);
@@ -228,12 +230,14 @@ function itemsInOrder(view, day = "") {
       out.push({ block, item: byId.get(row.itemId) });
     });
   });
-  /* A typed item no shown routine holds lives on its tab and is due every
-     day, so Next up and the tile picker list it after the routines. */
+  /* A typed item no routine holds lives on its tab and is due every day,
+     so Next up and the tile picker list it after the routines. One that
+     only a hidden routine holds is parked, not loose. */
   const shown = new Set((view.blocks || []).map((block) => block && block.id));
   const held = new Set((view.placements || []).filter((row) => row && shown.has(row.blockId)).map((row) => row.itemId));
+  const parked = routineParkedItemIds(view);
   const loose = (view.items || [])
-    .filter((item) => item && !held.has(item.id) && !seen.has(item.id) && routineItemType(item, view.prefs))
+    .filter((item) => item && !held.has(item.id) && !parked.has(item.id) && !seen.has(item.id) && routineItemType(item, view.prefs))
     .sort((a, b) => ((a.name || "") < (b.name || "") ? -1 : (a.name || "") > (b.name || "") ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   loose.forEach((item) => out.push({ block: null, item }));
   return out;

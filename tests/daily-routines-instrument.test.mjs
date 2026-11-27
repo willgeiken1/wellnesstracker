@@ -875,3 +875,92 @@ describe("Home tiles follow routine days", () => {
     assert.ok(tiles.routineTrayEntries(app.state, [], "").some((row) => row.id === tiles.routineItemTileId(id)));
   });
 });
+
+describe("items only hidden routines hold are parked, not standalone", () => {
+  /* Synthetic. 2026-11-23 is a Monday (0), 2026-11-24 a Tuesday (1). */
+  function parkedSetup() {
+    signIn();
+    assert.ok(saveRoutineBlock(app.state, { name: "Example Monday", startMin: 8 * 60, endMin: 9 * 60, days: [0] }));
+    const monday = liveOf(app.state.dailyRoutines.blocks).find((row) => row.name === "Example Monday");
+    assert.ok(routines.saveRoutineItem(app.state, { name: "Example Compound K", kind: "dose", amount: 1, unit: "mg", type: "peptide", blockIds: [monday.id], time: "10:00" }));
+    assert.ok(hideRoutineBlock(app.state, monday.id));
+    return { monday, id: item("Example Compound K").id };
+  }
+
+  test("the store tells a parked item from a standalone one, projected or raw", async () => {
+    const { routineParkedItemIds } = await import("../logger/js/shared/daily-routines-store.js");
+    const raw = {
+      blocks: [
+        { id: "b1", name: "Example shown", deletedAt: null },
+        { id: "b2", name: "Example hidden", hidden: true, deletedAt: null },
+      ],
+      placements: [
+        { id: "p1", itemId: "i_both", blockId: "b1", deletedAt: null },
+        { id: "p2", itemId: "i_both", blockId: "b2", deletedAt: null },
+        { id: "p3", itemId: "i_parked", blockId: "b2", deletedAt: null },
+        { id: "p4", itemId: "i_gone", blockId: "b2", deletedAt: 5 },
+      ],
+    };
+    assert.deepEqual([...routineParkedItemIds(raw)], ["i_parked"]);
+    const projected = { blocks: [raw.blocks[0]], hiddenBlocks: [raw.blocks[1]], placements: raw.placements };
+    assert.deepEqual([...routineParkedItemIds(projected)], ["i_parked"], "same answer from a projected view");
+    assert.equal(routineParkedItemIds(null).size, 0);
+  });
+
+  test("hiding a Monday-only routine does not make its timed item missed on Tuesday", () => {
+    const { monday } = parkedSetup();
+    const dose = { id: "item_k", kind: "dose", timeMin: 10 * 60, deletedAt: null };
+    const hidden = { id: monday.id, name: "Example Monday", startMin: 8 * 60, endMin: 9 * 60, days: [0], hidden: true, deletedAt: null };
+    const place = { id: "p_k", itemId: "item_k", blockId: monday.id, deletedAt: null };
+    const tuesday = new Date(2026, 10, 24, 12, 0, 0);
+    assert.equal(nextItemCountdown({ item: dose, blocks: [hidden], placements: [place], logs: [], date: tuesday, day: "2026-11-24" }), null, "parked, so no clock and never missed");
+    const standalone = nextItemCountdown({ item: dose, blocks: [], placements: [], logs: [], date: tuesday, day: "2026-11-24" });
+    assert.equal(standalone.missed, true, "a standalone item at its own time still runs daily");
+  });
+
+  test("Home, day counts and History leave a parked item out", async () => {
+    const tiles = await import("../logger/js/shared/routine-home-tiles.js");
+    const { routineHistoryView } = await import("../logger/js/shared/routine-history.js");
+    const { id } = parkedSetup();
+    const projected = projectDailyRoutines(app.state.dailyRoutines);
+    for (const day of ["2026-11-23", "2026-11-24"]) {
+      const next = tiles.renderRoutineTileHTML(tiles.NEXT_UP_TILE_ID, { state: app.state, size: "medium", day });
+      assert.doesNotMatch(next, new RegExp(`data-item-id="${id}"`), `Next up on ${day}`);
+      const one = tiles.renderRoutineTileHTML(tiles.routineItemTileId(id), { state: app.state, size: "medium", day });
+      assert.doesNotMatch(one, /data-action="routines-log"/, `its own tile on ${day}`);
+      assert.equal(routines.routineDoseProgress(projected, day).due, 0, `dose count on ${day}`);
+    }
+    assert.equal(routines.routineNextItem(projected, new Date(2026, 10, 24, 12, 0, 0), "2026-11-24"), null);
+    const history = routineHistoryView(projected, { month: "2026-11", day: "2026-11-24", today: "2026-11-24", tab: "logged" });
+    const marked = history.days.filter((row) => row.items.length);
+    assert.deepEqual(marked, [], "no day is due or missed while it is parked");
+  });
+
+  test("showing the routine again brings the item back on its days", () => {
+    const { monday, id } = parkedSetup();
+    assert.ok(routines.showRoutineBlock(app.state, monday.id));
+    const projected = projectDailyRoutines(app.state.dailyRoutines);
+    assert.ok(routines.routineNextItem(projected, new Date(2026, 10, 23, 7, 0, 0), "2026-11-23"), "Monday has it again");
+    assert.equal(routines.routineNextItem(projected, new Date(2026, 10, 24, 7, 0, 0), "2026-11-24"), null, "Tuesday still does not");
+    assert.ok(id);
+  });
+
+  test("a timed standalone item fills Now instead of Nothing scheduled", () => {
+    signIn(7, 0);
+    for (const row of liveOf(app.state.dailyRoutines.blocks).filter((b) => b.hidden !== true)) assert.ok(hideRoutineBlock(app.state, row.id));
+    assert.ok(routines.saveRoutineItem(app.state, { name: "Example Compound N", kind: "dose", amount: 1, unit: "mg", type: "peptide", blockIds: [], time: "10:00" }));
+    const projected = projectDailyRoutines(app.state.dailyRoutines);
+    const html = routines.routineNowHTML(projected, new Date(2026, 10, 22, 7, 0, 0));
+    assert.doesNotMatch(html, /Nothing scheduled/);
+    assert.doesNotMatch(html, /Add a routine/);
+    assert.match(html, /id="dr-now-title">Example Compound N</);
+    assert.match(html, /Due in 3 hr/);
+  });
+
+  test("with nothing due at all, Now still says Nothing scheduled", () => {
+    signIn(7, 0);
+    for (const row of liveOf(app.state.dailyRoutines.blocks).filter((b) => b.hidden !== true)) assert.ok(hideRoutineBlock(app.state, row.id));
+    const html = routines.routineNowHTML(projectDailyRoutines(app.state.dailyRoutines), new Date(2026, 10, 22, 7, 0, 0));
+    assert.match(html, /Nothing scheduled/);
+  });
+});

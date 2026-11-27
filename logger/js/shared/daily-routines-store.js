@@ -527,6 +527,32 @@ export function liveOf(list) {
   return (Array.isArray(list) ? list : []).filter(isLive);
 }
 
+/* Items that only hidden routines hold. A hidden routine is off the
+   schedule, so these are not due on any day. They are not standalone
+   either: a typed item that no routine holds at all lives on its tab and
+   is due every day, but one parked in a hidden routine waits until the
+   routine is shown again or the item is taken out of it. Works on a
+   projected view (blocks shown, hiddenBlocks hidden) and on a raw store. */
+export function routineParkedItemIds(view) {
+  const source = view && typeof view === "object" ? view : {};
+  const all = (Array.isArray(source.blocks) ? source.blocks : []).concat(Array.isArray(source.hiddenBlocks) ? source.hiddenBlocks : []);
+  const shown = new Set();
+  const hidden = new Set();
+  for (const block of all) {
+    if (!isLive(block) || typeof block.id !== "string") continue;
+    if (block.hidden === true) hidden.add(block.id);
+    else shown.add(block.id);
+  }
+  const inShown = new Set();
+  const inHidden = new Set();
+  for (const place of Array.isArray(source.placements) ? source.placements : []) {
+    if (!isLive(place) || typeof place.itemId !== "string") continue;
+    if (shown.has(place.blockId)) inShown.add(place.itemId);
+    else if (hidden.has(place.blockId)) inHidden.add(place.itemId);
+  }
+  return new Set([...inHidden].filter((id) => !inShown.has(id)));
+}
+
 export function projectDailyRoutines(store) {
   const normalized = normalizeDailyRoutines(store);
   if (!normalized) return null;

@@ -155,8 +155,13 @@ export function nextItemCountdown({ item, blocks, placements, logs, date, day, h
   const starts = [];
   const runDays = new Set();
   let memberships = 0;
+  let hiddenMemberships = 0;
   for (const block of Array.isArray(blocks) ? blocks : []) {
-    if (!live(block) || block.hidden === true || !placed.has(block.id)) continue;
+    if (!live(block) || !placed.has(block.id)) continue;
+    if (block.hidden === true) {
+      hiddenMemberships += 1;
+      continue;
+    }
     const days = routineBlockDays(block);
     memberships += 1;
     for (const weekday of days) runDays.add(weekday);
@@ -167,6 +172,9 @@ export function nextItemCountdown({ item, blocks, placements, logs, date, day, h
      routine's start, on the days its routines run, and works with no
      routine at all. */
   const own = routineMinuteOfDay(item.timeMin);
+  /* Held only by hidden routines, the item is parked: off the schedule on
+     every day, not a standalone item due daily. */
+  if (!memberships && hiddenMemberships) return null;
   if (own != null) starts.splice(0, starts.length, { start: own, days: memberships ? [...runDays].sort((a, b) => a - b) : [0, 1, 2, 3, 4, 5, 6] });
   if (!starts.length) return null;
   const boundaryMin = routineDayRolloverHour(hour) * 60;

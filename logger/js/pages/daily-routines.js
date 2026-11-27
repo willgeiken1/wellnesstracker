@@ -17,6 +17,7 @@ import {
   dedupePlacementPairs,
   seedDefaultBlocks,
   upsertEntity,
+  routineParkedItemIds,
 } from "../shared/daily-routines-store.js";
 import { MAX_DAY_ROLLOVER_HOUR, nextDoseCountdown, nextItemCountdown, routineBlockRunsOn, routineBlockStartMin, routineBlockWindow, routineDayKey, routineDayRolloverHour, routineMinuteOfDay } from "../shared/routine-dose.js";
 import {
@@ -314,7 +315,7 @@ function parseRoutineLogId(id) {
 
 /* One row per placed item. Two blocks that share an item are still one dose.
    With a day, a routine that does not run that weekday is left out. A typed
-   item no shown routine holds lives on its tab and is due every day, as in
+   item no routine holds lives on its tab and is due every day, as in
    History, so it counts too. */
 function placedItems(projected, day) {
   const shown = (projected && projected.blocks ? projected.blocks : []).filter((block) => isLive(block) && block.hidden !== true);
@@ -332,8 +333,10 @@ function placedItems(projected, day) {
     out.push(items.get(place.itemId));
   }
   const prefs = projected && projected.prefs;
+  /* One only hidden routines hold is parked: due on no day. */
+  const parked = routineParkedItemIds(projected);
   const loose = [...items.values()]
-    .filter((item) => !held.has(item.id) && routineItemType(item, prefs))
+    .filter((item) => !held.has(item.id) && !parked.has(item.id) && routineItemType(item, prefs))
     .sort((a, b) => ((a.name || "") < (b.name || "") ? -1 : (a.name || "") > (b.name || "") ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return out.concat(loose);
 }
@@ -374,7 +377,7 @@ function itemTiming(projected, item, date, day, logs = null) {
      routine day a time belongs to, and an off day is not overdue. */
   const result = nextItemCountdown({
     item,
-    blocks: projected && projected.blocks,
+    blocks: countdownBlocks(projected),
     placements: projected && projected.placements,
     logs: Array.isArray(logs) ? logs : [],
     date,
@@ -604,10 +607,17 @@ function itemNoteMarkup(item, compound) {
   return `<span class="dr-item-note">${esc(note)}</span>`;
 }
 
+/* Shown and hidden routines both, so the countdown can tell an item that
+   only a hidden routine holds (parked) from one in no routine (standalone). */
+function countdownBlocks(projected) {
+  if (!projected) return [];
+  return (Array.isArray(projected.blocks) ? projected.blocks : []).concat(Array.isArray(projected.hiddenBlocks) ? projected.hiddenBlocks : []);
+}
+
 function countdownQuery(projected, item, date, day) {
   return {
     item,
-    blocks: projected.blocks,
+    blocks: countdownBlocks(projected),
     placements: projected.placements,
     logs: projected.logs,
     date,
@@ -2250,6 +2260,21 @@ export function routineNowHTML(projected, date) {
   const clock = formatRoutineClock(date);
   const slot = SLOT_LABEL[moment.slot] || "Today";
   if (!moment.nowBlock) {
+    /* No routine is current, but a standalone item can still be due today,
+       such as a peptide at its own time on its tab. Show it and its time
+       rather than asking for a routine. */
+    const next = routineNextItem(projected, date, day);
+    if (next) {
+      const wait = next.overdue ? "Overdue" : formatRoutineWait(next.waitMin);
+      const when = !wait ? "Due today" : next.overdue ? wait : `Due ${wait}`;
+      return `<section class="dr-now dr-instrument" data-color="lavender" data-standalone="true" aria-labelledby="dr-now-title">
+      <p class="dr-k dr-vh">Next · ${esc(clock)}</p>
+      <h2 class="dr-now-title" id="dr-now-title">${esc(next.item.name)}</h2>
+      ${path}
+      <p class="dr-next">${esc(when)}</p>
+      ${footer}
+    </section>`;
+    }
     return `<section class="dr-now dr-instrument" data-color="lavender" aria-labelledby="dr-now-title">
       <p class="dr-k dr-vh">Now · ${esc(clock)}</p>
       <h2 class="dr-now-title" id="dr-now-title">Nothing scheduled</h2>
