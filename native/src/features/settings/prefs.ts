@@ -97,6 +97,7 @@ export function loadSettingsPrefs(storage: PrefsStorage | null | undefined): Set
 
 function useStorage(): PrefsStorage {
   let repo: PrefsStorage | null = null;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- useAuth runs on every render; the catch only covers its missing-provider throw, which comes after its one useContext.
   try { repo = useAuth().repository ?? null; } catch { repo = null; }
   return repo ?? memoryStore;
 }

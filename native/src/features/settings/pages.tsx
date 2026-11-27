@@ -60,6 +60,7 @@ export function GoalsPage() {
   const repo = useAuth().repository;
   const [p, set] = useSettingsPrefs();
   const [, bump] = useState(0);
+  const [now] = useState(() => Date.now());
   const kj = p.units.energy === 'kJ', kg = p.units.weight === 'kg', ml = p.units.water === 'ml';
   let g: GoalsData | null = null;
   try { g = repo ? readGoalsData(repo) : null; } catch { g = null; }
@@ -70,7 +71,7 @@ export function GoalsPage() {
   const pace = (kg ? [0.1, 0.25, 0.5, 0.75].map(k => +(k * KG).toFixed(4)) : [0.25, 0.5, 1, 1.5]).map(v => ({ v, l: paceLabel(v, p) }));
   const nowLb = g?.currentKg != null ? g.currentKg * KG : null, startLb = g?.startKg != null ? g.startKg * KG : null;
   const left = nowLb != null ? Math.max(0, nowLb - goalLb) : null;
-  const eta = left ? new Date(Date.now() + Math.round(left / p.goals.pace * 7) * 86400000) : null;
+  const eta = left ? new Date(now + Math.round(left / p.goals.pace * 7) * 86400000) : null;
   const foot = nowLb == null ? st('settingsPaceFootNoWeight') : !left ? st('settingsAtGoal')
     : st('settingsPaceFoot', { pace: paceLabel(p.goals.pace, p), goal: wt(goalLb, p), date: `${MONTHS[eta!.getMonth()]} ${eta!.getDate()}` });
   const lost = nowLb != null && startLb != null ? startLb - nowLb : null, total = startLb != null ? startLb - goalLb : null;

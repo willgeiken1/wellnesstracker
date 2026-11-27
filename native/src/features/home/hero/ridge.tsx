@@ -33,6 +33,19 @@ function settled(s: Springs, g: Group, i: number) {
   return Math.abs(s.x[g][i] - s.tg[g][i]) < e && Math.abs(s.vel[g][i]) < e * 6;
 }
 
+/** The scene at `now`: the springs' current values over the day's fixed parts. */
+function ridgeFrame(view: HeroView, kinds: Kind[], s: Springs, a: { r0: number; rDur: number }, now: number): RidgeState {
+  const rr = a.r0 < 0 ? 1 : outCubic((now - a.r0) / a.rDur);
+  const base = staticRidgeState(view, t('homeHeroOf'), t('homeHeroRecovery'));
+  return {
+    ...base,
+    v: s.x.v.map(v => Math.max(0, Math.min(1.08, v))),
+    met: s.x.v.map((v, i) => view.pillars[i].met && !view.pillars[i].rest ? smooth(0.955, 0.998, v) : 0),
+    tok: view.pillars.map((p, i) => p.rest ? [[t('homeHeroRest'), 'v', 0]] : settled(s, 'a', i) || kinds[i] === 'mask' ? p.arc : tokens(kinds[i], s.x.a[i])),
+    pct: view.empty ? '' : String(Math.round(Math.max(0, s.x.p[0]))), r: rr, ta: a.r0 < 0 ? 1 : outCubic(((now - a.r0) / a.rDur - 0.12) / 0.55), f: s.x.f.slice(),
+  };
+}
+
 export interface RidgeProps { view: HeroView; width: number; colors: Record<string, string>; mode: 'dark' | 'light'; reduceMotion: boolean; calm: boolean; labels: boolean; glow: number; detail?: 0 | 1 | 2;
   /** Told which peak was tapped (Hide numbers shows the numbers on a tap of the hidden food peak). */ onPeak?: (i: number) => void }
 
@@ -66,6 +79,7 @@ export function RidgeHero({ view, width: W, colors, mode, reduceMotion, calm, la
     s.tg.a = view.pillars.map(p => amountOf(p.arc, p.rest)); s.tg.p = [view.pct];
     if (!a.entered) {
       a.entered = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reduce Motion snaps the springs held in refs; this one redraw shows the final frame at once.
       if (reduceMotion) { snap(); setFrame(n => n + 1); return; }
       a.rDur = calm ? 720 : 1000; a.r0 = performance.now(); a.start = [0, 1, 2].map(i => a.r0 + 140 + i * 80);
       kick(); return;
@@ -75,19 +89,13 @@ export function RidgeHero({ view, width: W, colors, mode, reduceMotion, calm, la
   }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     sp.current.tg.f = [0, 1, 2].map(j => focus < 0 || j === focus ? 1 : 0.38);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reduce Motion snaps the springs held in refs; this one redraw shows the final frame at once.
     if (reduceMotion) { snap(); setFrame(n => n + 1); } else kick();
   }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { anim.current.dead = true; if (anim.current.raf) cancelAnimationFrame(anim.current.raf); }, []);
 
-  const s = sp.current, a = anim.current, now = performance.now(), rr = a.r0 < 0 ? 1 : outCubic((now - a.r0) / a.rDur);
-  const base = staticRidgeState(view, t('homeHeroOf'), t('homeHeroRecovery'));
-  const state: RidgeState = {
-    ...base,
-    v: s.x.v.map(v => Math.max(0, Math.min(1.08, v))),
-    met: s.x.v.map((v, i) => view.pillars[i].met && !view.pillars[i].rest ? smooth(0.955, 0.998, v) : 0),
-    tok: view.pillars.map((p, i) => p.rest ? [[t('homeHeroRest'), 'v', 0]] : settled(s, 'a', i) || kinds[i] === 'mask' ? p.arc : tokens(kinds[i], s.x.a[i])),
-    pct: view.empty ? '' : String(Math.round(Math.max(0, s.x.p[0]))), r: rr, ta: a.r0 < 0 ? 1 : outCubic(((now - a.r0) / a.rDur - 0.12) / 0.55), f: s.x.f.slice(),
-  };
+  // eslint-disable-next-line react-hooks/refs, react-hooks/purity -- by design: the springs live in refs, each frame's setFrame redraws, and the picture is read from them at render time.
+  const state = ridgeFrame(view, kinds, sp.current, anim.current, performance.now());
   const xml = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${ridgeScene(W, H, state, K, { uid: 'rg', detail, labels, glow })}</svg>`;
   const { xs, yb } = ridgePeaks(W, H);
 

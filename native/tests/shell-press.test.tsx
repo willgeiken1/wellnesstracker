@@ -11,7 +11,7 @@ jest.mock('react-native-reanimated', () => {
     Easing: { linear: 'linear', bezier: (...p: number[]) => `bezier(${p.join(',')})` },
     withSpring: (to: number, config: object) => ({ spring: to, config }),
     withTiming: (to: number, config: object) => ({ timing: to, config }),
-    useSharedValue: (v: unknown) => React.useState(() => { const s = { value: v }; ((globalThis as Record<string, unknown>).__pressValues as { value: unknown }[]).push(s); return s; })[0],
+    useSharedValue: (v: unknown) => React.useState(() => { const s = { value: v, set(next: unknown) { s.value = next; } }; ((globalThis as Record<string, unknown>).__pressValues as { value: unknown }[]).push(s); return s; })[0],
     useAnimatedStyle: (f: () => object) => f(),
   };
 });

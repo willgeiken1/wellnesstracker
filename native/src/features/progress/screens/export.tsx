@@ -29,7 +29,9 @@ export function ExportSheet() {
   const [on, setOn] = useState<Record<ExportKind, boolean>>({ weight: true, sleep: true, heart: true, steps: true, food: true, work: true, rout: false });
   const [range, setRange] = useState<ExportRange>('90'), [busy, setBusy] = useState(false);
   const kinds = EXPORT_KINDS.filter(x => on[x]);
-  const files = useMemo(() => repo && kinds.length ? buildCsvs(repo, d, kinds, range) : [], [repo, d, kinds.join(), range]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keyed on the picked kinds as text, so toggling a log off and on again reuses the files already built.
+  const kindsKey = kinds.join();
+  const files = useMemo(() => repo && kindsKey ? buildCsvs(repo, d, kindsKey.split(',') as ExportKind[], range) : [], [repo, d, kindsKey, range]);
   const bytes = useMemo(() => files.length ? zip(files).length : 0, [files]);
   const name = `insight-export-${d.today}.zip`;
   const go = async () => {

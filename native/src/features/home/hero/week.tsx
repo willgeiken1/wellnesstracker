@@ -79,11 +79,11 @@ export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduce
   const fade = useAnimatedStyle(() => ({ opacity: shown.value, transform: [{ translateY: (1 - shown.value) * 10 }] }));
 
   const pick = (x: number) => { const i = dayAt(x, RW); if (i !== sel) onSelect(i); };
-  const settle = () => { dragging.value = 0; selX.value = reduceMotion ? sel : withTiming(sel, WEEK_MOTION.settle); };
+  const settle = () => { dragging.set(0); selX.set(reduceMotion ? sel : withTiming(sel, WEEK_MOTION.settle)); };
   const pan = usePanGesture({
     activeOffsetX: [-6, 6], failOffsetY: [-12, 12],
-    onActivate: e => { 'worklet'; dragging.value = 1; runOnJS(pick)(e.x); },
-    onUpdate: e => { 'worklet'; if (!reduceMotion) selX.value = Math.max(0, Math.min(6, e.x / RW * 7 - 0.5)); runOnJS(pick)(e.x); },
+    onActivate: e => { 'worklet'; dragging.set(1); runOnJS(pick)(e.x); },
+    onUpdate: e => { 'worklet'; if (!reduceMotion) selX.set(Math.max(0, Math.min(6, e.x / RW * 7 - 0.5))); runOnJS(pick)(e.x); },
     onFinalize: () => { 'worklet'; runOnJS(settle)(); },
   });
 

@@ -18,10 +18,11 @@ const ORDER: Stage[] = ['deep', 'rem', 'core', 'awake'];
 function Hypnogram({ night, sel, onSel }: { night: Night; sel: number | null; onSel: (i: number) => void }) {
   const k = useKit(), segs = night.segments!, W = 329, H = 150, lanes: Stage[] = ['awake', 'rem', 'core', 'deep'], lh = 30, x0 = 46, PW = W - x0, tot = segs.reduce((a, s) => a + s[1], 0), start = night.bed ?? 0;
   const [w, setW] = useState(W);
-  let acc = 0, prevY: number | null = null;
+  const laneY = (st: Stage) => lanes.indexOf(st) * lh + 5;
+  const starts = segs.reduce<number[]>((a, _s, i) => [...a, i ? a[i - 1] + segs[i - 1][1] : 0], []);
   const blocks = segs.map(([st, min], i) => {
-    const x = x0 + PW * acc / tot, bw = PW * min / tot, y = lanes.indexOf(st) * lh + 5, link = prevY != null ? <Line key={`l${i}`} x1={x} x2={x} y1={Math.min(prevY, y) + 10} y2={Math.max(prevY, y) + 10} stroke={k.c['hair-2']} strokeWidth={1} /> : null;
-    prevY = y; acc += min;
+    const acc = starts[i], prevY = i ? laneY(segs[i - 1][0]) : null;
+    const x = x0 + PW * acc / tot, bw = PW * min / tot, y = laneY(st), link = prevY != null ? <Line key={`l${i}`} x1={x} x2={x} y1={Math.min(prevY, y) + 10} y2={Math.max(prevY, y) + 10} stroke={k.c['hair-2']} strokeWidth={1} /> : null;
     return <G key={i}>{link}<Rect x={x} y={y} width={Math.max(2, bw - 0.6)} height={20} rx={4} fill={k.tok(STAGES[st][1])} opacity={sel == null || sel === i ? 1 : 0.35} /></G>;
   });
   /* inner ticks on whole even hours that sit well inside the night, as on a clock face */

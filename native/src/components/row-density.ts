@@ -34,6 +34,7 @@ const idle = () => () => {};
 /** The density rows draw at now; it follows the Settings choice as it changes. Balanced outside the app's providers. */
 export function useRowDensity(): RowDensity {
   let source: Source | null = null;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- useAuth runs on every render; the catch only covers its missing-provider throw, which comes after its one useContext.
   try { source = useAuth().repository ?? null; } catch { source = null; }
   return useSyncExternalStore(source?.subscribe ? l => source.subscribe!(l) : idle, () => current(source), () => current(source));
 }

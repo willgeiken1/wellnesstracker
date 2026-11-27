@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, PanResponder, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Defs, Line, LinearGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
@@ -21,7 +21,8 @@ const round1 = (v: number) => Math.round(v * 10) / 10;
 function Ruler({ v, unit, onChange }: { v: number; unit: 'kg' | 'lb'; onChange: (next: number) => void }) {
   const k = useKit(), [w, setW] = useState(0);
   const start = useRef(v), live = useRef(v);
-  live.current = v;
+  useEffect(() => { live.current = v; });
+  // eslint-disable-next-line react-hooks/refs -- PanResponder.create only stores these handlers; the refs are read in touch callbacks, never during render.
   const pan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true, onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: () => { start.current = live.current; },
@@ -70,6 +71,7 @@ export function LogWeightSheet() {
   const [day, setDay] = useState<'today' | 'yesterday'>('today');
   const [typing, setTyping] = useState<string | null>(null);
   const [fromHealth, setFromHealth] = useState(() => repo ? readWeightFromHealth(repo) : true);
+  const [openedAt] = useState(() => Date.now());
   const set = (x: number) => { const [lo, hi] = limits(u), n = Math.max(lo, Math.min(hi, round1(x))); if (n !== v) haptic(); setV(n); };
   const goal = d.weight.goalKg != null ? wtV(d.weight.goalKg, u) : null, gap = goal != null ? round1(v - goal) : null;
   const unitWord = t(u === 'kg' ? 'progressKilograms' : 'progressPounds');
@@ -112,7 +114,7 @@ export function LogWeightSheet() {
       <ListRow title={t('progressDate')} right={<View style={{ width: 184 }}><SegmentedControl height={32} track={k.dark ? k.c.bg : undefined} label={t('progressDate')} value={day} onChange={x => {
         setDay(x); if (x === 'today' && startKg != null) setV(round1(wtV(startKg, u)));
       }} options={[{ value: 'today', label: t('progressTodayCap') }, { value: 'yesterday', label: t('progressYesterday') }]} /></View>} />
-      {day === 'today' ? <ListRow title={t('progressTime')} value={clockAt(Date.now())} /> : null}
+      {day === 'today' ? <ListRow title={t('progressTime')} value={clockAt(openedAt)} /> : null}
       <ListRow icon="apple" color="recovery" title={t('progressFromHealth')} sub={t('progressFromHealthSub')} toggle={fromHealth}
         onToggle={on => { setFromHealth(on); if (repo) saveWeightFromHealth(repo, on); }} />
     </List>

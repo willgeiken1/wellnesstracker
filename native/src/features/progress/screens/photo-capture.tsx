@@ -35,7 +35,7 @@ function Corners({ ink }: { ink: string }) {
 export function PhotoCaptureSheet() {
   const d = useProgress(), k = useKit(), auth = useAuth(), repo = auth.repository;
   const [permission, ask] = useCameraPermissions();
-  const cam = useRef<CameraView>(null), flash = useRef(new Animated.Value(0)).current;
+  const cam = useRef<CameraView>(null), [flash] = useState(() => new Animated.Value(0));
   const [pose, setPose] = useState<Pose>('Front'), [front, setFront] = useState(true), [timer, setTimer] = useState(false), [busy, setBusy] = useState(false);
   const live = !!permission?.granted;
   const last = d.photos.length ? d.photos[d.photos.length - 1] : null;

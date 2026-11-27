@@ -27,7 +27,8 @@ export function DayScoreScreen() {
   const known = PIL.filter(([key]) => p[key] != null);
   // Each square is one point: the score is the average of the pillars that have data, so each adds its share of that average.
   const share = known.length || 1;
-  let cum = 0; const cuts = PIL.map(([key, , c]) => { cum += (p[key] ?? 0) / share; return [Math.round(cum), c] as const; });
+  const sums = PIL.reduce<number[]>((acc, [key]) => [...acc, (acc.length ? acc[acc.length - 1] : 0) + (p[key] ?? 0) / share], []);
+  const cuts = PIL.map(([, , c], i) => [Math.round(sums[i]), c] as const);
   const adds = (key: keyof typeof p) => p[key] == null ? t('progressNoData') : fmt(p[key]! / share, 1);
   const cell = (i: number) => { const hit = cuts.find(c => i < c[0]); return hit ? k.tok(hit[1]) : mix(k.c.text, k.c['surface-2'], 0.08); };
   const W = 329, cw = (W - 19 * 3) / 20;

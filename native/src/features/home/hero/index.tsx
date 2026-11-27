@@ -66,7 +66,8 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
   const [touched, setTouched] = useState(false);
   const [failed, setFailed] = useState(false);
   const dayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-  useEffect(() => { setSel(6); setFocus(-1); }, [dayKey]);
+  const [shownDay, setShownDay] = useState(dayKey);
+  if (shownDay !== dayKey) { setShownDay(dayKey); setSel(6); setFocus(-1); }
   const view = useMemo(() => heroView(input, sel), [input, sel]);
   // Once setup has their first name, the greeting carries it.
   const greet = name?.trim() ? t('obaGreeting').replace('{greeting}', view.greeting).replace('{name}', name.trim()) : view.greeting;

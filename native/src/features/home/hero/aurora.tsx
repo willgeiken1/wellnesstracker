@@ -44,7 +44,8 @@ export function AuroraHero(p: AuroraProps) {
   const { view, width: w, colors, sky, focus } = p;
   const L = useMemo(() => heroLayout(w), [w]);
   const [motion] = useState(() => new HeroMotion(w, { reduceMotion: p.reduceMotion }));
-  const Canvas = loadAuroraCanvas();
+  // The module loads once and is kept, so the component stays the same across renders.
+  const [Canvas] = useState(loadAuroraCanvas);
   const build = !p.reduceMotion && !p.calm;
   // The words come in after the globe: the readout at 760 ms, the apex with the header's reveal.
   const labelsIn = useSharedValue(build ? 0 : 1), apexIn = useSharedValue(build ? 0 : 1);

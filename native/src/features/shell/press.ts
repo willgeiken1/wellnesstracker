@@ -13,13 +13,13 @@ export function useSpringPress(to: number, reduced: boolean, dimTo = 1) {
   const scale = useSharedValue(1), dim = useSharedValue(1);
   const style = useAnimatedStyle(() => ({ opacity: dim.value, transform: [{ scale: scale.value }] }));
   const onPressIn = () => {
-    if (reduced) { dim.value = DISTANCES.pressOpacityReduced; return; }
-    scale.value = withTiming(to, PRESS_IN);
-    if (dimTo < 1) dim.value = withTiming(dimTo, { duration: 60, easing: Easing.linear });
+    if (reduced) { dim.set(DISTANCES.pressOpacityReduced); return; }
+    scale.set(withTiming(to, PRESS_IN));
+    if (dimTo < 1) dim.set(withTiming(dimTo, { duration: 60, easing: Easing.linear }));
   };
   const onPressOut = () => {
-    dim.value = reduced || dimTo >= 1 ? 1 : withTiming(1, { duration: 220, easing: Easing.linear });
-    scale.value = reduced ? 1 : withSpring(1, RELEASE);
+    dim.set(reduced || dimTo >= 1 ? 1 : withTiming(1, { duration: 220, easing: Easing.linear }));
+    scale.set(reduced ? 1 : withSpring(1, RELEASE));
   };
   return { style, onPressIn, onPressOut };
 }

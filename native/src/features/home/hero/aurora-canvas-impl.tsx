@@ -1,5 +1,5 @@
 import { Canvas, Picture, Skia, type SkPicture } from '@shopify/react-native-skia';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GestureDetector, useExclusiveGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { AuroraScene } from './aurora-scene';
@@ -27,21 +27,24 @@ export function AuroraCanvas(p: AuroraCanvasProps) {
   const scene = useRef<AuroraScene | null>(null);
   const raf = useRef(0);
   const live = useRef({ paused, dead: false });
-  live.current.paused = paused;
   const drawRef = useRef<() => void>(() => {});
   const failed = useRef(false);
 
   const invalidate = () => { if (!raf.current && !live.current.paused && !live.current.dead) raf.current = requestAnimationFrame(() => drawRef.current()); };
-  drawRef.current = () => {
-    raf.current = 0;
-    const sc = scene.current;
-    if (!sc || live.current.paused || live.current.dead) return;
-    const { f, busy } = motion.frame(performance.now());
-    const rec = Skia.PictureRecorder(), c = rec.beginRecording(Skia.XYWHRect(0, 0, sc.w, sc.h));
-    sc.draw(c, f);
-    setPic(rec.finishRecordingAsPicture());
-    if (busy) invalidate(); else motion.rest();
-  };
+  // Kept current at commit, before the effects below run and before any frame can fire.
+  useLayoutEffect(() => {
+    live.current.paused = paused;
+    drawRef.current = () => {
+      raf.current = 0;
+      const sc = scene.current;
+      if (!sc || live.current.paused || live.current.dead) return;
+      const { f, busy } = motion.frame(performance.now());
+      const rec = Skia.PictureRecorder(), c = rec.beginRecording(Skia.XYWHRect(0, 0, sc.w, sc.h));
+      sc.draw(c, f);
+      setPic(rec.finishRecordingAsPicture());
+      if (busy) invalidate(); else motion.rest();
+    };
+  });
 
   // The scene follows the width, theme and detail; a new scene draws the current day without its build.
   const firstDay = useRef(true);
@@ -51,7 +54,7 @@ export function AuroraCanvas(p: AuroraCanvasProps) {
     if (!sc || !sc.ok) { if (!failed.current) { failed.current = true; p.onFail(); } return; }
     sc.setData(p.values, false);
     scene.current = sc;
-    motion.onSettle = () => scene.current?.settle();
+    motion.setOnSettle(() => scene.current?.settle());
     motion.setWidth(width);
     if (firstDay.current) { firstDay.current = false; motion.start({ values: p.values, rest: p.rest }, performance.now(), p.calm); }
     invalidate();
@@ -80,9 +83,9 @@ export function AuroraCanvas(p: AuroraCanvasProps) {
 
   const drag = useRef({ x0: 0, a0: 0 });
   const begin = () => { p.onTouch(); motion.finishEntrance(); };
-  const onStart = () => { if (p.reduceMotion) return; motion.dragging = true; drag.current.a0 = motion.az; invalidate(); };
-  const onMove = (dx: number) => { if (!motion.dragging) return; motion.az = Math.max(-0.5, Math.min(0.5, drag.current.a0 - dx * 0.005)); invalidate(); };
-  const onEnd = () => { motion.dragging = false; motion.rest(); invalidate(); };
+  const onStart = () => { if (p.reduceMotion) return; drag.current.a0 = motion.beginDrag(); invalidate(); };
+  const onMove = (dx: number) => { if (!motion.dragging) return; motion.dragTo(drag.current.a0 - dx * 0.005); invalidate(); };
+  const onEnd = () => { motion.endDrag(); invalidate(); };
   const onTapSky = p.onTapSky;
   const pan = usePanGesture({
     activeOffsetX: [-8, 8], failOffsetY: [-10, 10],
