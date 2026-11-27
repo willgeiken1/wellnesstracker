@@ -15,6 +15,7 @@ import { ROUTINES_KEY, createRoutinesStore, refreshNow } from '../src/features/r
 import { RoutineDetail } from '../src/features/routines/screens';
 import { showToast } from '../src/features/shell/toast';
 import { t } from '../src/i18n/en';
+import { saveReminder } from '../src/features/progress/local';
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '1.0.0', extra: { phoneOnly: false } } } }));
 jest.mock('expo-router', () => {
@@ -142,6 +143,20 @@ describe('the rest timer alert', () => {
     expect(planReminders({ ...REM, rest: true }, [], { now: NOW, timer: { endAt: NOW - 1, ended: false } })).toEqual([]);
     expect(planReminders({ ...REM, rest: false }, [], { now: NOW, timer: { endAt: end, ended: false } })).toEqual([]);
     expect(planReminders({ ...REM, rest: true }, [], { now: NOW, timer: null })).toEqual([]);
+  });
+});
+
+describe('the photo reminder', () => {
+  test('comes every Sunday at 8:00 AM while it is on, and not when off', () => {
+    expect(planReminders(REM, [], { now: NOW, photo: true }))
+      .toEqual([{ id: 'photo-6', weekday: 6, hour: 8, minute: 0, title: t('reminderPhotoTitle'), body: t('reminderPhotoBody') }]);
+    expect(planReminders(REM, [], { now: NOW, photo: false })).toEqual([]);
+  });
+  test('the plan reads it from Progress, Photos', () => {
+    const repo = memoryRepository();
+    expect(reminderPlan(repo, REM, NOW)).toEqual([]);
+    saveReminder(repo, true);
+    expect(reminderPlan(repo, REM, NOW).map(r => r.id)).toEqual(['photo-6']);
   });
 });
 

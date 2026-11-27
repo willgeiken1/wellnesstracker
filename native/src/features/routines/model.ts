@@ -201,7 +201,9 @@ export function hist(s: RoutinesState, i: Item, n: Now): DayState[] {
   }
   return out;
 }
-export interface Stats { pct: number; done: number; sched: number; streak: number; days: { s: number; d: number }[] }
+export interface Stats { pct: number; done: number; sched: number; streak: number; days: { s: number; d: number }[];
+  /** The first day of `days` any of the items existed on; days before it never count toward a streak or a run. */
+  from: number }
 /** Done share, counts and the streak of full days for a set of items over the last 30 days. */
 export function stats(s: RoutinesState, items: Item[], n: Now): Stats {
   let done = 0, sched = 0;
@@ -211,16 +213,19 @@ export function stats(s: RoutinesState, items: Item[], n: Now): Stats {
     days[d].s++; sched++;
     if (x === 'd') { days[d].d++; done++; }
   }));
+  // Days before the first item was added are not part of any streak: a new item starts from zero.
+  let from = HISTORY_DAYS;
+  for (const i of items) for (let k = 0; k < from; k++) if (addDays(n.day, k - (HISTORY_DAYS - 1)) >= i.created) { from = k; break; }
   let streak = 0;
-  for (let k = HISTORY_DAYS - 2; k >= 0; k--) { if (days[k].s && days[k].d < days[k].s) break; streak++; }
+  for (let k = HISTORY_DAYS - 2; k >= from; k--) { if (days[k].s && days[k].d < days[k].s) break; streak++; }
   const last = days[HISTORY_DAYS - 1];
   if (last.s && last.d === last.s) streak++;
-  return { pct: sched ? Math.round((done / sched) * 100) : 0, done, sched, streak, days };
+  return { pct: sched ? Math.round((done / sched) * 100) : 0, done, sched, streak, days, from };
 }
-/** The longest run of full days in the window. */
+/** The longest run of full days in the window, from the first day an item existed. */
 export function bestRun(st: Stats) {
   let best = 0, run = 0;
-  st.days.forEach(x => { if (!x.s || x.d >= x.s) { run++; best = Math.max(best, run); } else run = 0; });
+  st.days.forEach((x, k) => { if (k < (st.from ?? 0)) return; if (!x.s || x.d >= x.s) { run++; best = Math.max(best, run); } else run = 0; });
   return best;
 }
 

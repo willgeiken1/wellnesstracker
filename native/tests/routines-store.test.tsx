@@ -1,5 +1,5 @@
 import {
-  MAX_ON_HAND, addDays, clock, convert, demoState, emptyState, hist, markOf, nowOf, peptides, rById, rItems, stats, todayItems, weekData, weekdayOf,
+  MAX_ON_HAND, addDays, bestRun, clock, convert, demoState, emptyState, hist, markOf, nowOf, peptides, rById, rItems, stats, todayItems, weekData, weekdayOf,
   type Item, type RoutinesState,
 } from '../src/features/routines/model';
 import { createRoutinesStore, type NewItem } from '../src/features/routines/store';
@@ -155,6 +155,24 @@ describe('routine weekdays', () => {
     expect(st.pct).toBe(100);
     expect(st.done).toBe(st.sched);
     expect(st.streak).toBe(29); // Every day before today; today, a Sunday, has nothing due.
+  });
+
+  it('starts a new item\'s streak and best run at zero: days before it existed never count', () => {
+    const today = nowOf().day, n = nowOf();
+    const s = weekdayState({ created: today });
+    s.log = {};
+    rById(s, 'night')!.days = [0, 1, 2, 3, 4, 5, 6]; rById(s, 'morning')!.days = [0, 1, 2, 3, 4, 5, 6];
+    expect(stats(s, s.items, n).streak).toBe(0);
+    expect(bestRun(stats(s, s.items, n))).toBe(0);
+    (s.log[today] ??= {}).zn = 'd';
+    expect(stats(s, s.items, n).streak).toBe(1);
+    expect(bestRun(stats(s, s.items, n))).toBe(1);
+    // Added three days ago and kept every day since: a 3-day streak, not 30.
+    const t = weekdayState({ created: addDays(today, -2) });
+    rById(t, 'morning')!.days = [0, 1, 2, 3, 4, 5, 6];
+    t.log = {}; for (let k = 0; k < 3; k++) (t.log[addDays(today, -k)] ??= {}).zn = 'd';
+    expect(stats(t, t.items, n).streak).toBe(3);
+    expect(bestRun(stats(t, t.items, n))).toBe(3);
   });
 
   it('makes an item due on any day one of its routines runs, and pauses still count', () => {

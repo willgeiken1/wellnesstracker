@@ -58,6 +58,8 @@ export interface ReminderContext {
   mealsLogged?: readonly MealKey[];
   /** The running rest timer, if any. */
   timer?: { endAt: number; ended?: boolean } | null;
+  /** Progress, Photos' weekly photo reminder (Sundays at 8:00 AM) is on. */
+  photo?: boolean;
 }
 
 /** A reminder that comes on some weekdays at one time. `conditional` ones are only needed while something is open:
@@ -93,7 +95,7 @@ function routineSlots(s: RoutinesState, nowDate: Date): { starts: Slot[]; lefts:
 /**
  * The reminders that are on, in the order that matters most first: the workout reminder (only on planned training
  * days, `workoutDays`, Monday 0, at the chosen time), each routine whose Remind me is on (at its window's start, then
- * once if something is left), the weekly report (Mondays at 8:00 AM), then the food reminders (each meal that is on, at
+ * once if something is left), the weekly report (Mondays at 8:00 AM), the photo reminder (Sundays at 8:00 AM), then the food reminders (each meal that is on, at
  * its time, only while that meal is not logged). With "At most 2 a day" on, each day keeps the first two that fall on it.
  * The rest timer alert comes once, when the running rest ends, and is never held back by the limit, since it answers a
  * rest just started. The Reconnect Oura alert is not available yet (OURA_ALERT_AVAILABLE).
@@ -111,6 +113,7 @@ export function planReminders(rem: SettingsPrefs['rem'], workoutDays: readonly n
   }
   if (ctx.routines) { const { starts, lefts } = routineSlots(ctx.routines, nowDate); slots.push(...starts, ...lefts); }
   if (rem.weekly) slots.push({ id: 'weekly', days: [0], hour: 8, minute: 0, title: t('reminderWeeklyTitle'), body: t('reminderWeeklyBody') });
+  if (ctx.photo) slots.push({ id: 'photo', days: [6], hour: 8, minute: 0, title: t('reminderPhotoTitle'), body: t('reminderPhotoBody') });
   if (rem.food) {
     for (const m of MEAL_REMINDERS) {
       if (!rem[m.key]) continue;

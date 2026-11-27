@@ -1581,6 +1581,7 @@ export const en = {
   reminderMealTitle: 'Log {meal}', reminderMealBody: 'A quick add keeps today accurate.',
   reminderMealBreakfast: 'breakfast', reminderMealLunch: 'lunch', reminderMealDinner: 'dinner',
   reminderRestTitle: 'Rest is over', reminderRestBody: 'Time for your next set.',
+  reminderPhotoTitle: 'Progress photo day', reminderPhotoBody: 'Take this week\'s photo to compare.',
   settingsOuraAlertLater: 'Only if Oura stops sending new days. Comes in a later version.',
   settingsPrivacyTitle: 'Privacy and security', settingsPrivacyShort: 'Privacy', settingsFaceIdLock: 'Face ID lock', settingsFaceIdLockSub: 'Ask for Face ID when you open Insight',
   settingsRequireFaceId: 'Require Face ID', settingsImmediately: 'Immediately', settingsAfter1: 'After 1 minute', settingsAfter5: 'After 5 minutes', settingsAfter15: 'After 15 minutes',

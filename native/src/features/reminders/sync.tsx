@@ -8,6 +8,7 @@ import type { Repository } from '@/data/repository';
 import { useSettingsPrefs, type SettingsPrefs } from '@/features/settings/prefs';
 import { dayKey, normalize, type RoutinesState } from '@/features/routines/model';
 import { ROUTINES_KEY } from '@/features/routines/store';
+import { readReminder } from '@/features/progress/local';
 import { MEAL_REMINDERS, planReminders, plannedWorkoutDays, type MealKey, type PlannedReminder } from './plan';
 import { askedCount, subscribeAsked, syncReminders } from './notifier';
 
@@ -31,7 +32,8 @@ export function reminderPlan(repo: Repository | null | undefined, rem: SettingsP
   const routines = repo?.owner === 'demo' ? null : read<RoutinesState | null>(() => normalize(repo!.localGet(ROUTINES_KEY)), null);
   const mealsLogged = rem.food ? read<MealKey[]>(() => mealsLoggedOn(repo!, dayKey(new Date(now))), []) : [];
   const timer = rem.rest ? read<RestTimer | null>(() => repo!.localGet<RestTimer | null>('timer') ?? null, null) : null;
-  return planReminders(rem, rem.workout ? plannedWorkoutDays(repo) : [], { now, routines, mealsLogged, timer });
+  const photo = read<boolean>(() => readReminder(repo!), false);
+  return planReminders(rem, rem.workout ? plannedWorkoutDays(repo) : [], { now, routines, mealsLogged, timer, photo });
 }
 
 const noRevision = () => 0, noSubscribe = () => () => {};
