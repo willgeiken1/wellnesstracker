@@ -100,6 +100,18 @@ describe('export', () => {
     expect(lines(cardio.csv)[0]).toBe('date,activity,minutes,distance_km,notes');
     expect(lines(cardio.csv).slice(1)).toEqual([expect.stringMatching(/^2026-11-20,[^,]+,30,5,Easy$/), expect.stringMatching(/^2026-11-25,[^,]+,45,,$/)]);
   });
+  test('a one-side-at-a-time set exports both sides', () => {
+    const repo = memoryRepository();
+    const s = repo.save('sessions', { day: '2026-11-20', name: 'Synthetic legs', started_at: 1, finished_at: 2 });
+    const e = repo.save('entries', { session_id: s.id, exercise: 'Bulgarian Split Squat', position: 0 });
+    repo.save('sets', { entry_id: e.id, position: 0, weight_kg: 20, reps: 8, left_weight_kg: 20, left_reps: 8, right_weight_kg: 22.5, right_reps: 10 });
+    repo.save('sets', { entry_id: e.id, position: 1, weight_kg: 60, reps: 5 });
+    const work = buildCsvs(repo as never, emptyProgress(today, 'kg'), ['work'], 'all').find(f => f.name === 'workouts-and-sets.csv')!;
+    const out = lines(work.csv);
+    expect(out[0]).toBe('date,workout,exercise,set,weight,unit,reps,rpe,tag,left_weight,left_reps,right_weight,right_reps');
+    expect(out[1]).toMatch(/,20,kg,8,,,20,8,22\.5,10$/);
+    expect(out[2]).toMatch(/,60,kg,5,,,,,,$/);
+  });
   test('with no cardio there is no cardio file', () => {
     expect(buildCsvs(memoryRepository() as never, emptyProgress(today, 'kg'), ['work'], 'all').map(f => f.name)).toEqual(['workouts-and-sets.csv']);
   });

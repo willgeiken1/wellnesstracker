@@ -53,7 +53,13 @@ export function deleteProfilePhoto(uri: unknown): boolean {
  * departure marker stay and a retry finishes it. */
 export class OwnerFilesNotErased extends Error { constructor() { super('Kept files could not be deleted.'); } }
 
-function read(repo: Pick<Repository, 'localGet'>, key: string): unknown { try { return repo.localGet<unknown>(key); } catch { return undefined; } }
+/** A stored address list. One that can't be read stops departure, so the wipe never forgets files it could not find;
+ * the addresses and the marker stay for a retry (and the all-owner escape still deletes the folders). */
+function read(repo: Pick<Repository, 'localGet'>, key: string): unknown {
+  // A store with no local storage at all holds no addresses.
+  if (typeof repo.localGet !== 'function') return undefined;
+  try { return repo.localGet<unknown>(key); } catch { throw new OwnerFilesNotErased(); }
+}
 
 /** This person's kept files, profile photo first. */
 function ownerFiles(repo: Pick<Repository, 'localGet'>): File[] {

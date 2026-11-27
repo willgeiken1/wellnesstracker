@@ -54,3 +54,12 @@ describe('taking in a new progress photo', () => {
     expect(mockFiles.has(URI)).toBe(false);
   });
 });
+
+describe('departure when a photo address list cannot be read', () => {
+  test('stops before the wipe instead of treating the list as empty', () => {
+    mockFiles.add(URI);
+    const broken = { localGet: (k: string) => { if (k === 'progressPhotos') throw new Error('fixture: malformed JSON'); return undefined; } } as unknown as Repository;
+    expect(() => eraseOwnerFiles(broken)).toThrow(OwnerFilesNotErased);
+    expect(mockFiles.has(URI)).toBe(true);
+  });
+});

@@ -84,10 +84,13 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
           if (reps == null && kg == null) continue;
           // The logger keeps RPE beside the set, by its exercise and place, rather than on the set row.
           const position = Number(st.data.position ?? 0), rpe = num(st.data.rpe) ?? num(localRpe(repo, e.id, position));
-          rows.push([s.data.day, s.data.name, e.data.exercise, position + 1, kg == null ? null : kgTo(kg), unit, reps, rpe, st.data.tag ?? '']);
+          // A one-side-at-a-time set keeps each side's result; weight and reps are the weaker side's, as the logger shows.
+          const lk = num(st.data.left_weight_kg), rk = num(st.data.right_weight_kg), side = (k: number | null) => k == null ? null : kgTo(k);
+          rows.push([s.data.day, s.data.name, e.data.exercise, position + 1, kg == null ? null : kgTo(kg), unit, reps, rpe, st.data.tag ?? '',
+            side(lk), num(st.data.left_reps), side(rk), num(st.data.right_reps)]);
         }
       }
-      files.push({ name: 'workouts-and-sets.csv', csv: csv(['date', 'workout', 'exercise', 'set', 'weight', 'unit', 'reps', 'rpe', 'tag'], rows) });
+      files.push({ name: 'workouts-and-sets.csv', csv: csv(['date', 'workout', 'exercise', 'set', 'weight', 'unit', 'reps', 'rpe', 'tag', 'left_weight', 'left_reps', 'right_weight', 'right_reps'], rows) });
       // Cardio is logged on its own (machines, runs and rides), so it gets its own file when there is any.
       const cardio = repo.list('cardio_sessions').filter(c => keep(c.data.day)).sort(byDay).map(c => {
         const ms = num(c.data.duration_ms), m = num(c.data.distance_m);
