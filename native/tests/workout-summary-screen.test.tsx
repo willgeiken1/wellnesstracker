@@ -67,6 +67,21 @@ describe('session result', () => {
     // The Volume chart stacks one block per set, so each block carries both sides too, and the top set keeps the weaker side.
     expect(exerciseHistory(data, 'Bulgarian Split Squat').at(-1)!.sets).toEqual([{ w: data.kg(20), r: 10, v: side * 2 }]);
   });
+  test('a heavier single counts as a record though its estimated 1RM is lower', () => {
+    mockRepository = memoryRepository();
+    const store = new WorkoutStore(mockRepository);
+    const log = (start: number, sets: [string, string][]) => {
+      const s = store.start(undefined, start), e = store.addExercise(s.id, 'Squat', sets.length);
+      sets.forEach(([weight, reps], i) => { store.editDraft(e.id, i, { weight, reps }); store.toggleDone(e.id, i); });
+      store.finish(s.id, { startedAt: start, finishedAt: start + 45 * 60_000, notes: '' });
+      return s;
+    };
+    log(Date.now() - 7 * DAY, [['100', '10']]);
+    const today = log(Date.now() - 2 * 3_600_000, [['110', '1'], ['90', '8']]);
+    const res = sessionResult(new TrainingData(mockRepository), today.id)!;
+    expect(res.prs).toEqual([{ name: 'Squat', w: 110, r: 1, was: { w: 100, r: 10 } }]);
+    expect(res.exercises[0].sets.map(x => x.pr)).toEqual([true, false]);
+  });
   test('a first time doing a lift is not a record, and an unfinished workout has no result', () => {
     const { store } = sample();
     const data = new TrainingData(mockRepository);
