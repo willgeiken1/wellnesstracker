@@ -43,7 +43,7 @@ export function validateRow(input: unknown): asserts input is Row {
   if (r.table === 'daily_blocks' && !(within('start_min',0,1439) && within('end_min',1,2879) && within('days_mask',1,126) && within('hidden',0,1) && within('remind',0,1))) return bad();
   // An item's days keep every day (127) and no day (0) apart from no mask, which is every day.
   if (r.table === 'daily_items' && !(within('time_min',0,1439) && within('on_hand',0,999999) && within('days_mask',0,127))) return bad();
-  if (r.table === 'daily_logs' && !(within('rest',0,1) && within('undone',0,1))) return bad();
+  if (r.table === 'daily_logs' && !(within('rest',0,1) && within('undone',0,1) && within('on_hand_used',0,999999))) return bad();
   if (r.table === 'daily_compounds' && !within('chart_line',0,1)) return bad();
   if (r.table === 'daily_prefs' && !(within('day_rollover_hour',0,6) && within('focus_mode',0,1) && within('tips_hidden',0,1) && within('home_next_hidden',0,1))) return bad();
 }

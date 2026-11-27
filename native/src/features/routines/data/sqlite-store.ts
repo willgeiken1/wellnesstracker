@@ -10,7 +10,9 @@
    - an item is a daily_items row; what the person typed as its amount and unit is a daily_compounds row;
    - an item in a routine is a daily_placements row, item_rank keeping which routine leads;
    - a check-off is a daily_logs row, one per item and day. Taking a check-off away keeps the row, marked undone,
-     so it can be put back; a day older than the history the store keeps is removed and keeps no values.
+     so it can be put back; a day older than the history the store keeps is removed and keeps no values. A done
+     check-off also keeps in on_hand_used what it took off the item's on-hand count (the state's `used`), so taking
+     the tick back puts back exactly that.
    The screens' own ids (like "morning" or "n1abc") are kept in app_id; row ids are UUIDs made from them.
 
    The app never works out an amount: an item's amount is only what the person typed, stored as typed. */
@@ -151,13 +153,16 @@ export function readRoutinesState(repo: Repository): RoutinesState | null {
     return item;
   });
 
-  const log: RoutinesState['log'] = {};
+  const log: RoutinesState['log'] = {}, used: NonNullable<RoutinesState['used']> = {};
   for (const row of logs) {
     const mark = markOfRow(row), day = text(row.data.day), item = text(row.data.item_id);
     if (!mark || !day || !item) continue;
-    (log[day] ??= {})[itemId.get(item) ?? item] = mark;
+    const id = itemId.get(item) ?? item;
+    (log[day] ??= {})[id] = mark;
+    const took = mark === 'd' ? countOf(row.data.on_hand_used) : null;
+    if (took !== null) (used[day] ??= {})[id] = took;
   }
-  return normalize({ v: 1, routines, hidden, items: outItems, log });
+  return normalize({ v: 1, routines, hidden, items: outItems, log, ...(Object.keys(used).length ? { used } : {}) });
 }
 /** A live check-off: done or skipped, not undone, on an item (a rest day is not a check-off). */
 function markOfRow(row: Row): Mark | null {
@@ -252,10 +257,15 @@ export function commitRoutinesState(repo: Repository, next: RoutinesState, prev:
     // A day's marks are read with care: a document an earlier build left may hold anything there.
     const daysOf = (log: unknown) => Object.entries(log && typeof log === 'object' ? log : {}).filter(([, m]) => !!m && typeof m === 'object') as [string, Record<string, unknown>][];
     const markIn = (log: RoutinesState['log'], day: string, id: string) => markOf((log as Record<string, Record<string, unknown> | undefined>)[day]?.[id]);
+    // What a done check-off took off on hand. Kept only with a done mark, and made to fit its column like the rest.
+    const usedIn = (s: RoutinesState, day: string, id: string) => {
+      const byDay = s.used && typeof s.used === 'object' ? (s.used as Record<string, unknown>)[day] : undefined;
+      return markIn(s.log, day, id) === 'd' && byDay && typeof byDay === 'object' ? countOf((byDay as Record<string, unknown>)[id]) : null;
+    };
     if (prev) {
       // Only what changed since the state the rows held.
-      for (const log of [prev.log, next.log]) for (const [day, marks] of daysOf(log)) for (const id of Object.keys(marks)) {
-        if (markIn(prev.log, day, id) !== markIn(next.log, day, id)) add(day, id);
+      for (const log of [prev.log, next.log, prev.used, next.used]) for (const [day, marks] of daysOf(log)) for (const id of Object.keys(marks)) {
+        if (markIn(prev.log, day, id) !== markIn(next.log, day, id) || usedIn(prev, day, id) !== usedIn(next, day, id)) add(day, id);
       }
     } else {
       // Nothing known about the rows: every check-off in the state, and every live check-off row.
@@ -269,14 +279,17 @@ export function commitRoutinesState(repo: Repository, next: RoutinesState, prev:
     for (const [day, id] of touch.values()) {
       if (!isDay(day)) continue;
       const item = itemRowId(id), rowId = routineLogId(item, day);
-      const mark = markIn(next.log, day, id), have = repo.get('daily_logs', rowId);
+      const mark = markIn(next.log, day, id), used = usedIn(next, day, id), have = repo.get('daily_logs', rowId);
       if (mark) {
         const status = mark === 'd' ? 'done' : 'skipped';
-        if (have && have.deleted_at === null && have.data.status === status && have.data.undone !== 1) continue;
-        repo.save('daily_logs', { item_id: item, compound_id: null, day, status, amount: null, unit: null, note: null, at: markedAt(day, now), site: null, rest: 0, undone: 0 }, rowId, now); written++;
+        const same = !!have && have.deleted_at === null && have.data.status === status && have.data.undone !== 1;
+        if (same && (have.data.on_hand_used ?? null) === used) continue;
+        // A check-off that only gains or loses what it took off keeps the moment it was made.
+        const at = same && typeof have.data.at === 'number' ? have.data.at : markedAt(day, now);
+        repo.save('daily_logs', { item_id: item, compound_id: null, day, status, amount: null, unit: null, note: null, at, site: null, rest: 0, undone: 0, on_hand_used: used }, rowId, now); written++;
       } else if (have && have.deleted_at === null) {
         if (day < keepFrom) { repo.remove('daily_logs', rowId, now); written++; }
-        else if (have.data.undone !== 1) { repo.save('daily_logs', { ...have.data, undone: 1 }, rowId, now); written++; }
+        else if (have.data.undone !== 1 || have.data.on_hand_used != null) { repo.save('daily_logs', { ...have.data, undone: 1, on_hand_used: null }, rowId, now); written++; }
       }
     }
     return written;

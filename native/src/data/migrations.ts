@@ -173,4 +173,16 @@ DROP TABLE daily_placements;
 ALTER TABLE daily_placements_0006 RENAME TO daily_placements;
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS daily_pauses (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, block_id TEXT, from_day TEXT, until_day TEXT, why TEXT, position INTEGER, PRIMARY KEY(owner_id,id));`;
-export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }, { idx: 3, when: 1792238400003, tag: '0003_workout_local', breakpoints: true }, { idx: 4, when: 1792238400004, tag: '0004_v1_columns', breakpoints: true }, { idx: 5, when: 1792238400005, tag: '0005_daily_routines', breakpoints: true }, { idx: 6, when: 1792238400006, tag: '0006_daily_routines_local', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql, m0003: workoutLocalSql, m0004: v1ColumnsSql, m0005: dailyRoutinesSql, m0006: dailyRoutinesLocalSql } };
+// What a done check-off took off an item's on-hand count, so taking the tick back puts back exactly that. Local only,
+// like 0005 and 0006. daily_logs is rebuilt with the new column and its rows copied over, as 0006 does, so the step
+// also runs on a database where it ran before.
+export const dailyUsedLocalSql = `CREATE TABLE daily_logs_0007 (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, item_id TEXT, compound_id TEXT, day TEXT, status TEXT, amount REAL, unit TEXT, note TEXT, at INTEGER, site TEXT, rest INTEGER, undone INTEGER, on_hand_used REAL, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+INSERT INTO daily_logs_0007 (owner_id, id, updated_at, deleted_at, device_id, item_id, compound_id, day, status, amount, unit, note, at, site, rest, undone) SELECT owner_id, id, updated_at, deleted_at, device_id, item_id, compound_id, day, status, amount, unit, note, at, site, rest, undone FROM daily_logs;
+--> statement-breakpoint
+DROP TABLE daily_logs;
+--> statement-breakpoint
+ALTER TABLE daily_logs_0007 RENAME TO daily_logs;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS daily_logs_owner_day ON daily_logs(owner_id,day);`;
+export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }, { idx: 3, when: 1792238400003, tag: '0003_workout_local', breakpoints: true }, { idx: 4, when: 1792238400004, tag: '0004_v1_columns', breakpoints: true }, { idx: 5, when: 1792238400005, tag: '0005_daily_routines', breakpoints: true }, { idx: 6, when: 1792238400006, tag: '0006_daily_routines_local', breakpoints: true }, { idx: 7, when: 1792238400007, tag: '0007_daily_used_local', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql, m0003: workoutLocalSql, m0004: v1ColumnsSql, m0005: dailyRoutinesSql, m0006: dailyRoutinesLocalSql, m0007: dailyUsedLocalSql } };

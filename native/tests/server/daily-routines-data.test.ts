@@ -18,7 +18,7 @@ function seed(repo: Repository) {
 }
 const everyValue = (rows: Row[]) => JSON.stringify(rows.map(row => row.data));
 
-test('two local migrations add the eight tables, each with exactly its catalog columns', async () => {
+test('the local migrations add the eight tables, each with exactly its catalog columns', async () => {
   const { sqlite } = await localDatabase();
   try {
     expect([...routineTables]).toEqual(['daily_blocks', 'daily_items', 'daily_placements', 'daily_compounds', 'daily_logs', 'daily_types', 'daily_prefs', 'daily_pauses']);
@@ -27,7 +27,7 @@ test('two local migrations add the eight tables, each with exactly its catalog c
       expect(names).toEqual(['owner_id', 'id', 'updated_at', 'deleted_at', 'device_id', ...Object.keys(columns[table])]);
     }
     const applied = sqlite.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get()?.n;
-    expect(applied).toBe(7);
+    expect(applied).toBe(8);
   } finally { sqlite.close(); }
 });
 
@@ -175,7 +175,7 @@ test('validation is fail-closed for routine rows', () => {
   const base = (table: Table, data: Row['data']): Row => ({ table, owner_id: OWNER_A, id: '30000000-0000-4000-8000-000000000001', updated_at: 1, deleted_at: null, device_id: DEVICE_A, data });
   for (const row of routineFixtureRows()) expect(() => validateRow({ ...base(row.table, row.data), id: row.id })).not.toThrow();
   const bad: [Table, Row['data']][] = [
-    ['daily_logs', { day: '2026-11-1' }], ['daily_logs', { day: 20261119 }], ['daily_logs', { amount: '250' }], ['daily_logs', { undone: 2 }], ['daily_logs', { rest: -1 }],
+    ['daily_logs', { day: '2026-11-1' }], ['daily_logs', { day: 20261119 }], ['daily_logs', { amount: '250' }], ['daily_logs', { undone: 2 }], ['daily_logs', { rest: -1 }], ['daily_logs', { on_hand_used: -1 }], ['daily_logs', { on_hand_used: 1000000 }], ['daily_logs', { on_hand_used: '1' }],
     ['daily_logs', { mood: 3 }], ['daily_items', { feeling: 'low' }], ['daily_items', { vendor: 'x' }], ['daily_items', { on_hand: 1000000 }], ['daily_items', { on_hand: -1 }], ['daily_items', { days_mask: 128 }], ['daily_items', { per_day: '2' }],
     ['daily_items', { mixed_day: 'yesterday' }], ['daily_items', { time_min: 1440 }], ['daily_blocks', { start_min: -1 }], ['daily_blocks', { days_mask: 127 }], ['daily_blocks', { days_mask: 0 }],
     ['daily_blocks', { hidden: 2 }], ['daily_blocks', { remind: 2 }], ['daily_pauses', { until_day: 'soon' }], ['daily_pauses', { reason: 'x' }], ['daily_compounds', { start_day: '2026-13' }], ['daily_compounds', { amount: Infinity }], ['daily_prefs', { day_rollover_hour: 7 }], ['daily_prefs', { setup: '{}' }],

@@ -275,7 +275,9 @@ export const daily_logs = sqliteTable('daily_logs', {
   at: integer('at'),
   site: text('site'),
   rest: integer('rest'),
-  undone: integer('undone')
+  undone: integer('undone'),
+  // Phone only (migration 0007): what a done check-off took off the item's on-hand count.
+  on_hand_used: real('on_hand_used')
 }, t => [primaryKey({ columns: [t.owner_id, t.id] }), index('daily_logs_owner_day').on(t.owner_id,t.day)]);
 
 export const daily_types = sqliteTable('daily_types', {

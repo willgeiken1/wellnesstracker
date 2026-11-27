@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { DEVICE_A, OWNER_A } from '../fixtures/sync';
 import { Repository } from '../src/data/repository';
 import { routineTables } from '../src/data/rows';
-import { addDays, clock, demoState, emptyState, nowOf, type Item, type RoutinesState } from '../src/features/routines/model';
+import { MAX_ON_HAND, addDays, clock, demoState, emptyState, nowOf, type Item, type RoutinesState } from '../src/features/routines/model';
 import { routineLogId } from '../src/features/routines/model/ids';
 import { blockRowId, commitRoutinesState, guardRoutinesStore, itemRowId, readRoutinesState } from '../src/features/routines/data/sqlite-store';
 import { createLocalRoutinesStore, ROUTINES_KEY, type NewItem, type RoutinesStore } from '../src/features/routines/store';
@@ -31,8 +31,8 @@ async function account(owner = OWNER_A) {
   return { db, repo: forOwner, count, live, outbox };
 }
 
-/** The same state the way it reads back: an empty note is no note. */
-const canon = (s: RoutinesState) => JSON.parse(JSON.stringify(s, (k, v) => (k === 'note' && v === null ? undefined : v))) as RoutinesState;
+/** The same state the way it reads back: an empty note is no note, and nothing taken off on hand is no `used`. */
+const canon = (s: RoutinesState) => JSON.parse(JSON.stringify(s, (k, v) => ((k === 'note' && v === null) || (k === 'used' && v && !Object.keys(v).length) ? undefined : v))) as RoutinesState;
 
 /** Every field the screens keep, with odd values on purpose. */
 function fixtureState(): RoutinesState {
@@ -252,6 +252,104 @@ describe('each store method writes the rows the next open reads back', () => {
   });
 });
 
+describe('what a tick took off on hand', () => {
+  const logRow = (repo: Repository, id: string, day = TODAY) => repo.get('daily_logs', routineLogId(itemRowId(id), day))!;
+
+  test('a tick and its undo at on hand 0 leave 0, with the app opened again in between', async () => {
+    const { repo } = await account();
+    const { item } = createLocalRoutinesStore(repo).addItem(draft({ hand: '0' }));
+    expect(item).toMatchObject({ left: 0, perDay: 1 });
+    createLocalRoutinesStore(repo).toggleDone(item.id);
+    expect(logRow(repo, item.id).data).toMatchObject({ status: 'done', undone: 0, on_hand_used: 0 });
+    const back = createLocalRoutinesStore(repo);
+    expect(back.read().used).toEqual({ [TODAY]: { [item.id]: 0 } });
+    back.toggleDone(item.id);
+    expect(back.read().items.find(i => i.id === item.id)!.left).toBe(0);
+    expect(logRow(repo, item.id).data).toMatchObject({ undone: 1, on_hand_used: null });
+    expect(reopened(repo).items.find(i => i.id === item.id)!.left).toBe(0);
+    expect(reopened(repo).used).toBeUndefined();
+  });
+
+  test('a part step survives a reopen, so the undo puts back what was there and no more', async () => {
+    const { repo } = await account();
+    const { item } = createLocalRoutinesStore(repo).addItem(draft({ amt: 2.5, unit: 'g', hand: '1' }));
+    createLocalRoutinesStore(repo).toggleDone(item.id);
+    expect(reopened(repo).used).toEqual({ [TODAY]: { [item.id]: 1 } });
+    expect(reopened(repo).items.find(i => i.id === item.id)!.left).toBe(0);
+    const back = createLocalRoutinesStore(repo);
+    back.toggleDone(item.id);
+    expect(reopened(repo).items.find(i => i.id === item.id)!.left).toBe(1);
+    // Ticked again, it takes the whole step from the count that is there now.
+    back.toggleDone(item.id);
+    expect(reopened(repo).used).toEqual({ [TODAY]: { [item.id]: 1 } });
+  });
+
+  test('is kept only on a done check-off, inside its column, and saving the same state again writes nothing', async () => {
+    const { repo } = await account();
+    const s = fixtureState();
+    s.used = { [addDays(TODAY, -2)]: { fa: 5e9, fc: 3 }, [addDays(TODAY, -1)]: { fb: -2 }, [TODAY]: { fc: 0.5 } };
+    commitRoutinesState(repo, s, null);
+    expect(logRow(repo, 'fa', addDays(TODAY, -2)).data.on_hand_used).toBe(999999);
+    // fc was skipped that day, so it took nothing off.
+    expect(logRow(repo, 'fc', addDays(TODAY, -2)).data.on_hand_used).toBeNull();
+    expect(logRow(repo, 'fb', addDays(TODAY, -1)).data.on_hand_used).toBe(0);
+    const back = readRoutinesState(repo)!;
+    expect(back.used).toEqual({ [addDays(TODAY, -2)]: { fa: 999999 }, [addDays(TODAY, -1)]: { fb: 0 }, [TODAY]: { fc: 0.5 } });
+    expect(commitRoutinesState(repo, back, readRoutinesState(repo))).toBe(0);
+    expect(commitRoutinesState(repo, back, null)).toBe(0);
+  });
+
+  test('a change to what was taken alone rewrites the check-off and keeps the moment it was made', async () => {
+    const { repo } = await account();
+    const s = fixtureState();
+    commitRoutinesState(repo, s, null);
+    const at = logRow(repo, 'fc').data.at;
+    const next = { ...s, used: { [TODAY]: { fc: 2 } } };
+    expect(commitRoutinesState(repo, next, s, Date.now() + 5000)).toBe(1);
+    expect(logRow(repo, 'fc').data).toMatchObject({ on_hand_used: 2, at, status: 'done', undone: 0 });
+  });
+
+  test('an old document carries it into the tables', async () => {
+    const { repo } = await account();
+    const s = fixtureState();
+    s.used = { [TODAY]: { fc: 1 }, [addDays(TODAY, -1)]: { fb: 'two' as unknown as number } };
+    repo.localSave(ROUTINES_KEY, s);
+    expect(createLocalRoutinesStore(repo).read().used).toEqual({ [TODAY]: { fc: 1 } });
+    expect(repo.localGet(ROUTINES_KEY)).toBeNull();
+    expect(reopened(repo).used).toEqual({ [TODAY]: { fc: 1 } });
+  });
+
+  test('history older than the store keeps goes with its value, and signing out erases the rest', async () => {
+    const { repo, count, db } = await account();
+    const s = fixtureState();
+    const old = addDays(TODAY, -200);
+    s.log[old] = { fa: 'd' };
+    s.used = { [old]: { fa: 2 }, [TODAY]: { fc: 1 } };
+    commitRoutinesState(repo, s, null);
+    createLocalRoutinesStore(repo).toggleSkip('fb');
+    const gone = logRow(repo, 'fa', old);
+    expect(gone.deleted_at).not.toBeNull();
+    expect(gone.data.on_hand_used).toBeNull();
+    expect(reopened(repo).used).toEqual({ [TODAY]: { fc: 1 } });
+    repo.wipe();
+    expect(count('daily_logs')).toBe(0);
+    expect(db.get<{ n: number }>(sql`SELECT count(*) AS n FROM daily_logs WHERE on_hand_used IS NOT NULL`)!.n).toBe(0);
+    expect(createLocalRoutinesStore(repo).read().used).toBeUndefined();
+  });
+
+  test('none of it is queued for upload while routine sync is off', async () => {
+    const { repo, outbox } = await account();
+    const { item } = createLocalRoutinesStore(repo).addItem(draft({ hand: '3' }));
+    const store = createLocalRoutinesStore(repo);
+    store.toggleDone(item.id);
+    store.toggleDone(item.id);
+    store.toggleDone(item.id);
+    expect(logRow(repo, item.id).data.on_hand_used).toBe(1);
+    expect(outbox()).toBe(0);
+    expect(repo.pending().filter(p => p.row.table.startsWith('daily_'))).toEqual([]);
+  });
+});
+
 test('a guard over any store lets a second Save through once the double tap has passed', () => {
   let t = 0;
   const items: Item[] = [];
@@ -389,13 +487,14 @@ describe('a value out of the range its column takes', () => {
     const { repo } = await account();
     const store = createLocalRoutinesStore(repo);
     const good = store.addItem(draft({ name: 'Fixture good' })).item;
+    // The store keeps a typed count to its own limit, inside the column's.
     const big = store.addItem(draft({ name: 'Fixture big', hand: '1000000' })).item;
-    expect(repo.get('daily_items', itemRowId(big.id))!.data.on_hand).toBe(999999);
+    expect(repo.get('daily_items', itemRowId(big.id))!.data.on_hand).toBe(MAX_ON_HAND);
     store.toggleDone(good.id);
     expect(repo.get('daily_logs', routineLogId(itemRowId(good.id), TODAY))!.data).toMatchObject({ status: 'done', undone: 0 });
     const back = reopened(repo);
     expect(back.items.map(i => i.name)).toEqual(['Fixture good', 'Fixture big']);
-    expect(back.items.find(i => i.id === big.id)!.left).toBe(999999);
+    expect(back.items.find(i => i.id === big.id)!.left).toBe(MAX_ON_HAND);
     expect(back.items.find(i => i.id === good.id)!.left).toBe(29);
     expect(back.log[TODAY]).toEqual({ [good.id]: 'd' });
     // Ticking the big one saves too.

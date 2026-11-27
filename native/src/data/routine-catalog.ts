@@ -3,7 +3,8 @@
    These tables are not in catalog.ts because that file is the wire catalog the server checks itself
    against, and routines are not on the wire.
    Migration 0006 added columns and daily_pauses on the phone only, for the Routines screens' store
-   (features/routines/data/sqlite-store.ts). The server schema has to gain them before routine sync is turned on. */
+   (features/routines/data/sqlite-store.ts), and migration 0007 added daily_logs.on_hand_used, what a done check-off
+   took off the item's on-hand count. The server schema has to gain them before routine sync is turned on. */
 export const routineColumns = {
   "daily_blocks": {
     "name": "text",
@@ -67,7 +68,8 @@ export const routineColumns = {
     "at": "integer",
     "site": "text",
     "rest": "integer",
-    "undone": "integer"
+    "undone": "integer",
+    "on_hand_used": "real"
   },
   "daily_types": {
     "name": "text",
