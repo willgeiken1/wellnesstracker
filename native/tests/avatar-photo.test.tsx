@@ -183,3 +183,11 @@ test('a change stops, writing nothing, when the kept address or the leftover lis
   expect(store.get('profilePhotoLeftovers')).toBe('file:///docs/profile-photo/old.jpg');
   expect(store.get('profilePhoto')).toBe(first);
 });
+
+test('example data keeps no profile photo: nothing is moved or noted, so no file is left for an account to lose', async () => {
+  const r = Object.assign(repo(), { owner: 'demo' });
+  mockFiles.add('file:///caches/picked.jpg');
+  await expect(saveProfilePhoto(r, 'file:///caches/picked.jpg')).rejects.toThrow();
+  expect([...mockFiles]).toEqual(['file:///caches/picked.jpg']);
+  expect(r.localSave).not.toHaveBeenCalled();
+});

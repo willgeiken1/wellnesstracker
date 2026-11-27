@@ -63,6 +63,8 @@ export function readProfilePhoto(repo: Repository | null | undefined): string | 
 
 /** Moves a photo the picker just wrote (in Caches, which iOS may clear) into the kept folder, then forgets the old one. */
 export async function saveProfilePhoto(repo: Repository, pickedUri: string): Promise<string> {
+  // Example data keeps no files: one saved there would not carry to an account, and its deletion could not find it.
+  if (repo.owner === 'demo') throw new Error('Photos are not kept with example data.');
   const dir = new Directory(Paths.document, FOLDER);
   dir.create({ intermediates: true, idempotent: true });
   const dest = new File(dir, `${randomUUID().replace(/[^a-zA-Z0-9-]/g, '')}.jpg`);

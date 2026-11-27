@@ -245,7 +245,7 @@ export function AccountPage() {
     <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
       <View>
         <Avatar name={who.name || who.email} size={92} />
-        {auth.repository ? <AvatarCameraButton repo={auth.repository} /> : null}
+        {auth.repository && !auth.demo ? <AvatarCameraButton repo={auth.repository} /> : null}
       </View>
       <KitText weight={700} size={24} tracking={-0.03} style={{ marginTop: 12 }}>{who.name || who.signIn}</KitText>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>

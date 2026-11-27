@@ -107,3 +107,13 @@ describe('the noted addresses of photos still being taken in', () => {
     expect(store.get('progressPhotosPending')).toEqual([EARLIER, 'progress-photos/p1.jpg']);
   });
 });
+
+describe('a progress photo with example data', () => {
+  test('is refused before anything is moved or noted', async () => {
+    const r = Object.assign(repo(), { owner: 'demo' }), moved = jest.fn(move);
+    await expect(takeInPhoto(r, shot, moved)).rejects.toThrow();
+    expect(moved).not.toHaveBeenCalled();
+    expect(r.localGet('progressPhotosPending')).toBeUndefined();
+    expect(mockFiles.size).toBe(0);
+  });
+});

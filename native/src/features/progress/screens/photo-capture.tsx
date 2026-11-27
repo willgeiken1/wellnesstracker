@@ -43,6 +43,8 @@ export function PhotoCaptureSheet() {
   useEffect(() => { if (permission && !permission.granted && permission.canAskAgain) void ask(); }, [permission, ask]);
   const shoot = async () => {
     if (busy || !repo) return;
+    // Example data keeps nothing: a photo taken here would not carry to an account and could not be erased with it.
+    if (auth.demo) { showToast(t('progressPhotoDemo'), { color: 'warning' }); return; }
     if (!live || !cam.current) { if (permission?.canAskAgain) void ask(); else showToast(t('progressCameraOff'), { color: 'warning' }); return; }
     setBusy(true);
     try {
@@ -80,7 +82,7 @@ export function PhotoCaptureSheet() {
       <Corners ink={ink} />
       <View pointerEvents="none" style={{ position: 'absolute', top: 14, left: 0, right: 0, alignItems: 'center' }}>
         <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: mix(ink, 'transparent', 0.14) }}>
-          <Text style={[font(700, 12), { color: ink }]}>{!live && permission && !permission.canAskAgain ? t('progressCameraOff')
+          <Text style={[font(700, 12), { color: ink }]}>{auth.demo ? t('progressPhotoDemoShort') : !live && permission && !permission.canAskAgain ? t('progressCameraOff')
             : last ? fill(t('progressLineUp'), { day: dShort(last.day), pose: poseWord(pose).toLowerCase() }) : t('progressLineUpFirst')}</Text></View>
       </View>
       <Animated.View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: ink, opacity: flash }} />

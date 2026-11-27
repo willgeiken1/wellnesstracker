@@ -44,6 +44,8 @@ function unpend(repo: Repository, address: string) {
  * finds it and the photo never stays on the phone unknown. Throws when the photo was not saved.
  */
 export async function takeInPhoto(repo: Repository, photo: Omit<StoredPhoto, 'uri'>, move: (id: string) => Promise<string>): Promise<StoredPhoto> {
+  // Example data keeps no files: one taken there would not carry to an account, and its deletion could not find it.
+  if (repo.owner === 'demo') throw new Error('Photos are not kept with example data.');
   const planned = plannedAddress(photo.id);
   // Throws, before anything is moved, when the noted addresses can't be read, rather than write over them.
   repo.localSave(PROGRESS_PHOTOS_PENDING_KEY, [...listToChange<string>(repo, PROGRESS_PHOTOS_PENDING_KEY), planned]);

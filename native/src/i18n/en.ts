@@ -1384,7 +1384,7 @@ export const en = {
   progressCameraAria: 'Camera view with an outline of your last photo to line up with', progressCameraOff: 'Turn on the camera for Insight in Settings',
   progressLineUp: 'Line up with your {day} {pose} photo', progressLineUpFirst: 'Stand in the outline', progressPose: 'Pose', progressSeeAllPhotos: 'See all photos',
   progressTakePhotoBtn: 'Take photo', progressTimer3: 'Three second timer', progressSavedPhoneOnly: 'Saved on this phone only', progressPhotoIn3: 'Taking the photo in 3 seconds',
-  progressPhotoSaved: '{pose} photo saved to this phone', progressPhotoFailed: 'That photo did not save. Try again.',
+  progressPhotoSaved: '{pose} photo saved to this phone', progressPhotoFailed: 'That photo did not save. Try again.', progressPhotoDemo: 'Photos are not kept with example data. Leave the example data to take one.', progressPhotoDemoShort: 'Not kept with example data',
   progressMeasArmLong: 'Upper arm', progressMeasureLead: 'Measure at the same time of day, relaxed, with the tape level and snug.',
   progressMeasureFoot: 'Waist at the navel. Arm and thigh at the widest point, same side each time.', progressLastV: 'Last {v}', progressLastFatScale: 'Last {v}, from a smart scale',
   progressMeasuresSaved: 'Measurements saved', progressMeasureSaveFailed: 'Those measurements did not save. Try again.',
