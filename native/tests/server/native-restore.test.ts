@@ -131,3 +131,17 @@ test('a backup restored while signed out brings its phone-side details to the fi
     expect(guest.localGet('pwaPendingAccountLocal')).toBeNull();
   } finally { sqlite.close(); }
 });
+
+test('a merge keeps one copy of a routine the phone shows that the file still has hidden, and the other way round', async () => {
+  const { sqlite, repo } = await setup();
+  try {
+    repo.localSave('routines', { v: 1, routines: [{ id: 'r1', name: 'Morning' }], hidden: [{ id: 'r2', name: 'Evening', sub: '' }], items: [], log: {} });
+    const backup = { format: 'insight-phone-only' as const, version: 1 as const, rows: {}, local: {
+      routines: { v: 1, routines: [{ id: 'r2', name: 'Evening' }, { id: 'r3', name: 'Noon' }], hidden: [{ id: 'r1', name: 'Morning', sub: '' }, { id: 'r4', name: 'Late', sub: '' }], items: [], log: {} },
+    } };
+    restoreNativeLocal(repo, backup, new Set(), 'merge', noPhotos);
+    const merged = repo.localGet<{ routines: { id: string }[]; hidden: { id: string }[] }>('routines')!;
+    expect(merged.routines.map(r => r.id)).toEqual(['r1', 'r3']);
+    expect(merged.hidden.map(r => r.id)).toEqual(['r2', 'r4']);
+  } finally { sqlite.close(); }
+});

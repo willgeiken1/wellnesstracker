@@ -1195,7 +1195,7 @@ export const en = {
   foodMoreADay: '{v} {u} more a day than last week', foodLessADay: '{v} {u} less a day than last week', foodADay: 'a day', foodNoWeekCompare: 'Not enough logged to compare weeks', foodDaysOnGoal: 'days on goal',
   foodDailyAverageLower: 'daily average', foodMoreThanLast: 'more a day than last week', foodLessThanLast: 'less a day than last week', foodNOfM: '{n} of {m}',
   foodWithin10: 'days within 10% of goal', foodDaysWithin: '{n} of {m} days within 10%', foodGoalLegend: '{v} {u} goal', foodTapADay: 'Tap a day',
-  foodNotOnFoods: 'Not on your foods yet', foodUnderLimit: '{v} {u} under the limit', foodOverLimit: '{v} {u} over the limit', foodGoalMet: 'Goal met', foodToGo: '{v} {u} to go',
+  foodNotOnFoods: 'Not on your foods yet', foodUnderLimit: '{v} {u} under the limit', foodSomeNotListed: 'Some foods don’t list it, so the total may be higher', foodOverLimit: '{v} {u} over the limit', foodGoalMet: 'Goal met', foodToGo: '{v} {u} to go',
   foodLimitWord: 'limit', foodMarkIsLimit: 'The mark is your daily limit.', foodUnknownMeans: 'Unknown means your foods so far do not list it.',
   foodNothingLoggedYet: 'Nothing logged yet', foodWindowA11y: 'Eating window from {from} to {to}', foodTargetHours: 'target {n} hours', foodWindowCloses: 'Window closes at',
   foodInsideWindow: 'Inside your {n} hour window', foodPastWindow: '{d} past your {n} hours', foodLastMeal: 'Last meal', foodNoMealsYet: 'No meals yet',

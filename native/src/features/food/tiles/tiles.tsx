@@ -359,21 +359,25 @@ const Week: TileBody = ({ p, repo, d }) => {
 };
 
 /* 7. Nutrients */
-export interface Nu { key: string; v: number | null; goal: number; u: string; limit?: boolean; color?: string }
+export interface Nu { key: string; v: number | null; goal: number; u: string; limit?: boolean; color?: string;
+  /** Some of the day's foods don't list this nutrient, so `v` adds up only the ones that do. */
+  partial?: boolean }
 export function nutrients(v: DayView): { reach: Nu[]; limit: Nu[] } {
   const known = (key: 'sugar' | 'sodium') => v.items.some(i => i[key] != null) ? v.items.reduce((a, i) => a + (i[key] ?? 0), 0) : null;
+  // A food that doesn't list it is unknown, not 0: the total is then only a floor, so it can't be called under the limit.
+  const partial = (key: 'sugar' | 'sodium') => v.items.some(i => i[key] != null) && v.items.some(i => i[key] == null);
   return {
     reach: [{ key: t('foodMacroFiber'), v: v.fib == null ? null : Math.round(v.fib), goal: v.goals.fib, u: 'g', color: 'success' },
       ...(['foodPotassium', 'foodCalcium', 'foodIron', 'foodVitaminC', 'foodVitaminD'] as const).map((key, i) => ({ key: t(key), v: null, goal: [3400, 1000, 8, 90, 15][i], u: ['mg', 'mg', 'mg', 'mg', 'mcg'][i] }))],
-    limit: [{ key: t('foodNuSugar'), v: known('sugar') == null ? null : Math.round(known('sugar')!), goal: 50, u: 'g', limit: true },
+    limit: [{ key: t('foodNuSugar'), v: known('sugar') == null ? null : Math.round(known('sugar')!), goal: 50, u: 'g', limit: true, partial: partial('sugar') },
       { key: t('foodSatFat'), v: null, goal: 22, u: 'g', limit: true },
-      { key: t('foodNuSodium'), v: known('sodium') == null ? null : Math.round(known('sodium')!), goal: 2300, u: 'mg', limit: true },
+      { key: t('foodNuSodium'), v: known('sodium') == null ? null : Math.round(known('sodium')!), goal: 2300, u: 'mg', limit: true, partial: partial('sodium') },
       { key: t('foodCholesterol'), v: null, goal: 300, u: 'mg', limit: true }],
   };
 }
 export function nuNote(x: Nu) {
   if (x.v == null) return t('foodNotOnFoods');
-  if (x.limit) return x.v <= x.goal ? tx('foodUnderLimit', { v: num(x.goal - x.v), u: x.u }) : tx('foodOverLimit', { v: num(x.v - x.goal), u: x.u });
+  if (x.limit) return x.v > x.goal ? tx('foodOverLimit', { v: num(x.v - x.goal), u: x.u }) : x.partial ? t('foodSomeNotListed') : tx('foodUnderLimit', { v: num(x.goal - x.v), u: x.u });
   return x.v >= x.goal ? t('foodGoalMet') : tx('foodToGo', { v: num(x.goal - x.v), u: x.u });
 }
 function NuMeter({ x, h }: { x: Nu; h: number }) {
@@ -397,7 +401,7 @@ const Micros: TileBody = ({ p, d }) => {
   }
   if (p.size === 'M') return <View style={[col, { justifyContent: lim ? 'center' : 'flex-end' }]}>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 18, rowGap: lim ? 22 : 11 }}>{list.map(x => <View key={x.key} accessible
-      accessibilityLabel={`${x.key} ${x.v == null ? t('foodUnknownLower') : `${x.v} ${t('foodOf')} ${x.goal} ${x.u}`}`} style={{ width: (p.body.w - 18) / 2, gap: 5 }}>
+      accessibilityLabel={`${x.key} ${x.v == null ? t('foodUnknownLower') : `${x.v} ${t('foodOf')} ${x.goal} ${x.u}`}${x.partial ? `, ${nuNote(x)}` : ''}`} style={{ width: (p.body.w - 18) / 2, gap: 5 }}>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
         <KitText weight={600} size={12.5} lineHeight={1.25} numberOfLines={1} color={x.v == null ? 'text-muted' : 'text'} style={{ flexShrink: 1 }}>{x.key}</KitText>{valText(x, !!lim)}</View>
       <NuMeter x={x} h={lim ? 7 : 6} />

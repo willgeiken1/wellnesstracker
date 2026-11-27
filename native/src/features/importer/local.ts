@@ -305,15 +305,23 @@ function mergeHistory(key: string, mine: unknown, theirs: unknown): unknown {
   if (key === "progressNeck" || key === "progressBodyFat") return Array.isArray(mine) && Array.isArray(theirs) ? byDay(mine, theirs) : null;
   if (!isObj(mine) || !isObj(theirs)) return null;
   if (key === "foodWater") return { ...mine, log: nested(mine.log, theirs.log, byId) };
-  if (key === "routines")
+  if (key === "routines") {
+    // A routine is one routine whether it is shown or hidden: one the phone has in either list stays where the phone has
+    // it, so a routine since brought back is never added again as hidden, or the other way round.
+    const list = (l: unknown) => (Array.isArray(l) ? l : []);
+    const taken = new Set([...list(mine.routines), ...list(mine.hidden)].map((r) => (isObj(r) ? r.id : undefined)));
+    const fresh = (l: unknown) => list(l).filter((r) => isObj(r) && r.id !== undefined && !taken.has(r.id) && !!taken.add(r.id));
+    const routines = [...list(mine.routines), ...fresh(theirs.routines)];
+    const hidden = [...list(mine.hidden), ...fresh(theirs.hidden)];
     return {
       ...mine,
-      routines: byId(mine.routines, theirs.routines),
-      hidden: byId(mine.hidden, theirs.hidden),
+      routines,
+      hidden,
       items: byId(mine.items, theirs.items),
       log: nested(mine.log, theirs.log, keys),
       ...(mine.used !== undefined || theirs.used !== undefined ? { used: nested(mine.used, theirs.used, keys) } : {}),
     };
+  }
   return null;
 }
 /**
