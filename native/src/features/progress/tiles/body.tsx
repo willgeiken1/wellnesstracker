@@ -95,19 +95,20 @@ function MeasureTile({ size, options }: TileRenderProps) {
   if (!ms.length) return <Empty size={size} text={t('progressMeasureEmpty')} />;
   const latest = ms[ms.length - 1], at = options.cmp === 'prev' ? ms[Math.max(0, ms.length - 2)] : ms[0];
   const val = (key: MeasureKey) => { for (let i = ms.length - 1; i >= 0; i--) { const v = ms[i].cm[key]; if (finite(v)) return v; } return null; };
-  const rows = MEAS_ORDER.flatMap(key => { const v = val(key), a = at.cm[key]; return v == null ? [] : [{ key, name: measureName(key), v, dd: finite(a) ? r1(v - a) : 0 }]; });
-  const sl = (cm: number) => fmt(lenV(cm, u), 1), sd = (cm: number) => signed(lenV(cm, u), 1);
-  const aria = fill(t('progressMeasureAria'), { day: dShort(latest.day), since: dShort(at.day) }) + ' ' + rows.map(x => `${x.name} ${sl(x.v)} ${L}, ${sd(x.dd)}`).join(', ') + '.';
+  const rows = MEAS_ORDER.flatMap(key => { const v = val(key), a = at.cm[key]; return v == null ? [] : [{ key, name: measureName(key), v, dd: finite(a) ? r1(v - a) : null }]; });
+  // A measurement with no reading on the day compared against has no change to show, not a change of zero.
+  const sl = (cm: number) => fmt(lenV(cm, u), 1), sd = (cm: number | null) => cm == null ? '–' : signed(lenV(cm, u), 1);
+  const aria = fill(t('progressMeasureAria'), { day: dShort(latest.day), since: dShort(at.day) }) + ' ' + rows.map(x => `${x.name} ${sl(x.v)} ${L}, ${x.dd == null ? t('progressMeasNoThen') : sd(x.dd)}`).join(', ') + '.';
   if (size === 'S') {
     const top = rows[0];
     return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}><Num v={sl(top.v)} unit={L} fs={30} />
-      <Sub style={{ marginTop: 4 }}>{top.name}, {sd(top.dd)} {L}</Sub><Sub>{t('progressSince')} {dShort(at.day)}</Sub>
+      <Sub style={{ marginTop: 4 }}>{top.name}, {top.dd == null ? t('progressMeasNoThen') : `${sd(top.dd)} ${L}`}</Sub><Sub>{t('progressSince')} {dShort(at.day)}</Sub>
       <View style={{ marginTop: 'auto' }}>{rows.slice(1, 3).map((x, i) => <Row key={x.key} style={{ height: 22, borderTopWidth: i ? 1 : 0, borderTopColor: k.c.hair }}>
         <Text style={[font(600, 12), { color: k.c.text, flex: 1 }]}>{x.name}</Text>
         <Text style={[font(700, 13, 1), { color: k.c.text, fontVariant: ['tabular-nums'] }]}>{sl(x.v)}<Text style={[font(600, 11), { color: k.c['text-muted'] }]}>{'\u200A'}{L}</Text></Text></Row>)}</View></View>;
   }
-  const max = Math.max(...rows.map(x => Math.abs(x.dd))) || 1;
-  const diverge = (dd: number) => <View style={{ height: 8, width: 96 }}>
+  const max = Math.max(...rows.map(x => Math.abs(x.dd ?? 0))) || 1;
+  const diverge = (dd: number | null) => dd == null ? <View style={{ height: 8, width: 96 }} /> : <View style={{ height: 8, width: 96 }}>
     <View style={{ position: 'absolute', left: '50%', top: -3, bottom: -3, width: 1, backgroundColor: k.c['hair-2'] }} />
     <View style={[{ position: 'absolute', top: 0, bottom: 0, borderRadius: 3, width: `${Math.max(dd ? 3 : 0, Math.abs(dd) / max * 50)}%`, backgroundColor: dd < 0 ? k.c.recovery : mix(k.c.recovery, k.c['surface-2'], 0.45) }, dd < 0 ? { right: '50%' } : { left: '50%' }]} />
   </View>;

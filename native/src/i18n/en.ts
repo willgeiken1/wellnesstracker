@@ -1296,7 +1296,7 @@ export const en = {
   progressFatEmpty: 'Body fat shows here from a smart scale or a reading you add.', progressFatAria: 'Body fat {pct} percent, {ch} since {since}.', progressFatAriaMass: 'Fat mass {fat}, lean mass {lean}.',
   progressLeanFat: 'lean mass, {pct}% fat', progressLeanMass: 'lean mass', progressSince: 'since', progressSmartScale: 'Smart scale', progressFat: 'Fat', progressLean: 'Lean',
   progressMeasWaist: 'Waist', progressMeasChest: 'Chest', progressMeasHips: 'Hips', progressMeasNeck: 'Neck', progressMeasArm: 'Arm', progressMeasThigh: 'Thigh',
-  progressMeasureEmpty: 'Add your first measurements with a soft tape.', progressMeasureAria: 'Measurements, {day}, change since {since}:',
+  progressMeasureEmpty: 'Add your first measurements with a soft tape.', progressMeasureAria: 'Measurements, {day}, change since {since}:', progressMeasNoThen: 'not measured then',
   progressTapeCm: 'Centimeters, with a soft tape. Change since {since}.', progressTapeIn: 'Inches, with a soft tape. Change since {since}.',
   progressPlanWeek: 'Plan this week', progressOfDaysUnit: 'of {n} days', progressYourPlan: 'Your plan', progressNextIs: '{name} is next, {when}', progressNoNext: 'Nothing planned next',
   progressPlanAria: '{done} of {per} plan days this week.', progressSleepGoal: 'Sleep goal', progressANight: 'a night', progressNightsAt: '{n} of 7 nights at {goal}',
