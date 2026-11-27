@@ -213,8 +213,10 @@ export class SplitStore {
   private project(def: SplitDef) {
     const fixed = def.mode === 'weekdays';
     const days = def.days.map((d, i) => ({ routineId: d.routineId, weekdays: def.week.map((w, wd) => w === i ? wd : -1).filter(wd => wd >= 0) }));
-    this.plans.save({ mode: fixed && days.every(d => d.weekdays.length) ? 'fixed' : 'rotation',
-      daysPerWeek: Math.max(1, Math.min(7, perWeekOf(def) || 1)), days });
+    // In Set weekdays a day with no weekday yet simply doesn't run, so it stays out of the plan rather than turning the
+    // whole plan into a rotation (the synced plan row decides the mode on every phone).
+    this.plans.save({ mode: fixed ? 'fixed' : 'rotation',
+      daysPerWeek: Math.max(1, Math.min(7, perWeekOf(def) || 1)), days: fixed ? days.filter(d => d.weekdays.length) : days });
     this.plans.setName(def.name);
   }
   private write(def: SplitDef, state?: SplitState) {
