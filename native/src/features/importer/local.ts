@@ -7,11 +7,18 @@ import {
 } from "../../../../supabase/functions/_shared/pwa-import";
 export type { ImportPlan } from "../../../../supabase/functions/_shared/pwa-import";
 export { normalizePwa } from "../../../../supabase/functions/_shared/pwa-import";
+/**
+ * Tables a restore from this app's own backup file may write: every synced table but the purge markers. Custom exercises,
+ * the split and breaks are kept too, so a Replace restore brings them back instead of deleting them.
+ */
+const RESTORE_TABLES = syncedTables.filter((t) => t !== "purges");
 export interface ImportPreview {
   plan: ImportPlan;
   owner: string;
   revision: number;
   mode: "merge" | "replace";
+  /** Built from this app's own backup file, so its own tables (custom exercises, the split, breaks) come back too. */
+  native?: boolean;
   counts: Record<string, number>;
   existing: number;
   removed: number;
@@ -21,6 +28,7 @@ export function previewImport(
   repo: Repository,
   plan: ImportPlan,
   mode: "merge" | "replace" = "merge",
+  native = false,
 ): ImportPreview {
   if (
     !plan ||
@@ -37,9 +45,11 @@ export function previewImport(
     )
   )
     throw new Error("Invalid import plan.");
-  const allowed = syncedTables.filter(
-    (t) => !["purges", "custom_exercises", "plans", "pauses"].includes(t),
-  );
+  const allowed = native
+    ? RESTORE_TABLES
+    : syncedTables.filter(
+        (t) => !["purges", "custom_exercises", "plans", "pauses"].includes(t),
+      );
   const counts: Record<string, number> = {};
   let existing = 0;
   for (const row of plan.rows) {
@@ -62,6 +72,7 @@ export function previewImport(
     owner: repo.owner,
     revision: repo.getRevision(),
     mode,
+    ...(native ? { native: true } : {}),
     counts,
     existing,
     removed:
@@ -200,8 +211,6 @@ export function commitImport(
   return added;
 }
 
-/** Tables a restore may write, as for any import. */
-const RESTORE_TABLES = syncedTables.filter((t) => !["purges", "custom_exercises", "plans", "pauses"].includes(t));
 type NativeBackup = { format: "insight-phone-only" | "insight-account"; version: 1; rows: Record<string, unknown>; local: Record<string, unknown> };
 /** A file from Settings › Save a backup file (this app's own format), or null for any other file. */
 export function nativeBackup(input: unknown): NativeBackup | null {
@@ -226,15 +235,22 @@ export function nativeBackupPlan(backup: NativeBackup): ImportPlan {
   return { version: 1, rows, issues: [], unmapped: [], legacy: {} };
 }
 /**
- * After a restore, the phone-side details saved with it (a workout's unsaved set rows, RPE, sides, settings): any the phone
- * does not have yet, and the set rows of a workout the restore brought back. The importer's own bookkeeping is left alone.
+ * After a restore, the phone-side details saved with it (a workout's unsaved set rows, RPE, sides, settings). A merge adds
+ * any the phone does not have yet, and the set rows of a workout the restore brought back; Replace writes every one of them.
+ * The importer's own bookkeeping is left alone.
  */
-export function restoreNativeLocal(repo: Repository, backup: NativeBackup, newEntries: ReadonlySet<string>) {
+export function restoreNativeLocal(
+  repo: Repository,
+  backup: NativeBackup,
+  newEntries: ReadonlySet<string>,
+  mode: "merge" | "replace" = "merge",
+) {
   repo.atomic(() => {
     for (const [key, value] of Object.entries(backup.local)) {
       if (key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:")) continue;
       const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));
-      if (repo.localGet(key) !== undefined && !fresh) continue;
+      // Replace puts the file's details back over the phone's; a merge only fills in what the phone does not have.
+      if (mode === "merge" && repo.localGet(key) !== undefined && !fresh) continue;
       repo.localSave(key, value);
     }
   });

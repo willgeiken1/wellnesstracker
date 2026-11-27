@@ -146,7 +146,7 @@ function ImportBody() {
       const converted =
         server || !base || own ? base : normalizePwa(input, bank, valid);
       return {
-        preview: converted ? previewImport(repo, converted, mode) : null,
+        preview: converted ? previewImport(repo, converted, mode, !!own) : null,
         error: false,
         names: base?.unmapped ?? [],
       };
@@ -209,7 +209,7 @@ function ImportBody() {
       const own = server ? null : nativeBackup(input);
       const newEntries = new Set(p.plan.rows.filter((r) => r.table === "entries" && !repo.get("entries", r.id)).map((r) => r.id));
       commitImport(repo, p, true, mode === "replace");
-      if (own) restoreNativeLocal(repo, own, newEntries);
+      if (own) restoreNativeLocal(repo, own, newEntries, mode);
       if (server) repo.localSave("pwaImportComplete", true);
       setDone(true);
       void auth.syncNow();
