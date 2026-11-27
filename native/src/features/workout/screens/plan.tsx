@@ -40,6 +40,11 @@ export function writeDay(store: WorkoutStore, routineId: string, rows: TemplateE
   const clean = rows.map(r => r.superset_group && (count.get(r.superset_group) ?? 0) < 2 ? { ...r, superset_group: undefined } : r);
   store.saveTemplate(String(store.repo.get('routines', routineId)?.data.name ?? ''), clean, routineId);
 }
+/** Undo of a removed exercise: the day as it was, with the same exercise rows, so their settings (one side at a time,
+ * superset) and links from earlier workouts stay with them. */
+export function undoDay(store: WorkoutStore, routineId: string, before: TemplateExercise[]) {
+  try { writeDay(store, routineId, before); } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); }
+}
 /** Give every day without a weekday the next free one, for Fixed weekdays. Null when there are more days than weekdays. */
 export function fillWeekdays(days: string[], weekdays: Record<string, number[]>): Record<string, number[]> | null {
   if (days.length > 7) return null;
@@ -133,7 +138,7 @@ function DayCard({ store, id, index, open, next, weekday, onToggle, onStart }: {
     const before = rows;
     try {
       writeDay(store, id, rows.filter((_, j) => j !== i));
-      showToast(tr('trainingRemoved', { name: exLabel(before[i].exercise) }), { action: { label: tr('trainingUndo'), onAction: () => writeDay(store, id, before.map(r => ({ ...r, id: undefined }))) } });
+      showToast(tr('trainingRemoved', { name: exLabel(before[i].exercise) }), { action: { label: tr('trainingUndo'), onAction: () => undoDay(store, id, before) } });
     } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); }
   };
   return <Card style={{ padding: 0, overflow: 'hidden' }}>

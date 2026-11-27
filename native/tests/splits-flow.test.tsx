@@ -1,7 +1,7 @@
 // Workout splits on Training (Insight Mockup v21): the first-time picker, a preset set up and used, the tracker at each
 // size, the Change menu (swap, skip, freestyle, train today), and a split day loading its exercises into the logger.
 // Made-up sample data only.
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 import { router } from 'expo-router';
 import { ThemeProvider, useTheme } from '../src/design/theme-provider';
@@ -270,6 +270,17 @@ describe('the Split screen, the library and the customize sheet', () => {
     await fireEvent.press(screen.getByText('Set weekdays'));
     expect(screen.getByText('Monday')).toBeTruthy();
     expect(screen.getByText('Each day has its weekday. Miss one and it waits for your next session, then the week carries on.')).toBeTruthy();
+  });
+  test('Undo of a removed exercise keeps every exercise of the day as it was, one side at a time included', async () => {
+    const store = await chooseUpperLower();
+    const routine = store.view()!.days[0].routineId, rows = () => store.workout.templateExercises(routine);
+    const ids = rows().map(r => r.id), one = rows().find(r => r.data.exercise !== 'Bench Press')!;
+    store.workout.repo.localSave(`routineUnilateral:${one.id}`, true);
+    await render(<SplitScreen />, { wrapper });
+    await fireEvent.press(screen.getByRole('button', { name: 'Remove Bench press' }));
+    await act(() => (toast.mock.calls.at(-1)![1].action.onAction as () => void)());
+    expect(rows().map(r => r.id)).toEqual(ids);
+    expect(store.workout.repo.localGet(`routineUnilateral:${one.id}`)).toBe(true);
   });
   test("editing a day's exercises: remove one, change its sets, add from the bank with muscle and equipment filters", async () => {
     const store = await chooseUpperLower();

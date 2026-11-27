@@ -20,7 +20,7 @@ import { actionSheet } from '../workout/action-sheet';
 import { exLabel } from '../workout/logger/model';
 import { trainingNav } from '../workout/nav';
 import { Page } from '../workout/screens/page';
-import { ExerciseRow, dayRows, writeDay } from '../workout/screens/plan';
+import { ExerciseRow, dayRows, undoDay, writeDay } from '../workout/screens/plan';
 import { MUSCLE_GROUPS, type MuscleGroup } from '../workout/training-data';
 import { tr, trCount } from '../workout/tr';
 import { freestyle, nextIndex, skipToday, startSplitDay, statusLine, swapSheet, trainNow } from './menu';
@@ -162,7 +162,7 @@ function DayCard({ store, v, index, open, abbr, onToggle }: { store: SplitStore;
     const before = rows;
     try {
       writeDay(store.workout, d.routineId, rows.filter((_, j) => j !== i));
-      showToast(tr('trainingRemoved', { name: exLabel(before[i].exercise) }), { action: { label: tr('splitUndo'), onAction: () => writeDay(store.workout, d.routineId, before.map(r => ({ ...r, id: undefined }))) } });
+      showToast(tr('trainingRemoved', { name: exLabel(before[i].exercise) }), { action: { label: tr('splitUndo'), onAction: () => undoDay(store.workout, d.routineId, before) } });
     } catch { showToast(tr('trainingSaveError'), { color: 'warning' }); }
   };
   const toggleMuscle = (m: MuscleGroup) => {
