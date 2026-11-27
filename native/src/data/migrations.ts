@@ -174,8 +174,8 @@ ALTER TABLE daily_placements_0006 RENAME TO daily_placements;
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS daily_pauses (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, block_id TEXT, from_day TEXT, until_day TEXT, why TEXT, position INTEGER, PRIMARY KEY(owner_id,id));`;
 // What a done check-off took off an item's on-hand count, so taking the tick back puts back exactly that. Local only,
-// like 0005 and 0006. daily_logs is rebuilt with the new column and its rows copied over, as 0006 does, so the step
-// also runs on a database where it ran before.
+// like 0005 and 0006. daily_logs is rebuilt with the new column and its rows copied over, as 0006 does. The journal
+// runs it once per database; a second run would drop the column's values, since only the older columns are copied.
 export const dailyUsedLocalSql = `CREATE TABLE daily_logs_0007 (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, item_id TEXT, compound_id TEXT, day TEXT, status TEXT, amount REAL, unit TEXT, note TEXT, at INTEGER, site TEXT, rest INTEGER, undone INTEGER, on_hand_used REAL, PRIMARY KEY(owner_id,id));
 --> statement-breakpoint
 INSERT INTO daily_logs_0007 (owner_id, id, updated_at, deleted_at, device_id, item_id, compound_id, day, status, amount, unit, note, at, site, rest, undone) SELECT owner_id, id, updated_at, deleted_at, device_id, item_id, compound_id, day, status, amount, unit, note, at, site, rest, undone FROM daily_logs;

@@ -52,8 +52,9 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
    for a document an earlier build left, which may hold anything. */
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 /** The most an on-hand count may be (the row check's range for on_hand); per day and vial keep to it too. */
-export const MAX_ON_HAND = 999999;
-const countOf = (v: unknown) => (finite(v) ? clamp(v, 0, MAX_ON_HAND) : null);
+/** The largest count the on_hand column takes (the screens cap entry lower, at the model's MAX_ON_HAND). */
+const COLUMN_MAX = 999999;
+const countOf = (v: unknown) => (finite(v) ? clamp(v, 0, COLUMN_MAX) : null);
 const realOf = (v: unknown) => (finite(v) ? v : null);
 const minutesOf = (h: unknown, lo: number, hi: number) => (finite(h) ? clamp(Math.round(h * 60), lo, hi) : null);
 const wordsOf = (v: unknown) => (typeof v === 'string' ? v : null);
