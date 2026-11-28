@@ -1509,7 +1509,7 @@ export const en = {
   routinesRemindMe: 'Remind me', routinesRemindSub: 'At {time}, then once if something is left', routinesRemindOn: '{name} reminders on', routinesRemindOff: '{name} reminders off',
   routinesResumeName: 'Resume {name}', routinesRoutineToPause: 'Routine to pause', routinesRoutineWord: 'Routine', routinesRoutinesAndTime: 'Routines and time',
   routinesSaveRoutine: 'Save routine', routinesSaved: '{name} saved', routinesTapADay: 'Tap a day to read it.', routinesTime: 'Time',
-  routinesTSupplement: 'Supplement', routinesTPeptide: 'Peptide', routinesTMedication: 'Medication', routinesTEnhancer: 'Enhancer', routinesTOther: 'Other',
+  routinesTSupplement: 'Supplement', routinesTPeptide: 'Peptide', routinesTMedication: 'Medication', routinesTEnhancer: 'Booster', routinesTOther: 'Other',
   routinesUntil: 'Until', routinesWhen: 'When', routinesWhy: 'Why', routinesWhyTravel: 'Travel', routinesWhyBreak: 'A break', routinesWhyUnwell: 'Feeling unwell',
   routinesWindowLabel: '{name} window {win}',
   // P6 routines end
