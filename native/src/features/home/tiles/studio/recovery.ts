@@ -229,6 +229,21 @@ export function install(window) {
     }).join('');
   }
 
+  /* B, and the styles drawn from a night's stages when the source shares none (Oura's nightly total): the last nights as columns.
+     Without stages the header says so, so the style reads as itself rather than as a different one. */
+  function hasStages(d) { return !!(d.sleep && d.sleep.last && d.sleep.last.stages && d.sleep.last.stages.length); }
+  function sleepNights(o, ctx, noStages) {
+    let k = kit(o, ctx), T = k.T, S = sleepModel(ctx.data), sc = o.show === 'score', n = +o.range || 7, R = sleepRange(S, n), body;
+    let met = S.durs.slice(-n).filter(function (v) { return v >= S.needH; }).length;
+    let sub = sc ? asleep(S) : 'of ' + S.needH + ' h need', avgT = sc ? 'Avg ' + k.num(String(R.avgScore), 11) : 'Avg ' + k.num(dur(R.avgDur), 11);
+    if (k.size === 'S') body = k.stack(k.hero(sleepHero(k, S, sc), sub) + nightCols(k, S, k.cw, 52, n, sc, false));
+    else if (k.size === 'M') body = k.split(k.hero(sleepHero(k, S, sc), sub) + k.t(avgT + ' a night', 11), nightCols(k, S, k.cw - 132, k.bh, n, sc, true), 116);
+    else body = k.stack(k.hero(sleepHero(k, S, sc), esc(sc ? asleep(S) + (S.last.bed ? ', ' + S.last.bed + ' to ' + S.last.wake : '') : needLine(S))) + nightCols(k, S, k.cw, 156, n, sc, true) +
+      k.foot(sc ? S.scoreSrc : S.src, sc ? k.fact('Avg score', String(R.avgScore)) : k.fact('Need met', met + ' of ' + n + ' nights') + k.fact('Avg', dur(R.avgDur))));
+    return k.root('ts2-sleep-B', sleepAria(S, sc) + 'Over the last ' + n + ' nights, ' + (sc ? 'average score ' + R.avgScore : 'average sleep ' + dur(R.avgDur) + ', need met on ' + met) + '.',
+      k.head('sleep', T.sleep, 'Sleep', k.size === 'S' ? '' : noStages ? 'No stages shared' : n + ' nights'), body);
+  }
+
   let sleepTile = {
     id: 'sleep', title: 'Sleep', group: 'Recovery & Sleep',
 
@@ -239,6 +254,7 @@ export function install(window) {
         options: [{ id: 'size', label: 'Size', choices: [['S', 'Small'], ['M', 'Wide'], ['L', 'Large']] }, showOpt()],
         sizes: ['S', 'M', 'L'],
         render: function (o, ctx) {
+          if (!hasStages(ctx.data)) return sleepNights(o, ctx, true);
           let k = kit(o, ctx), T = k.T, S = sleepModel(ctx.data), sc = o.show === 'score', body, sub = sc ? asleep(S) : 'of ' + S.needH + ' h need';
           if (k.size === 'S') body = k.stack(k.hero(sleepHero(k, S, sc), sub) + hypno(k, S, k.cw, 50, 0, false));
           else if (k.size === 'M') body = k.split(k.hero(sleepHero(k, S, sc), sub) + k.t(esc(S.last.bed + ' to ' + S.last.wake), 11), hypno(k, S, k.cw - 132, 96, 0, false), 116);
@@ -256,17 +272,7 @@ export function install(window) {
           { id: 'range', label: 'Range', choices: [['7', '7 nights'], ['14', '14 nights']] }
         ],
         sizes: ['S', 'M', 'L'],
-        render: function (o, ctx) {
-          let k = kit(o, ctx), T = k.T, S = sleepModel(ctx.data), sc = o.show === 'score', n = +o.range || 7, R = sleepRange(S, n), body;
-          let met = S.durs.slice(-n).filter(function (v) { return v >= S.needH; }).length;
-          let sub = sc ? asleep(S) : 'of ' + S.needH + ' h need', avgT = sc ? 'Avg ' + k.num(String(R.avgScore), 11) : 'Avg ' + k.num(dur(R.avgDur), 11);
-          if (k.size === 'S') body = k.stack(k.hero(sleepHero(k, S, sc), sub) + nightCols(k, S, k.cw, 52, n, sc, false));
-          else if (k.size === 'M') body = k.split(k.hero(sleepHero(k, S, sc), sub) + k.t(avgT + ' a night', 11), nightCols(k, S, k.cw - 132, k.bh, n, sc, true), 116);
-          else body = k.stack(k.hero(sleepHero(k, S, sc), esc(sc ? asleep(S) + ', ' + S.last.bed + ' to ' + S.last.wake : needLine(S))) + nightCols(k, S, k.cw, 156, n, sc, true) +
-            k.foot(sc ? S.scoreSrc : S.src, sc ? k.fact('Avg score', String(R.avgScore)) : k.fact('Need met', met + ' of ' + n + ' nights') + k.fact('Avg', dur(R.avgDur))));
-          return k.root('ts2-sleep-B', sleepAria(S, sc) + 'Over the last ' + n + ' nights, ' + (sc ? 'average score ' + R.avgScore : 'average sleep ' + dur(R.avgDur) + ', need met on ' + met) + '.',
-            k.head('sleep', T.sleep, 'Sleep', k.size === 'S' ? '' : n + ' nights'), body);
-        }
+        render: function (o, ctx) { return sleepNights(o, ctx); }
       },
       {
         key: 'C', name: 'Night arc',
@@ -292,6 +298,7 @@ export function install(window) {
         options: [{ id: 'size', label: 'Size', choices: [['M', 'Wide'], ['S', 'Small'], ['L', 'Large']] }, showOpt()],
         sizes: ['S', 'M', 'L'],
         render: function (o, ctx) {
+          if (!hasStages(ctx.data)) return sleepNights(o, ctx, true);
           let k = kit(o, ctx), T = k.T, S = sleepModel(ctx.data), sc = o.show === 'score', body, sub = sc ? asleep(S) : 'of ' + S.needH + ' h need';
           let deepRem = Math.round((S.tot.deep + S.tot.rem) / S.total * 100);
           if (k.size === 'S') body = k.stack(k.hero(sleepHero(k, S, sc), sub) + '<div>' + k.t('Deep and REM ' + k.num(dur(S.tot.deep + S.tot.rem), 11), 11, null, 'margin-bottom:8px') + stageBar(k, S, k.cw, 16) + '</div>');

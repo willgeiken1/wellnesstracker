@@ -1,7 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useEffect, useMemo, useRef, type ComponentRef } from 'react';
 import { View } from 'react-native';
-import Animated, { useAnimatedRef, useScrollOffset } from 'react-native-reanimated';
+import Animated, { useAnimatedRef, useAnimatedStyle, useScrollOffset, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
@@ -56,7 +56,7 @@ const MIN_TOP = 47;
  */
 export function Home() {
   const { store } = useWorkout();
-  const { colors } = useTheme();
+  const { colors, reduceMotion } = useTheme();
   const insets = useSafeAreaInsets();
   const focused = useFocused();
   // Hide numbers: a tap shows Home's numbers only until Home is left.
@@ -79,6 +79,9 @@ export function Home() {
 
   const { editing } = useTileEdit('home');
   useShellEditMode('home', editing, () => tileEdit.end());
+  const pinShown = useSharedValue(1);
+  useEffect(() => { pinShown.value = reduceMotion ? (editing ? 0 : 1) : withTiming(editing ? 0 : 1, { duration: 200 }); }, [editing, reduceMotion, pinShown]);
+  const pinStyle = useAnimatedStyle(() => ({ opacity: pinShown.value, transform: [{ scale: 0.8 + 0.2 * pinShown.value }] }));
   const go = (href: string) => router.push(href as unknown as Href);
   useQuickActions('home', {
     edit: { run: () => tileEdit.set('home', true) },
@@ -103,8 +106,11 @@ export function Home() {
       <TileGrid page="home" scrollRef={scrollRef} />
     </Animated.ScrollView>
     {/* Pinned over the page, so it stays at the top right while the page scrolls under it. Its own fill keeps it legible. */}
-    <View ref={avatarRef} collapsable={false} testID="profile-pin" style={{ position: 'absolute', top: Math.max(insets.top, MIN_TOP) + 6, right: 16 }}>
-      <ProfileButton name={name} />
+    {/* While Home is editing it steps away, so it never sits over the edit bar's Done as that bar sticks to the top. */}
+    <View ref={avatarRef} collapsable={false} testID="profile-pin" pointerEvents={editing ? 'none' : 'box-none'}
+      accessibilityElementsHidden={editing} importantForAccessibility={editing ? 'no-hide-descendants' : 'auto'}
+      style={{ position: 'absolute', top: Math.max(insets.top, MIN_TOP) + 6, right: 16 }}>
+      <Animated.View style={pinStyle}><ProfileButton name={name} /></Animated.View>
     </View>
     <HomeTips store={repo} hero={heroRef} avatar={avatarRef} />
     <SampleTour demo={repo?.owner === 'demo'} />

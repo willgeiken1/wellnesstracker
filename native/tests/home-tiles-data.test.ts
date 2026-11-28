@@ -106,7 +106,15 @@ describe('which tiles have a reading to draw', () => {
     expect(d.weight.lastWeighIn).toBe('Today, 6:52 AM');
     expect(d.weight.series.filter(v => v !== null)).toHaveLength(2);
     expect(tileView(s, 'weight', 'A', 'S', { goal: 'on' })).toEqual({ options: { goal: 'off' } });
-    expect(tileView(s, 'weight', 'D', 'S', {})).toEqual({ empty: 'goalWeight' });
+    // Progress with no goal yet still draws as itself: today's weight, a track with no step taken, and where to add the goal.
+    expect(tileView(s, 'weight', 'D', 'S', {})).toEqual({ options: { goal: 'off' } });
+    for (const size of ['S', 'M'] as const) {
+      const html = drawTile({ id: 'weight', style: 'D', size, options: { show: 'progress', range: '30' }, colors: createTheme('dark'), mode: 'dark', data: d, uid: 'wd' }) ?? '';
+      expect(html).toContain(size === 'S' ? 'No goal yet' : 'No goal weight yet');
+      expect(html).toContain('181.4');
+      expect(html).toContain('No goal weight yet. Add one in Settings, Goals');
+      expect(html).not.toMatch(/NaN|Infinity|Goal 0|undefined/);
+    }
   });
   test('a week with no recovery reading shows the pillar as missing, not as 0', () => {
     const score = days.map(() => ({ value: 70, training: 80, food: 60, recovery: null }));
@@ -163,7 +171,7 @@ describe('health sources stay apart', () => {
     expect(pickRecovery(null, apple)).toEqual({ hrv: [40], rhr: [60], sleepScore: null, source: 'Apple Health' });
     expect(pickRecovery(null, { access: 'ask', recovery: null })).toBeNull();
   });
-  test('with Oura as the sleep source, Apple\'s night stages are left out and the sleep tile says why', () => {
+  test('with Oura as the sleep source, Apple\'s night stages are left out and the sleep tile draws its nights, saying it has no stages', () => {
     const detail = { stepsHourly: null, activeHourly: null, exerciseHourly: null, bedtimes: [23], mindful: null, bodyFat: null,
       night: { bed: new Date(2026, 10, 21, 23), wake: new Date(2026, 10, 22, 6), stages: [['core', 0, 420]] as [ 'core', number, number][] } };
     expect(detailFor(detail, false)).toBe(detail);
@@ -172,7 +180,16 @@ describe('health sources stay apart', () => {
     expect(only.bedtimes).toBeNull();
     const s = buildState(input({ health: health({ sleepHours: series(6.9, 7) }), detail: only,
       recovery: { hrv: series(54, 50), rhr: series(56, 57), sleepScore: series(86, 80), source: 'Oura' } }), DEFAULT_UNITS, () => {});
-    expect(tileView(s, 'sleep', 'A', 'S', {})).toEqual({ empty: 'sleepStages' });
+    expect(tileView(s, 'sleep', 'A', 'S', {})).toEqual({ options: {} });
+    for (const style of ['A', 'D'] as const) for (const size of ['S', 'M', 'L'] as const) for (const show of ['hours', 'score']) {
+      const html = drawTile({ id: 'sleep', style, size, options: { show }, colors: createTheme('dark'), mode: 'dark', data: s.data, uid: 'sl' }) ?? '';
+      expect(html).toContain('ts2-sleep-B');
+      if (size !== 'S') expect(html).toContain('No stages shared');
+      expect(html).toContain(show === 'score' ? '86' : '6h');
+      expect(html).not.toMatch(/NaN|Infinity|undefined| to <| to ,/);
+    }
+    // A style that never needed stages keeps its own header.
+    expect(drawTile({ id: 'sleep', style: 'B', size: 'M', options: { show: 'hours', range: '7' }, colors: createTheme('dark'), mode: 'dark', data: s.data, uid: 'sl' })).toContain('7 nights');
     expect(tileView(s, 'hrv', 'A', 'S', {})).toEqual({ options: {} });
   });
 });

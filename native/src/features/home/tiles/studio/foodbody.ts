@@ -960,9 +960,23 @@ export function install(window) {
     return root('weight', 'C', ctx, wtAria(m) + ' Smoothed trend now ' + f1(trNow) + ' ' + m.u + '; weigh-ins over ' + m.n + ' days ranged from ' + f1(amin(raw)) + ' to ' + f1(amax(raw)) + ' ' + m.u + '.', h);
   }
 
+  /* D before there is a goal: the same track with every step still recessed, and where to add the goal at its end, so the style
+     reads as itself and shows what it is waiting for rather than a note in place of the tile. */
+  function weightNoGoal(o, ctx, m) {
+    let T = ctx.T, col = T.accent, h = '', S = o.size === 'S', segs = S ? 7 : 12, i;
+    let z = S ? { x: P, y: 114, w: 141, h: 16, gap: 3 } : { x: P, y: 118, w: 326, h: 18, gap: 4 }, sw = (z.w - z.gap * (segs - 1)) / segs;
+    m.goalOn = false;
+    h += head(ctx, 'weight', col, 'Weight', S ? '' : 'To goal');
+    h += hero(ctx, o, { num: f1(m.today), unit: m.u, cap: S ? 'No goal yet' : 'No goal weight yet', w: S ? 141 : 326 });
+    for (i = 0; i < segs; i++) h += cell(ctx, z.x + i * (sw + z.gap), z.y, sw, z.h, Math.min(6, z.h / 2), 0, col, 'right');
+    h += lbl(ctx, z.x, z.y + z.h + 8, 80, S ? 'Now' : 'Now ' + f1(m.today)) + lbl(ctx, z.x + z.w - 150, z.y + z.h + 8, 150, S ? 'Add a goal' : 'Add a goal in Settings', 'right', true);
+    return root('weight', 'D', ctx, wtAria(m) + ' No goal weight yet. Add one in Settings, Goals, to see your progress toward it.', h);
+  }
+
   /* D: Progress. From where the range started to the goal as recessed segments, one per lb (half a kg in kg), raised as far as the trend has come. */
   function weightD(o, ctx) {
     let T = ctx.T, m = wtModel(ctx, o), col = T.accent, h = '', S = o.size === 'S', n = m.n, i;
+    if (!(m.goal > 0)) return weightNoGoal(o, ctx, m);
     let start = m.tr[m.tr.length - n], dir = m.goal < start ? -1 : 1, total = Math.abs(m.goal - start), done = clamp((m.today - start) * dir, 0, total);
     let unit = m.u === 'kg' ? 0.5 : 1; while (total / unit > 14) unit *= 2;
     let segs = Math.max(1, Math.ceil(total / unit - 1e-6)), z = S ? { x: P, y: 114, w: 141, h: 16, gap: 3 } : { x: P, y: 118, w: 326, h: 18, gap: 4 };
