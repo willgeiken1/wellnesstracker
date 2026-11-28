@@ -96,3 +96,17 @@ test('the scrim lets taps through to the page as soon as the actions close', asy
   const scrim = screen.queryByTestId('fan-scrim');
   if (scrim) expect(scrim).toHaveProp('pointerEvents', 'none');
 });
+
+// On the phone the page's own text read through the dim scrim next to the page name and Customize. The kit's scrim blurs
+// the page (backdrop-filter: blur(14px)) and names the page in small capitals; the app now does both.
+test('the scrim blurs the page behind the actions, as the kit does', async () => {
+  await render(<ThemeProvider><Scrim open onClose={() => {}} /></ThemeProvider>);
+  const blur = screen.getByTestId('fan-scrim-blur');
+  expect(blur).toBeTruthy();
+  expect(StyleSheet.flatten(screen.getByTestId('fan-scrim').props.style).backgroundColor).toBeUndefined();
+});
+test('the page name above the actions is in small capitals, as the kit draws it', async () => {
+  await open();
+  expect(StyleSheet.flatten(screen.getByTestId('fan-page').props.style)).toMatchObject({ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.54 });
+  expect(screen.getByText('Routines')).toBeTruthy();
+});

@@ -1,5 +1,5 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
-import { View, useWindowDimensions } from 'react-native';
+import { Platform, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationOptions } from 'expo-router';
 
@@ -23,14 +23,18 @@ export function sheetDetent(options: NativeStackNavigationOptions | undefined): 
 
 /**
  * The frame every fixed-height sheet's content sits in. On iOS a form sheet's screen can hand its content no height
- * at all (every sheet showed its header over a blank body: Log food, Water, a split preset), because the content
- * fills its screen with `flex: 1`. The outer view keeps measuring what the screen gives; while that is collapsed,
- * the content takes the sheet's own height from the window instead, and goes back to filling once the screen has one.
+ * at all (every sheet showed its header over a blank body: Log food, Water, a split preset, and the tile tray still
+ * opened black after the content's own height only took over once the screen measured collapsed), because the content
+ * fills its screen with `flex: 1`. So on iOS the content always takes the sheet's own height: a sheet with one fixed
+ * detent is `detent` of the large sheet, which stands `LARGE_TOP` below the status bar, and never changes height.
+ * Elsewhere the outer view keeps measuring what the screen gives, and the content takes that height only while the
+ * screen gives none.
  */
-export function SheetFrame({ detent, children }: { detent: number; children: ReactNode }) {
+export function SheetFrame({ detent, children, ios = Platform.OS === 'ios' }: { detent: number; children: ReactNode; ios?: boolean }) {
   const insets = useSafeAreaInsets(), { height } = useWindowDimensions();
   const [collapsed, setCollapsed] = useState(false);
   const own = Math.round((height - insets.top - LARGE_TOP) * detent);
+  if (ios) return <View testID="sheet-frame" style={{ height: own }}>{children}</View>;
   return <View style={{ flex: 1 }} onLayout={e => setCollapsed(e.nativeEvent.layout.height < COLLAPSED)}>
     <View testID="sheet-frame" style={collapsed ? { height: own } : { flex: 1 }}>{children}</View>
   </View>;

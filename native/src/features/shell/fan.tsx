@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, View, type LayoutChangeEvent } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { blurIntensity, useReduceTransparency } from '@/components/blur-bar';
 import { Tappable } from '@/components/tappable';
 import { ThemedText } from '@/components/themed-text';
+import { capitals, font } from '@/components/kit-style';
 import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
@@ -22,9 +25,14 @@ export interface FanProps {
 }
 const CLOSE = Easing.bezier(0.4, 0, 0.7, 0.2);
 
-/** The scrim behind the arc: the page dims and a tap anywhere closes the actions. */
+/** The scrim's blur, as the kit's `.qa-scrim` draws it (`backdrop-filter: blur(14px)`), so the page's own text never reads
+ * through next to the arc's labels. */
+export const SCRIM_BLUR = 14;
+/** The scrim behind the arc: the page blurs and dims, and a tap anywhere closes the actions. With Reduce Transparency on,
+ * or where the system can't blur, the dim colour alone. */
 export function Scrim({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { colors, mode, reduceMotion } = useTheme();
+  const reduce = useReduceTransparency(), blur = Platform.OS === 'ios' && !reduce;
   const fade = useState(() => new Animated.Value(open ? 1 : 0))[0];
   const [shown, setShown] = useState(open);
   if (open && !shown) setShown(true);
@@ -34,7 +42,11 @@ export function Scrim({ open, onClose }: { open: boolean; onClose: () => void })
   }, [open, fade, reduceMotion]);
   if (!shown) return null;
   // Once closing starts it lets taps through, so the page under it answers while it fades.
-  return <Animated.View testID="fan-scrim" pointerEvents={open ? 'auto' : 'none'} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: fade, backgroundColor: shellColors(colors, mode).scrim }}>
+  return <Animated.View testID="fan-scrim" pointerEvents={open ? 'auto' : 'none'} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: fade, backgroundColor: blur ? undefined : shellColors(colors, mode).scrim }}>
+    {blur ? <View pointerEvents="none" testID="fan-scrim-blur" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
+      <BlurView intensity={blurIntensity(SCRIM_BLUR)} tint={mode === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: shellColors(colors, mode).scrim }]} />
+    </View> : null}
     <Tappable dim="none" accessible={false} onPress={onClose} style={{ flex: 1 }} />
   </Animated.View>;
 }
@@ -130,7 +142,7 @@ export function Fan({ open, width, height, plus, pageLabel, color, actions, onRu
     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
     <Animated.View pointerEvents={open ? 'box-none' : 'none'} style={{ position: 'absolute', right: 16, bottom: arc.captionBottom, flexDirection: 'row', alignItems: 'center', gap: 10,
       opacity: cap, transform: [{ translateY: rise }] }}>
-      <ThemedText style={{ fontFamily: tokens.font.heading, fontSize: tokens.type.caption, color: c }}>{pageLabel}</ThemedText>
+      <ThemedText testID="fan-page" style={[font(700, 11, 13 / 11, 0.14), capitals, { color: c }]}>{pageLabel}</ThemedText>
       <Tappable dim="fill" testID="fan-customize" accessibilityRole="menuitem" accessibilityLabel={t('shellCustomize')} onPress={onCustomize} hitSlop={{ top: 6, bottom: 6 }}
         style={{ minHeight: 34, paddingLeft: 10, paddingRight: 13, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 7,
           backgroundColor: colors.surface, boxShadow: `inset 0px 0px 0px 1px ${colors['hair-2']}, ${shell.lift}` }}>
