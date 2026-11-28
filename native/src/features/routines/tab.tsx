@@ -42,7 +42,8 @@ export function RoutinesTabPage({ repo }: { repo: Repository }) {
   const nx = nextItem(s, n);
   useQuickActions('routines', {
     add: { run: () => routinesRoutes.add() },
-    due: { run: () => { if (nx) toggleDone(store, nx.id); else routinesRoutes.history(); }, hint: nx ? `${nx.name}, ${h12(nx.h)}` : t('routinesAllDoneToday') },
+    due: { run: () => { if (nx) toggleDone(store, nx.id); else routinesRoutes.history(); }, hint: nx ? `${nx.name}, ${h12(nx.h)}` : t('routinesAllDoneToday'),
+      hints: nx ? [`${nx.name}, ${h12(nx.h)}`, nx.name] : undefined },
     conv: { run: () => routinesRoutes.converter() },
     order: { run: () => routinesRoutes.reorder() },
     pause: { run: () => routinesRoutes.pause() },

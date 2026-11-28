@@ -135,7 +135,7 @@ describe('Customize', () => {
     await fireEvent.press(plus());
     await fireEvent.press(screen.getByTestId('fan-customize'));
     expect(screen.getByTestId('customize-sheet')).toBeTruthy();
-    await fireEvent(screen.getByLabelText('Show Start next workout'), 'valueChange', true);
+    await fireEvent(screen.getByLabelText('Show Start workout'), 'valueChange', true);
     await fireEvent(screen.getByLabelText('Show Log weight'), 'valueChange', true);
     expect(screen.getByText('Five is the most that fit')).toBeTruthy();
     await fireEvent(screen.getByLabelText('Show Edit tiles'), 'valueChange', false);

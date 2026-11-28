@@ -6,12 +6,13 @@ import type { PageKey } from './pages';
  *
  * Quick actions: the shell owns which actions the + shows (the person's choice, or the defaults in pages.ts) and their icons.
  * A page gives each action what it does, and may give a live name and hint, with `useQuickActions(page, { id: { run, label, hint } })`.
+ * `hints` may add shorter forms of a live hint, longest first, for a row of the arc with less room.
  * An action with no `run` opens its default route if it has one (pages.ts), otherwise the shell says it isn't available yet.
  *
  * Edit mode: while a page edits its tiles it calls `useShellEditMode(page, true, onDone)`. The + turns into the accent Done check,
  * pressing it calls onDone, and the bar's touch and hold is off. The page ends edit mode itself when onDone runs.
  */
-export interface QuickActionHandler { run?: () => void; label?: string; hint?: string }
+export interface QuickActionHandler { run?: () => void; label?: string; hint?: string; hints?: readonly string[] }
 export type QuickActionHandlers = Partial<Record<string, QuickActionHandler>>;
 
 const handlers = new Map<PageKey, () => QuickActionHandlers>();

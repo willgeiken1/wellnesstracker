@@ -74,13 +74,34 @@ export function layoutArc(width: number, height: number, plus: { x: number; y: n
   });
   return { items, captionBottom: height - top + 6 };
 }
-/** Which side of its button a name goes on: right while it fits, left near the top of the curve. Returns its left offset from the button. */
-export function labelOffset(width: number, itemX: number, labelWidth: number): { left: number; side: 'l' | 'r' } {
-  const cx = itemX + 26, right = width - 12 - (cx + 26 + 10) >= labelWidth;
-  let left = right ? 52 + 10 : -10 - labelWidth;
-  const abs = itemX + left;
-  if (abs < 12) left += 12 - abs;
-  return { left, side: right ? 'r' : 'l' };
+/** The arc's label type: a 14 point name over a 13 point hint, in a bubble with 10 points each side, 8 points from its button. */
+export const LABEL_TYPE = { name: 14, hint: 13, padX: 10, gap: 8 } as const;
+/**
+ * Where an action's name goes and how much room it has there. The top action sits where the arc meets the screen's right edge,
+ * so its name goes on the left; every other name goes on the right, the way the Food arc reads. `room` is the widest the name's
+ * bubble may be: up to 12 points from the screen edge on its side, 8 points clear of its button, so it never covers a button.
+ */
+export function labelPlace(width: number, itemX: number, top: boolean): { side: 'l' | 'r'; room: number } {
+  const gap = LABEL_TYPE.gap;
+  return top ? { side: 'l', room: Math.max(0, itemX - gap - 12) } : { side: 'r', room: Math.max(0, width - 12 - (itemX + 52 + gap)) };
+}
+
+/* Advance widths of Plus Jakarta Sans for characters 32 to 126, in thousandths of the font size: SemiBold for an action's name,
+ * Medium for its hint. Worked out from the font files the app ships; kerning only ever narrows a line, so these never under-count. */
+const ADV_NAME = [175, 341, 464, 873, 647, 1022, 774, 289, 351, 351, 520, 642, 328, 566, 347, 481, 716, 392, 598, 611, 646, 615, 601, 554, 631, 601, 347, 367, 642, 642, 642, 555, 928, 692, 692, 777, 741, 601, 584, 813, 734, 272, 390, 671, 539, 874, 739, 878, 646, 878, 654, 647, 532, 712, 682, 1008, 640, 648, 576, 382, 481, 382, 642, 641, 372, 578, 670, 606, 670, 613, 402, 655, 586, 245, 245, 567, 245, 919, 586, 653, 670, 670, 362, 512, 405, 586, 550, 855, 535, 569, 471, 371, 363, 371, 642];
+const ADV_HINT = [173, 312, 429, 832, 646, 998, 754, 267, 323, 323, 499, 624, 299, 532, 317, 455, 724, 382, 599, 610, 638, 616, 599, 548, 629, 599, 317, 337, 624, 624, 624, 527, 928, 672, 692, 779, 741, 606, 583, 817, 735, 264, 386, 662, 535, 855, 738, 878, 645, 878, 648, 646, 522, 706, 667, 996, 618, 635, 580, 349, 455, 349, 624, 620, 362, 575, 669, 603, 669, 614, 397, 659, 580, 237, 237, 558, 237, 913, 580, 654, 669, 669, 350, 511, 396, 580, 533, 826, 511, 553, 460, 344, 332, 344, 624];
+const lineWidth = (text: string, adv: readonly number[], size: number) => {
+  let w = 0;
+  for (const ch of text) { const c = ch.codePointAt(0) ?? 0; w += c >= 32 && c <= 126 ? adv[c - 32] : 1000; }
+  return w * size / 1000;
+};
+/** How wide an action's bubble is with this name and hint. */
+export const labelWidth = (name: string, hint: string) =>
+  Math.max(lineWidth(name, ADV_NAME, LABEL_TYPE.name), lineWidth(hint, ADV_HINT, LABEL_TYPE.hint)) + 2 * LABEL_TYPE.padX;
+/** The fullest hint that fits the room beside its button, from longest to shortest. When none fits (a long name the person
+ * typed, or very large text), the last one is used and the bubble's text shrinks to fit rather than being cut short. */
+export function fitHint(name: string, hints: readonly string[], room: number): string {
+  return hints.find(h => labelWidth(name, h) <= room) ?? hints[hints.length - 1] ?? '';
 }
 
 /** The shell's springs, as stiffness and damping on a unit mass: the arc lands with a small overshoot, the open tab glides

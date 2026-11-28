@@ -24,14 +24,14 @@ export default function ProgressTab() {
   useShellEditMode('progress', editing, () => tileEdit.end());
   useEffect(() => { if (!focused) tileEdit.set('progress', false); }, [focused]);
   useQuickActions('progress', {
-    weigh: { run: () => router.push('/progress/log-weight'), label: t('progressQaWeigh'), hint: t('progressQaWeighHint') },
-    photo: { run: () => router.push('/progress/photo-capture'), label: t('progressQaPhoto'), hint: t('progressQaPhotoHint') },
+    weigh: { run: () => router.push('/progress/log-weight'), label: t('progressQaWeigh'), hint: t('progressQaWeighHint'), hints: [t('progressQaWeighHint'), t('shellHintShort_weigh')] },
+    photo: { run: () => router.push('/progress/photo-capture'), label: t('progressQaPhoto'), hint: t('progressQaPhotoHint'), hints: [t('progressQaPhotoHint'), t('shellHintShort_photo')] },
     range: {
       run: () => { const next = RANGE_NEXT[range]; setPageRange(next); showToast(t(next === 'week' ? 'progressRangeWeek' : next === 'month' ? 'progressRangeMonth' : 'progressRangeYear')); },
-      label: t('progressQaRange'), hint: t('progressQaRangeHint'),
+      label: t('progressQaRange'), hint: t('progressQaRangeHint'), hints: [t('progressQaRangeHint'), t('shellHintShort_range')],
     },
     charts: { run: () => tileEdit.set('progress', true), label: t('progressQaCharts'), hint: t('progressQaChartsHint') },
-    measure: { run: () => router.push('/progress/measurements'), label: t('progressQaMeasure'), hint: t('progressQaMeasureHint') },
+    measure: { run: () => router.push('/progress/measurements'), label: t('progressQaMeasure'), hint: t('progressQaMeasureHint'), hints: [t('progressQaMeasureHint'), t('shellHintShort_measure')] },
     export: { run: () => router.push('/progress/export'), label: t('progressQaExport'), hint: t('progressQaExportHint') },
   });
   return <Animated.ScrollView ref={scrollRef} style={{ flex: 1, backgroundColor: k.c.bg }} contentInsetAdjustmentBehavior="never"
