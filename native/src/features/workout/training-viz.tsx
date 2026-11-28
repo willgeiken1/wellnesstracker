@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } fr
 import { Text, View, type StyleProp, type TextStyle } from 'react-native';
 import Svg, { Line, Path } from 'react-native-svg';
 import { useAuth } from '@/auth/provider';
+import { useUnitOverride } from '@/features/settings/unit-override';
+import type { Unit } from '../../core/workout/rules';
 import { Icon } from '@/components/icon';
 import { font, mix, alpha, tabular } from '@/components/kit-style';
 import type { ThemeColors, ThemeMode } from '@/design/tokens';
@@ -74,7 +76,8 @@ export function Cells({ states, w, h, gap, r, groups, color, colors, mode, label
 }
 
 // One per repository and revision: a new repository (signing in or out) never reads or writes through the last one's data.
-let cached: { key: string; repo: Repository; data: TrainingData } | null = null;
+// One set per data revision: the person's units, plus one per unit a tile has its own (the tile editor's Units).
+let cached: { key: string; repo: Repository; data: TrainingData; own: Map<Unit, TrainingData> } | null = null;
 const minuteListeners = new Set<() => void>();
 let minuteTimer: ReturnType<typeof setInterval> | null = null;
 let minute = Math.floor(Date.now() / 60000);
@@ -83,18 +86,23 @@ function subscribeMinute(cb: () => void) {
   if (!minuteTimer) minuteTimer = setInterval(() => { const m = Math.floor(Date.now() / 60000); if (m !== minute) { minute = m; minuteListeners.forEach(l => l()); } }, 5000);
   return () => { minuteListeners.delete(cb); if (!minuteListeners.size && minuteTimer) { clearInterval(minuteTimer); minuteTimer = null; } };
 }
-function dataFor(repository: Repository, key: string) {
-  if (cached?.key !== key || cached.repo !== repository) cached = { key, repo: repository, data: new TrainingData(liveReads(repository), Date.now(), t('workoutName')) };
-  return cached.data;
+function dataFor(repository: Repository, key: string, unit?: Unit) {
+  if (cached?.key !== key || cached.repo !== repository) cached = { key, repo: repository, data: new TrainingData(liveReads(repository), Date.now(), t('workoutName')), own: new Map() };
+  const c = cached;
+  if (!unit || unit === c.data.unit) return c.data;
+  let d = c.own.get(unit);
+  if (!d) { d = new TrainingData(c.data.repo, c.data.now, t('workoutName'), unit); c.own.set(unit, d); }
+  return d;
 }
 /** Training data for the signed-in person, shared by every tile and redrawn when the data changes or a minute passes. */
 export function useTrainingData(): TrainingData | null {
   const { repository } = useAuth();
   const revision = useSyncExternalStore(cb => repository?.subscribe(cb) ?? (() => {}), () => repository?.getRevision() ?? 0, () => repository?.getRevision() ?? 0);
   const m = useSyncExternalStore(subscribeMinute, () => minute, () => minute);
+  const unit = useUnitOverride()?.weight;
   return useMemo(() => {
-    return repository ? dataFor(repository, `${repository.owner}:${revision}:${m}`) : null;
-  }, [repository, revision, m]);
+    return repository ? dataFor(repository, `${repository.owner}:${revision}:${m}`, unit) : null;
+  }, [repository, revision, m, unit]);
 }
 /** The time, ticking every second while `on`. */
 export function useNow(on: boolean) {

@@ -145,3 +145,19 @@ test('the profile button is pinned over the page, outside the scroll, and opens 
   await fireEvent.press(button);
   expect(router.push).toHaveBeenCalledWith('/settings');
 });
+
+/* In edit mode the edit bar sticks to the top with Done at its right, where the pinned profile button sat over it (Will, Nov 28). */
+test('while Home is editing the profile button steps away, so Done is never under it', async () => {
+  open(false);
+  await render(<Home />, { wrapper });
+  await settle();
+  expect(screen.getByTestId('profile-pin').props.pointerEvents).toBe('box-none');
+  await act(async () => { tileEdit.set('home', true); });
+  const pin = screen.getByTestId('profile-pin', { includeHiddenElements: true });
+  expect(pin.props.pointerEvents).toBe('none');
+  expect(pin.props.importantForAccessibility).toBe('no-hide-descendants');
+  expect(screen.queryByTestId('profile-button')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy();
+  await act(async () => { tileEdit.end(); });
+  expect(screen.getByTestId('profile-pin').props.pointerEvents).toBe('box-none');
+});

@@ -93,12 +93,17 @@ test('a night with no sleep recorded reads as none recorded, not as 0 hours', as
   expect(within(tile('Sleep')).queryByText(/^0/)).toBeNull();
 });
 
-test('a night recorded without stages says so, rather than drawing stages it does not have', async () => {
+test('a night recorded without stages draws its nights and says it has no stages, rather than a note in place of the tile', async () => {
   jest.mocked(appleHealth).mockReturnValue(fake('asked'));
   addHealthTiles(open());
   await render(<Home />, { wrapper });
   await settle();
-  expect(within(tile('Sleep')).getByText('Last night was recorded without sleep stages, so there is nothing to draw here.')).toBeTruthy();
+  const sleep = within(tile('Sleep'));
+  expect(sleep.queryByText(/nothing to draw|can't draw/)).toBeNull();
+  // Small, so it is the nights' columns under last night's hours against the need.
+  const drawn = JSON.stringify(screen.toJSON());
+  expect(drawn).toMatch(/"of 8 h need"/);
+  expect(drawn).not.toMatch(/sleep stages, so there is nothing/);
 });
 
 test('a day with no steps recorded today reads as none recorded, not as 0 steps (review of #176, #181)', async () => {

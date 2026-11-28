@@ -26,6 +26,11 @@ import { weightGoalKg } from '@/features/settings/goals-data';
 
 /** Daily goals the tiles measure against until the app keeps its own for these readings. */
 export const HOME_GOALS: HomeInput['goals'] = { steps: STEP_GOAL, exercise: 30, active: 500, sleepHours: 8, mindful: 10 };
+/** Home's goals with the two the person sets in Settings, Goals: sleep (minutes) and daily training, which the Exercise tile measures against. */
+export function homeGoals(sleepMin: number, trainMin: number): HomeInput['goals'] {
+  const ok = (v: number) => Number.isFinite(v) && v > 0;
+  return { ...HOME_GOALS, sleepHours: ok(sleepMin) ? sleepMin / 60 : HOME_GOALS.sleepHours, exercise: ok(trainMin) ? Math.round(trainMin) : HOME_GOALS.exercise };
+}
 
 /** HRV, resting heart rate and sleep score from one source only: Oura when it is connected, otherwise Apple Health. */
 export function pickRecovery(oura: OuraRecovery | null, apple: RecoveryRead): RecoveryIn | null {
@@ -129,7 +134,7 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
   const repo = store?.repo ?? null;
   // The Apple read is a new object on each draw until it lands, so only its parts are watched.
   const appleAccess = apple.access, appleRecovery = apple.recovery;
-  const prefs = useSettingsPrefs()[0], hide = prefs.priv.hide, sleepGoal = prefs.goals.sleep, energy = prefs.units.energy, clock = prefs.units.clock;
+  const prefs = useSettingsPrefs()[0], hide = prefs.priv.hide, sleepGoal = prefs.goals.sleep, trainGoal = prefs.goals.train, energy = prefs.units.energy, clock = prefs.units.clock;
   const state = useMemo(() => {
     if (!reader) return null;
     const now = new Date(minute * 60_000);
@@ -141,12 +146,12 @@ export function useHomeTiles({ store, focused, health, apple, oura }: HomeTileSo
       health: health ? { steps: health.steps, activeKcal: health.activeKcal, exerciseMinutes: health.exerciseMinutes, sleepHours: health.sleepHours, mindfulMinutes: health.mindfulMinutes } : null,
       detail: detailFor(detailRaw, today.ouraSleep, today.ouraSteps), recovery,
       sources: { activity: appleAccess === 'asked' || !oura ? 'Apple Health' : 'Oura', steps: today.steps, sleep: today.sleep, body: 'Apple Health' },
-      goals: { ...HOME_GOALS, sleepHours: Number.isFinite(sleepGoal) && sleepGoal > 0 ? sleepGoal / 60 : HOME_GOALS.sleepHours },
+      goals: homeGoals(sleepGoal, trainGoal),
     };
     const nextMeal = input.nextMeal;
     const scores = weekScores(reader, now, health);
     return { ...buildState(input, { ...DEFAULT_UNITS, weight: app.weightUnit, energy: energy === 'kJ' ? 'kJ' : 'kcal', clock: clock === '24' ? '24' : '12' }, data => homeTileAction(repo, nextMeal, data), hide), scores };
-  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide, sleepGoal, energy, clock]);
+  }, [reader, repo, minute, health, detailRaw, appleAccess, appleRecovery, oura, hide, sleepGoal, trainGoal, energy, clock]);
   useEffect(() => { setHomeTileState(state); }, [state]);
   return state;
 }

@@ -16,6 +16,8 @@ export function tilePage(id: TilePageId): TilePageConfig {
   return cfg;
 }
 export const tilePageIds = () => [...pages.keys()];
+/** Whether a route param names a page that has tiles. */
+export const isTilePage = (p: unknown): p is TilePageId => typeof p === 'string' && (tilePageIds() as string[]).includes(p);
 
 /** Registers (or replaces) a whole page configuration. */
 export function registerTilePage(cfg: TilePageConfig): void { pages.set(cfg.id, cfg); }

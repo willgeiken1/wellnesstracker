@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { configureTileRoutes, configureTileToast, resetTileStores, tileEdit, tileStoreFor, type TileStorage } from '../src/features/tiles';
-import { TileCustomizeSheet } from '../src/features/tiles/customize-sheet';
+import { TileEditorSheet } from '../src/features/tiles/editor/editor-sheet';
 import { TileTraySheet } from '../src/features/tiles/tray-sheet';
 import { TileGrid } from '../src/features/tiles/tile-grid';
 import { tileSheetOptions } from '../src/features/tiles/nav';
@@ -68,10 +68,12 @@ describe('tile grid screens', () => {
   it('the tray lists tiles not on the page and adds one', async () => {
     const storage = fakeStorage();
     await wrap(<TileTraySheet page="training" storage={storage} />);
-    expect(screen.getByText('Training tiles')).toBeTruthy();
-    expect(screen.getByText(/2 of 12 tiles are not on Training yet\./)).toBeTruthy();
+    expect(screen.getByText('Add a tile')).toBeTruthy();
+    expect(screen.getByText('2 of 12 tiles are not on Training yet. Add one as it is, or tap it to choose how it looks first.')).toBeTruthy();
     expect(screen.getByText('Reset Training tiles')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Add Plan days, Medium'));
+    // Each card draws its tile live, at the size it will be added.
+    expect(screen.getByTestId('tray-card-plan')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Add Plan days to Training as it is'));
     await act(async () => { jest.advanceTimersByTime(600); });
     expect(routes.close).toHaveBeenCalled();
     expect(tileStoreFor(storage, 'training').getState().tiles.some(e => e.id === 'plan')).toBe(true);
@@ -84,16 +86,16 @@ describe('tile grid screens', () => {
     const inner = screen.getByTestId('sheet-frame');
     await fireEvent(inner.parent!, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 0 } } });
     expect(StyleSheet.flatten(screen.getByTestId('sheet-frame').props.style).height).toBeGreaterThan(500);
-    expect(screen.getByText('Training tiles')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Add Plan days, Medium'));
+    expect(screen.getByText('Add a tile')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Add Plan days to Training as it is'));
     await act(async () => { jest.advanceTimersByTime(600); });
     expect(tileStoreFor(storage, 'training').getState().tiles.some(e => e.id === 'plan')).toBe(true);
   });
 
   it('the Home tray has its own copy, filters and footnote', async () => {
     await wrap(<TileTraySheet page="home" storage={fakeStorage()} />);
-    expect(screen.getByText('Tile tray')).toBeTruthy();
-    expect(screen.getByText('14 tiles to choose from, each in its styles. Pick a style and a size, then add it to Home.')).toBeTruthy();
+    expect(screen.getByText('Add a tile')).toBeTruthy();
+    expect(screen.getByText('14 tiles are not on Home yet. Add one as it is, or tap it to pick its style and size first.')).toBeTruthy();
     expect(screen.getAllByText('Recovery and sleep').length).toBeGreaterThan(1);
     expect(screen.getByText('Tiles read Apple Health and Oura where a number comes from them.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('radio', { name: 'Food' }));
@@ -108,9 +110,9 @@ describe('tile grid screens', () => {
 
   it('customize applies a size as it is picked and removes the tile', async () => {
     const storage = fakeStorage();
-    await wrap(<TileCustomizeSheet page="home" id="next" storage={storage} />);
-    expect(screen.getByText('Customize tile')).toBeTruthy();
-    expect(screen.getByText('Slots')).toBeTruthy();
+    await wrap(<TileEditorSheet page="home" id="next" storage={storage} />);
+    expect(screen.getByText('Edit tile')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /^Slots/ })).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Large'));
     expect(tileStoreFor(storage, 'home').getState().tiles.find(e => e.id === 'next')!.size).toBe('L');
     await fireEvent.press(screen.getByText('Remove from Home'));
@@ -120,9 +122,9 @@ describe('tile grid screens', () => {
 
   it('customize without a tile says so', async () => {
     // an unknown id falls back to the page's first tile, which is the split tile now
-    await wrap(<TileCustomizeSheet page="training" id="none" storage={fakeStorage()} />);
-    expect(screen.getByLabelText('Split tile')).toBeTruthy();
-    await wrap(<TileCustomizeSheet page={undefined} id="none" storage={fakeStorage()} />);
+    await wrap(<TileEditorSheet page="training" id="none" storage={fakeStorage()} />);
+    expect(screen.getByLabelText(/^Preview, .*, Large/)).toBeTruthy();
+    await wrap(<TileEditorSheet page={undefined} id="none" storage={fakeStorage()} />);
     expect(screen.getByText('No tile here')).toBeTruthy();
   });
 });

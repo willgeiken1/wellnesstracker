@@ -1,4 +1,5 @@
 import type { Repository } from '@/data/repository';
+import type { Row } from '@/data/rows';
 import { lastWeight, dailyWeights } from '@/features/body/model';
 import { KJ, dayView, goalsFor } from '@/features/food/day';
 import { setTargets } from '@/features/food/model';
@@ -42,4 +43,36 @@ export function saveGoalWeight(repo: Repository, value: number, unit: 'lb' | 'kg
   if (!Number.isFinite(value) || value <= 0) throw new Error('Invalid goal weight.');
   const row = repo.list('goals').find(r => r.deleted_at === null && r.data.kind === 'weight');
   repo.save('goals', { kind: 'weight', target_value: value, target_unit: unit, target_day: null }, row?.id);
+}
+
+/** How the weight goal and today's food targets are stored, so a change made to try something can be undone exactly,
+ * including a goal that was never set or targets that were still estimated. */
+type Stored = { id: string; data: Row['data'] };
+export interface StoredGoals { weight: Stored | null; food: Stored | null; basis: string | undefined; day: string }
+export function readStoredGoals(repo: Repository, day = today()): StoredGoals {
+  const w = repo.list('goals').find(r => r.deleted_at === null && r.data.kind === 'weight');
+  const f = repo.list('food_targets').find(r => r.deleted_at === null && r.data.day === day);
+  return { weight: w ? { id: w.id, data: { ...w.data } } : null, food: f ? { id: f.id, data: { ...f.data } } : null,
+    basis: repo.localGet<Record<string, string>>('foodTargetBasis')?.[day], day };
+}
+/** Puts the weight goal or today's food targets back as readStoredGoals found them. */
+export function restoreStoredGoals(repo: Repository, was: StoredGoals, which: 'weight' | 'food') {
+  repo.atomic(() => {
+    if (which === 'weight') {
+      if (was.weight) repo.save('goals', was.weight.data, was.weight.id);
+      else for (const r of repo.list('goals')) if (r.deleted_at === null && r.data.kind === 'weight') repo.remove('goals', r.id);
+      return;
+    }
+    if (was.food) repo.save('food_targets', was.food.data, was.food.id);
+    else for (const r of repo.list('food_targets')) if (r.deleted_at === null && r.data.day === was.day) repo.remove('food_targets', r.id);
+    const map = { ...(repo.localGet<Record<string, string>>('foodTargetBasis') ?? {}) };
+    if (was.basis === undefined) delete map[was.day]; else map[was.day] = was.basis;
+    repo.localSave('foodTargetBasis', map);
+  });
+}
+/** Whether the weight goal or today's food targets are stored differently from how readStoredGoals found them. */
+export function storedGoalsChanged(repo: Repository, was: StoredGoals, which: 'weight' | 'food'): boolean {
+  const now = readStoredGoals(repo, was.day);
+  const part = (g: StoredGoals) => JSON.stringify(which === 'weight' ? g.weight : [g.food, g.basis ?? null]);
+  return part(now) !== part(was);
 }

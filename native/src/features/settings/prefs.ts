@@ -1,5 +1,6 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { useAuth } from '@/auth/provider';
+import { useUnitOverride, withUnits } from './unit-override';
 import { memoryStore, snapshot, withPref, SETTINGS_PREFS_KEY, type PrefsStorage, type SettingsPrefs } from './prefs-model';
 
 export * from './prefs-model';
@@ -11,11 +12,14 @@ function useStorage(): PrefsStorage {
   return repo ?? memoryStore;
 }
 
-/** The settings choices and a setter by dotted path. Changes save at once and every reader redraws. */
+/** The settings choices and a setter by dotted path. Changes save at once and every reader redraws. Inside a tile with
+ * its own units (the tile editor's Units), `units` holds the tile's; the setter still writes Settings. */
 export function useSettingsPrefs(): [SettingsPrefs, (path: string, value: unknown) => void] {
   const storage = useStorage();
   const subscribe = useCallback((listener: () => void) => storage.subscribe ? storage.subscribe(listener) : () => {}, [storage]);
-  const prefs = useSyncExternalStore(subscribe, () => snapshot(storage), () => snapshot(storage));
+  const saved = useSyncExternalStore(subscribe, () => snapshot(storage), () => snapshot(storage));
+  const own = useUnitOverride();
+  const prefs = useMemo(() => withUnits(saved, own), [saved, own]);
   const set = useCallback((path: string, value: unknown) => {
     try { storage.localSave(SETTINGS_PREFS_KEY, withPref(snapshot(storage), path, value)); } catch { /* not kept: the screen stays as last saved */ }
   }, [storage]);

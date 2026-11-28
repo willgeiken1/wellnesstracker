@@ -148,7 +148,8 @@ export function tileReady(input: HomeInput): TileReady {
     water: true,
     weight: input.weighIns.some(w => input.days.includes(w.day)),
     bodyFat: !!input.detail?.bodyFat?.some(r => input.days.includes(localDayOf(r.at))),
-    sleep: has(h?.sleepHours) && !!input.detail?.night,
+    // Hours asleep are enough: a source that shares no stage timeline (Oura's nightly total) still draws, as its nights.
+    sleep: has(h?.sleepHours),
     sleepScore: has(input.recovery?.sleepScore),
     mindful: has(h?.mindfulMinutes),
     hrv: has(input.recovery?.hrv),

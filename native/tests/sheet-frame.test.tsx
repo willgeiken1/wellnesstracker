@@ -3,7 +3,8 @@
 // the sheet's own height while its screen gives it none. Made-up sample data only.
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
+import type { ReactTestRendererJSON } from 'react-test-renderer';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { COLLAPSED, SheetFrame, sheetDetent, sheetScreenLayout } from '../src/features/navigation/sheet-frame';
 import { largeSheet, mediumSheet, fittedSheet, pushedScreen } from '../src/features/navigation/presentation';
@@ -95,6 +96,50 @@ describe('the frame', () => {
     await act(async () => {});
     await fireEvent(f.outer, 'layout', layout(780));
     expect(f.style().flex).toBe(1);
+  });
+});
+
+describe('the scroll view a sheet holds', () => {
+  /** The host views react-native-screens walks on iOS: from the frame, each first child down until one has none. */
+  function firstChildChain(node: ReactTestRendererJSON): string[] {
+    const chain: string[] = [];
+    let at: ReactTestRendererJSON | undefined = node;
+    while (at) {
+      chain.push(`${at.type}${at.props.testID ? `#${at.props.testID}` : ''}`);
+      const first: unknown = at.children?.[0];
+      at = first && typeof first === 'object' ? first as ReactTestRendererJSON : undefined;
+    }
+    return chain;
+  }
+  function frameNode(node: ReactTestRendererJSON | ReactTestRendererJSON[] | null): ReactTestRendererJSON {
+    const all = Array.isArray(node) ? node : node ? [node] : [];
+    for (const n of all) {
+      if (n.props.testID === 'sheet-frame') return n;
+      const kids = (n.children ?? []).filter((c): c is ReactTestRendererJSON => typeof c === 'object');
+      for (const k of kids) { try { return frameNode(k); } catch { /* keep looking */ } }
+    }
+    throw new Error('no sheet frame');
+  }
+
+  // Add a tile and Edit tile opened black on iPhone: their body is a scroll view inside this frame, and on iOS the
+  // sheet moved the first scroll view on that path to its own frame, a sheet's height below where it belonged.
+  test('on iOS the first-child path from the frame ends at an empty stop before the sheet\'s scroll view', async () => {
+    await render(sheetScreenLayout({ options: largeSheet, children: <ScrollView testID="body"><Text>Tiles</Text></ScrollView> }), { wrapper });
+    const chain = firstChildChain(frameNode(screen.toJSON()));
+    expect(chain).toEqual(['View#sheet-frame', 'View#sheet-scroll-stop']);
+    const stop = screen.getByTestId('sheet-scroll-stop', { includeHiddenElements: true });
+    expect(stop.props.collapsable).toBe(false);
+    expect(stop.props.pointerEvents).toBe('none');
+    expect(StyleSheet.flatten(stop.props.style)).toMatchObject({ position: 'absolute', width: 0, height: 0 });
+    expect(screen.getByText('Tiles')).toBeTruthy();
+  });
+
+  test('the stop is hidden from screen readers and takes no space', async () => {
+    await render(<SheetFrame detent={1}><Text>Body</Text></SheetFrame>, { wrapper });
+    const stop = screen.getByTestId('sheet-scroll-stop', { includeHiddenElements: true });
+    expect(stop.props.accessible).toBe(false);
+    expect(stop.props.importantForAccessibility).toBe('no-hide-descendants');
+    expect(stop.children).toHaveLength(0);
   });
 });
 

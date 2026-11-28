@@ -5,7 +5,7 @@ import type { HomeTileData } from './data-types';
 import type { StudioUnits } from './studio';
 
 /** Why a tile shows its empty state instead of a reading. Each has one line of copy (see empty.tsx). */
-export type EmptyReason = 'connect' | 'today' | 'night' | 'targets' | 'next' | 'score' | 'weigh' | 'bodyFat' | 'routines' | 'detail' | 'goalWeight' | 'sleepStages' | 'noStages' | 'foodUnknown';
+export type EmptyReason = 'connect' | 'today' | 'night' | 'targets' | 'next' | 'score' | 'weigh' | 'bodyFat' | 'routines' | 'detail' | 'foodUnknown';
 
 /** Home's tile data and what each tile can show, shared by every tile on Home and in the tray while Home is open. */
 export interface HomeTileState {
@@ -34,8 +34,6 @@ export function reasons(input: HomeInput, ready: TileReady): Record<string, Empt
   for (const [id, ok] of Object.entries(ready)) {
     if (ok) continue;
     out[id] = HEALTH.has(id) ? (input.health ? 'today' : 'connect')
-      // Asleep last night, but with no stage timeline to draw: say why rather than "nothing recorded".
-      : id === 'sleep' && input.health?.sleepHours?.at(-1) != null ? (input.recovery?.source === 'Oura' ? 'sleepStages' : 'noStages')
       : NIGHT.has(id) ? (connected ? 'night' : 'connect')
       : id === 'bodyFat' ? (input.detail ? 'bodyFat' : 'connect')
       // Targets are set, but nothing logged today gives the total the tile leads with.
@@ -78,7 +76,6 @@ export function tileView(s: HomeTileState, id: string, style: string, size: Tile
   // Macros, or the amount Log a meal leads with, that nothing logged today gives: said so, not drawn as 0.
   if ((id === 'calories' && style === 'C' && h.foodMacros === false)
     || (id === 'logMeal' && (options.value === 'p' ? h.foodProtein === false : h.foodKcal === false))) return { empty: 'foodUnknown' };
-  if (id === 'weight' && D && !h.weightGoal) return { empty: 'goalWeight' };
   const o = { ...options };
   if (id === 'weight' && !h.weightGoal) o.goal = 'off';
   if (id === 'sleep' && !h.sleepScore) o.show = 'hours';

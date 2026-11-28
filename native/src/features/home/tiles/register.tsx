@@ -14,6 +14,7 @@ import { EmptyTile } from './empty';
 import { Markup } from './markup';
 import { homeTileState, tileView, useHomeTileState } from './state';
 import { drawTile } from './studio';
+import { useUnitOverride } from '@/features/settings/unit-override';
 import { HIDDEN_TILES, numbersCover, useTileCovered } from '../hide-numbers';
 
 /** Where the cover starts: under the tile's own header row. */
@@ -47,9 +48,17 @@ export const HomeTileView = memo(function HomeTileView(p: TileRenderProps) {
   const def = tilePage('home').tiles.find(d => d.id === p.id);
   const key = JSON.stringify(p.options);
   const view = useMemo(() => s ? tileView(s, p.id, p.style, p.size, p.options) : null, [s, p.id, p.style, p.size, key]); // eslint-disable-line react-hooks/exhaustive-deps
-  const html = useMemo(() => s && view && 'options' in view
-    ? drawTile({ id: p.id, style: p.style, size: p.size, options: view.options, colors: p.colors, mode: p.mode, data: s.data, units: s.units, uid })
-    : null, [s, view, p.id, p.style, p.size, p.colors, p.mode, uid]);
+  // The tile's own units (the tile editor's Units) over Settings'; water's unit lives with the water data.
+  const own = useUnitOverride();
+  const units = useMemo(() => s && own ? { ...s.units, ...(own.weight ? { weight: own.weight } : null), ...(own.energy ? { energy: own.energy } : null),
+    ...(own.clock ? { clock: own.clock } : null) } : s?.units, [s, own]);
+  const data = useMemo(() => {
+    const w = own?.water === 'ml' ? 'ml' : own?.water ? 'oz' : null;
+    return s && w && s.data.water && s.data.water.unit !== w ? { ...s.data, water: { ...s.data.water, unit: w } } : s?.data;
+  }, [s, own]);
+  const html = useMemo(() => s && data && view && 'options' in view
+    ? drawTile({ id: p.id, style: p.style, size: p.size, options: view.options, colors: p.colors, mode: p.mode, data, units, uid })
+    : null, [s, data, units, view, p.id, p.style, p.size, p.colors, p.mode, uid]);
   if (!html || !s) {
     return <EmptyTile icon={def?.icon ?? 'grid'} title={def?.title ?? ''} tint={p.tint} colors={p.colors}
       why={view && 'empty' in view ? view.empty : null} />;

@@ -103,7 +103,7 @@ test('a tile the person removes stays removed after a restart, and the tray offe
   expect(ids()).not.toContain('workout');
   expect(trayDefs(tilePage('home'), homeLayout(mockRepository as never)).map(d => d.id)).toContain('workout');
   await wrap(<TileTraySheet page="home" storage={mockRepository as never} />);
-  await fireEvent.press(screen.getByLabelText('Add Workout to Home, Medium'));
+  await fireEvent.press(screen.getByLabelText('Add Workout to Home as it is'));
   await act(async () => { jest.advanceTimersByTime(900); });
   expect(routes.close).toHaveBeenCalled();
   expect(ids()).toContain('workout');
