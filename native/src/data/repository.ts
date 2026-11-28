@@ -541,7 +541,8 @@ export class Repository {
   /** Within the caller's transaction. Children must be wiped before references. */
   private applyPurges() {
     const markers=this.purgeMarkers();
-    for (const saved of this.losingVersions()) {
+    // Recovery copies come only from sync, which the sample and guest data never do: no need to look for them on each save.
+    for (const saved of this.owner === 'demo' || this.owner === 'guest' ? [] : this.losingVersions()) {
       const current = this.get(saved.row.table,saved.row.id);
       if (current?.deleted_at !== null || markers.some(marker => matchesPurge(saved.row,marker,(table,id)=>this.get(table,id)))) {
         this.dropLosingVersion(saved.key);
