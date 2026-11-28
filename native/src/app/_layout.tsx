@@ -15,6 +15,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { configureTileToast } from '@/features/tiles/store';
 import { ROOT_ROUTES, routeOptions } from '@/features/navigation/presentation';
+import { sheetScreenLayout } from '@/features/navigation/sheet-frame';
 // Every page's tiles register at startup, so each page and Home's tray can draw any of them on first open.
 import '@/features/food/tiles';
 import '@/features/progress/tiles';
@@ -50,7 +51,7 @@ export function NavigationShell({ access = false, signedIn = false }: {access?: 
     <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
     {/* Full-screen modals (the workout logger) take the status bar from their own screen, not from the component
         above, so the style is also set per screen. Without it a dark theme showed dark clock text on a dark page. */}
-    <Stack screenOptions={{ statusBarStyle: mode === 'dark' ? 'light' : 'dark', headerTintColor: colors.text, headerStyle: { backgroundColor: colors.surface },
+    <Stack screenLayout={sheetScreenLayout} screenOptions={{ statusBarStyle: mode === 'dark' ? 'light' : 'dark', headerTintColor: colors.text, headerStyle: { backgroundColor: colors.surface },
       contentStyle: { backgroundColor: colors.bg }, animation: reduceMotion ? 'none' : 'default', animationDuration: motion.sheet }}>
       <Stack.Protected guard={!access}>
         <Stack.Screen name="auth" options={{ headerShown: false }} />
