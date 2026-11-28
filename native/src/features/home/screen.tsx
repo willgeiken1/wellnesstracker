@@ -45,7 +45,7 @@ export function waterHint(w: { today: number; goal: number; unit: string } | und
 const MIN_TOP = 47;
 
 /**
- * Home: the hero (date, greeting, today's map and the week), the profile button, and the tiles. The + offers Edit tiles,
+ * Home: the hero (date, greeting, today's map and the week), the tiles, and the profile button pinned at the top right. The + offers Edit tiles,
  * Add a tile, Water, Log a meal, Start workout and Weigh in; in edit mode it is the Done check.
  */
 export function Home() {
@@ -91,11 +91,14 @@ export function Home() {
       showsVerticalScrollIndicator={false}>
       <View ref={heroRef} collapsable={false}>
         <HomeHero scrollY={scrollY} name={name.trim().split(/\s+/)[0]} />
-        <View ref={avatarRef} collapsable={false} style={{ position: 'absolute', top: 6, right: 0 }}><ProfileButton name={name} /></View>
       </View>
       <NudgeCard store={repo} />
       <TileGrid page="home" scrollRef={scrollRef} />
     </Animated.ScrollView>
+    {/* Pinned over the page, so it stays at the top right while the page scrolls under it. Its own fill keeps it legible. */}
+    <View ref={avatarRef} collapsable={false} testID="profile-pin" style={{ position: 'absolute', top: Math.max(insets.top, MIN_TOP) + 6, right: 16 }}>
+      <ProfileButton name={name} />
+    </View>
     <HomeTips store={repo} hero={heroRef} avatar={avatarRef} />
     <SampleTour demo={repo?.owner === 'demo'} />
   </View>;

@@ -130,3 +130,18 @@ test('a tap on the hero\'s hidden food energy shows the numbers too', async () =
   expect(foodArc().props.accessibilityLabel).toContain('1,364 of 2,200 kcal');
   expect(weightShown()).toBe(true);
 });
+
+/* The profile button stays at the top right while Home scrolls (Will, Nov 28): it sits over the page, not in it. */
+test('the profile button is pinned over the page, outside the scroll, and opens Settings', async () => {
+  open(false);
+  await render(<Home />, { wrapper });
+  await settle();
+  const button = screen.getByTestId('profile-button'), scroll = screen.getByTestId('home-scroll'), pin = screen.getByTestId('profile-pin');
+  let inScroll = false;
+  for (let n = button.parent; n; n = n.parent) if (n === scroll) inScroll = true;
+  expect(inScroll).toBe(false);
+  expect(pin.props.style).toMatchObject({ position: 'absolute', right: 16 });
+  expect(pin.props.style.top).toBeGreaterThanOrEqual(47);
+  await fireEvent.press(button);
+  expect(router.push).toHaveBeenCalledWith('/settings');
+});
