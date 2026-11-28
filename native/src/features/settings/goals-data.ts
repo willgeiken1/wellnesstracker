@@ -70,3 +70,9 @@ export function restoreStoredGoals(repo: Repository, was: StoredGoals, which: 'w
     repo.localSave('foodTargetBasis', map);
   });
 }
+/** Whether the weight goal or today's food targets are stored differently from how readStoredGoals found them. */
+export function storedGoalsChanged(repo: Repository, was: StoredGoals, which: 'weight' | 'food'): boolean {
+  const now = readStoredGoals(repo, was.day);
+  const part = (g: StoredGoals) => JSON.stringify(which === 'weight' ? g.weight : [g.food, g.basis ?? null]);
+  return part(now) !== part(was);
+}

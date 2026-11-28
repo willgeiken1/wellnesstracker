@@ -9,7 +9,7 @@ import { useTheme } from '@/design/theme-provider';
 import { tokens, type ThemeColors, type ThemeMode } from '@/design/tokens';
 import type { Repository } from '@/data/repository';
 import { useSettingsPrefs } from '@/features/settings/prefs';
-import { readStoredGoals, restoreStoredGoals } from '@/features/settings/goals-data';
+import { readStoredGoals, restoreStoredGoals, storedGoalsChanged, type StoredGoals } from '@/features/settings/goals-data';
 import type { UnitKey } from '@/features/settings/unit-override';
 import { showToast } from '@/features/shell/toast';
 import { t, type MessageKey } from '@/i18n/en';
@@ -159,7 +159,9 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
   };
   const wasCtx: GoalCtx = { ...ctx, units: was.units };
   const dirty = entry.style !== was.pick.style || entry.size !== was.pick.size || !sameOptions(entry.options, was.pick.options)
-    || goalKeys.some(g => safeGet(g, wasCtx) !== was.goals[g]);
+    || goalKeys.some(g => safeGet(g, wasCtx) !== was.goals[g])
+    // A goal stepped back to its number can still have been saved where none was (or estimated targets made manual).
+    || (!!repo && !!was.stored && touched.some(g => { const w = GOALS[g].stored; return !!w && safeChanged(repo, was.stored!, w); }));
   const atStart = entry.style === start.style && entry.size === start.size && sameOptions(entry.options, start.options);
   const revert = () => {
     for (const g of goalKeys) { const v = was.goals[g]; if (v != null && safeGet(g, wasCtx) !== v) { try { GOALS[g].set(wasCtx, v); } catch { /* kept */ } } }
@@ -320,6 +322,7 @@ const TOAST_COLORS = ['accent', 'food', 'water', 'recovery', 'training', 'sleep'
 const toastColor = (c: string) => (TOAST_COLORS as readonly string[]).includes(c) ? c as (typeof TOAST_COLORS)[number] : 'accent';
 function safeGet(g: GoalKey, c: GoalCtx) { try { return GOALS[g].get(c); } catch { return 0; } }
 function safeStored(repo: Repository) { try { return readStoredGoals(repo); } catch { return null; } }
+function safeChanged(repo: Repository, was: StoredGoals, w: 'weight' | 'food') { try { return storedGoalsChanged(repo, was, w); } catch { return false; } }
 function useAnimatedStyleSafe(v: { value: number }) {
   return useAnimatedStyle(() => ({ opacity: v.value, transform: [{ translateY: (1 - v.value) * -6 }] }));
 }

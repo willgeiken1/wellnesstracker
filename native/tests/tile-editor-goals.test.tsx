@@ -39,6 +39,29 @@ describe('Revert on a tile goal', () => {
     expect(repo.list('goals')).toHaveLength(0);
   });
 
+  it('keeps Revert available when a new goal weight is stepped back to the number it showed', async () => {
+    const repo = await open('weight');
+    await fireEvent.press(screen.getByLabelText('Raise goal weight'));
+    await fireEvent.press(screen.getByLabelText('Lower goal weight'));
+    expect(repo.list('goals')).toHaveLength(1);
+    expect(screen.getByTestId('te-revert').props.accessibilityElementsHidden).toBe(false);
+    await fireEvent.press(screen.getByTestId('te-revert'));
+    expect(repo.list('goals')).toHaveLength(0);
+    expect(screen.getByTestId('te-revert', { includeHiddenElements: true }).props.accessibilityElementsHidden).toBe(true);
+  });
+
+  it('hides Revert again when a goal that was set is stepped back to the same value', async () => {
+    const repo = memoryRepository();
+    saveGoalWeight(repo, 176, 'lb');
+    jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle', demo: false } as ReturnType<typeof useAuth>);
+    const storage = fakeStorage();
+    tileStoreFor(storage, 'home').add('weight', 'M', 'A');
+    await render(<ThemeProvider><TileEditorSheet page="home" id="weight" storage={storage} /></ThemeProvider>);
+    await fireEvent.press(screen.getByLabelText('Raise goal weight'));
+    await fireEvent.press(screen.getByLabelText('Lower goal weight'));
+    expect(screen.getByTestId('te-revert', { includeHiddenElements: true }).props.accessibilityElementsHidden).toBe(true);
+  });
+
   it('puts a goal weight that was set back as it was typed', async () => {
     const repo = memoryRepository();
     saveGoalWeight(repo, 80, 'kg');
