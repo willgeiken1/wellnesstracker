@@ -118,6 +118,10 @@ const READERS = [
   // Routines with Remind me on become local notifications, scheduled on the phone. plan.ts beside it is plain logic.
   'features/reminders/plan.ts',
   'features/reminders/sync.tsx',
+  // A backup restore merges the file's routines with the ones kept in the tables, on the phone.
+  'features/importer/local.ts',
+  // The person's own backup file, made on the phone and handed to the share sheet only when they ask for it.
+  'phone-only/backup.ts',
 ];
 /* The sample items of "Look around first" and the leak-test rows. Both are made up. */
 const FIXTURE_READERS = ['routines.ts'];

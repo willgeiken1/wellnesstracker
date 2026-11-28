@@ -27,7 +27,7 @@ function auth(): AuthState {
     signOut: jest.fn(async () => {}), syncNow: jest.fn(async () => {}), prepareSignOut: jest.fn(async () => {}) } as AuthState;
 }
 
-test('the sign-out question says routines on this iPhone are erased for good, and Sign out still signs out', async () => {
+test('the sign-out question says routines on this iPhone are erased unless backed up, and Sign out still signs out', async () => {
   const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation(() => {});
   const a = auth();
   await render(<AuthContext.Provider value={a}><ThemeProvider><Section /></ThemeProvider></AuthContext.Provider>);
@@ -36,7 +36,7 @@ test('the sign-out question says routines on this iPhone are erased for good, an
   const [options, choose] = sheet.mock.calls[0];
   expect(options.title).toBe('Sign out of Insight?');
   expect(options.message).toContain('This iPhone’s copy is removed until you sign in again.');
-  expect(options.message).toContain('Routines are kept only on this iPhone, so signing out erases them, and a backup can’t bring them back.');
+  expect(options.message).toContain('Routines are kept only on this iPhone, so signing out erases them. Save a backup first to keep them.');
   expect(options.options).toEqual(['Sign out', 'Cancel']);
   // Choosing Sign out syncs first and then signs out, as before.
   await act(async () => { choose(0); for (let i = 0; i < 6; i++) await Promise.resolve(); });

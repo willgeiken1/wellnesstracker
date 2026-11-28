@@ -20,7 +20,7 @@ const progress = (n: string) => `file:///docs/progress-photos/${n}.jpg`;
 const profile = (n: string) => `file:///docs/profile-photo/${n}.jpg`;
 function repo() {
   const store = new Map<string, unknown>();
-  return { atomic: (f: () => unknown) => f(), localGet: (k: string) => store.get(k), localSave: (k: string, v: unknown) => store.set(k, v) } as unknown as Repository;
+  return { atomic: (f: () => unknown) => f(), localGet: (k: string) => store.get(k), localSave: (k: string, v: unknown) => store.set(k, v), list: () => [] } as unknown as Repository;
 }
 const photos = { names: photoAddresses, settle: settleReplacedPhotos };
 // An older backup, saved before the second progress photo and the new profile photo, from another app folder.
