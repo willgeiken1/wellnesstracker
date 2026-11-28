@@ -7,7 +7,9 @@ import { GRABBER_ROOM } from '@/components/sheet';
 import { Tappable } from '@/components/tappable';
 import { useTheme } from '@/design/theme-provider';
 import { tokens, type ThemeColors, type ThemeMode } from '@/design/tokens';
+import type { Repository } from '@/data/repository';
 import { useSettingsPrefs } from '@/features/settings/prefs';
+import { readStoredGoals, restoreStoredGoals } from '@/features/settings/goals-data';
 import type { UnitKey } from '@/features/settings/unit-override';
 import { showToast } from '@/features/shell/toast';
 import { t, type MessageKey } from '@/i18n/en';
@@ -104,7 +106,9 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
   // What the tile and its goals were when the sheet opened, for Revert.
   // The goals are kept in the units the tile had then, so Revert after a unit change puts back the same goal, not the same number.
   const [was] = useState(() => entry ? { pick: { style: entry.style, size: entry.size, options: copy(entry.options) } as Pick0,
-    goals: Object.fromEntries(goalKeys.map(g => [g, safeGet(g, ctx)])) as Partial<Record<GoalKey, number>>, units: ctx.units } : null);
+    goals: Object.fromEntries(goalKeys.map(g => [g, safeGet(g, ctx)])) as Partial<Record<GoalKey, number>>, units: ctx.units,
+    stored: repo && goalKeys.some(g => GOALS[g].stored) ? safeStored(repo) : null } : null);
+  const [touched, setTouched] = useState<readonly GoalKey[]>([]);
   const [headH, setHeadH] = useState(60);
   const [barH, setBarH] = useState(88);
   const [stageBottom, setStageBottom] = useState(400);
@@ -150,6 +154,7 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
     const spec = GOALS[g], v = safeGet(g, ctx), n = stepGoal(spec, ctx, dir);
     if (n === v) return;
     try { spec.set(ctx, n); } catch { /* left as last saved */ }
+    if (!touched.includes(g)) setTouched(x => [...x, g]);
     bump(x => x + 1); setChange(x => ({ c: { how: 'fade' }, seq: x.seq + 1 }));
   };
   const wasCtx: GoalCtx = { ...ctx, units: was.units };
@@ -158,6 +163,10 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
   const atStart = entry.style === start.style && entry.size === start.size && sameOptions(entry.options, start.options);
   const revert = () => {
     for (const g of goalKeys) { const v = was.goals[g]; if (v != null && safeGet(g, wasCtx) !== v) { try { GOALS[g].set(wasCtx, v); } catch { /* kept */ } } }
+    // A goal stepped here is put back as it was stored, so one that was never set, or targets still estimated, stay that way.
+    const back = new Set(touched.map(g => GOALS[g].stored).filter(x => x != null));
+    if (repo && was.stored) for (const w of back) { try { restoreStoredGoals(repo, was.stored, w); } catch { /* kept */ } }
+    setTouched([]);
     bump(x => x + 1);
     apply({ style: was.pick.style, size: was.pick.size, options: copy(was.pick.options) }, { how: 'fade' });
     showToast(t('teReverted'), { color: toastColor(def.color) });
@@ -310,6 +319,7 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
 const TOAST_COLORS = ['accent', 'food', 'water', 'recovery', 'training', 'sleep', 'success', 'warning'] as const;
 const toastColor = (c: string) => (TOAST_COLORS as readonly string[]).includes(c) ? c as (typeof TOAST_COLORS)[number] : 'accent';
 function safeGet(g: GoalKey, c: GoalCtx) { try { return GOALS[g].get(c); } catch { return 0; } }
+function safeStored(repo: Repository) { try { return readStoredGoals(repo); } catch { return null; } }
 function useAnimatedStyleSafe(v: { value: number }) {
   return useAnimatedStyle(() => ({ opacity: v.value, transform: [{ translateY: (1 - v.value) * -6 }] }));
 }

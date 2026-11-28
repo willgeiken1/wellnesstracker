@@ -19,6 +19,8 @@ export interface GoalSpec {
   min: (c: GoalCtx) => number;
   max: (c: GoalCtx) => number;
   show: (c: GoalCtx, v: number) => string;
+  /** Where it is stored on the app's data, for goals Revert puts back exactly (a goal never set stays unset). */
+  stored?: 'weight' | 'food';
 }
 function goals(repo: Repository | null) { try { return repo ? readGoalsData(repo) : null; } catch { return null; } }
 const kg = (c: GoalCtx) => c.units.weight === 'kg';
@@ -29,14 +31,14 @@ export const GOALS: Record<GoalKey, GoalSpec> = {
     label: t('teGKcal'), where: t('teWKcal'),
     get: c => goals(c.repo)?.kcal ?? c.prefs.goals.kcal,
     set: (c, v) => { if (c.repo) saveFoodTarget(c.repo, 'kcal', v); else c.set('goals.kcal', v); },
-    step: () => 50, min: () => 1000, max: () => 5000,
+    step: () => 50, min: () => 1000, max: () => 5000, stored: 'food',
     show: (c, v) => c.units.energy === 'kJ' ? `${formatNumber(Math.round(v * KJ / 10) * 10)} kJ` : `${formatNumber(v)} kcal`,
   },
   protein: {
     label: t('teGProtein'), where: t('teWProtein'),
     get: c => goals(c.repo)?.protein ?? c.prefs.goals.protein,
     set: (c, v) => { if (c.repo) saveFoodTarget(c.repo, 'protein', v); else c.set('goals.protein', v); },
-    step: () => 5, min: () => 40, max: () => 300, show: (_c, v) => `${v} g`,
+    step: () => 5, min: () => 40, max: () => 300, show: (_c, v) => `${v} g`, stored: 'food',
   },
   train: {
     label: t('teGTrain'), where: t('teWTrain'),
@@ -59,7 +61,7 @@ export const GOALS: Record<GoalKey, GoalSpec> = {
       c.set('goals.weight', kg(c) ? Math.round(v * LB * 2) / 2 : v);
       if (c.repo) saveGoalWeight(c.repo, v, kg(c) ? 'kg' : 'lb');
     },
-    step: c => kg(c) ? 0.5 : 1, min: c => kg(c) ? 36 : 80, max: c => kg(c) ? 180 : 400,
+    step: c => kg(c) ? 0.5 : 1, min: c => kg(c) ? 36 : 80, max: c => kg(c) ? 180 : 400, stored: 'weight',
     show: (c, v) => kg(c) ? `${v.toFixed(1)} kg` : `${Math.round(v)} lb`,
   },
   water: {
