@@ -4,7 +4,9 @@ import { useAuth } from '@/auth/provider';
 import { mix } from '@/components/kit-style';
 import type { TileRenderProps } from '@/features/tiles';
 import { t } from '@/i18n/en';
-import { clock, clockTime, DAY_LETTERS } from '../training-data';
+import { clockMs } from '@/features/settings/clock';
+import { useClockUnit } from '@/features/settings/prefs';
+import { clock, DAY_LETTERS } from '../training-data';
 import { startTraining } from '../start-workout';
 import { trainingNav } from '../nav';
 import { tr } from '../tr';
@@ -14,7 +16,7 @@ import { Cells, Gauge, Glow, IconChip, K, LiveDot, Material, N, S, B, T, TileBut
 /** 1. The workout going now, or the next plan day to start. */
 export function SessionTile(p: TileRenderProps) {
   const { colors, mode, body, size, options, editing, preview } = p;
-  const data = useTrainingData(), { repository } = useAuth();
+  const data = useTrainingData(), { repository } = useAuth(), ck = useClockUnit();
   const live = data?.live() ?? null;
   const now = useNow(!!live && !editing && !preview);
   const tint = colors.training, W = body.w;
@@ -49,7 +51,7 @@ export function SessionTile(p: TileRenderProps) {
   const head = <View style={{ flexDirection: 'row', alignItems: 'center' }}>
     <LiveDot label={t('trainingInProgress')} colors={colors} />
     <View style={{ flex: 1 }} />
-    <S colors={colors}>{tr('trainingStarted', { time: clockTime(live.startedAt) })}</S>
+    <S colors={colors}>{tr('trainingStarted', { time: clockMs(live.startedAt, ck) })}</S>
   </View>;
   const cells = <Cells states={live.matrix} w={W} h={11} gap={3} r={3} groups={live.groups} color={tint} colors={colors} mode={mode} label={cellsLabel} />;
   if (size === 'M') {

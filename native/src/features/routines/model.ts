@@ -93,23 +93,23 @@ export function setClock24(on: boolean) { clock24 = on; }
 export const is24 = () => clock24;
 
 /** A time of day in the person's clock: "9:30 PM" or "21:30". */
-export function h12(h: number) {
+export function h12(h: number, c24 = clock24) {
   const m = Math.round(h * 60), H = Math.floor(m / 60) % 24, M = m % 60;
-  if (clock24) return `${pad2(H)}:${pad2(M)}`;
+  if (c24) return `${pad2(H)}:${pad2(M)}`;
   return `${((H + 11) % 12) + 1}:${pad2(M)} ${H >= 12 ? 'PM' : 'AM'}`;
 }
 /** A compact axis label: 5a, 2p, or 05, 14. */
-export function hax(h: number) {
-  if (clock24) return pad2(Math.round(h) % 24);
+export function hax(h: number, c24 = clock24) {
+  if (c24) return pad2(Math.round(h) % 24);
   return `${((h + 11) % 12) + 1}${h % 24 >= 12 ? 'p' : 'a'}`;
 }
-const dropRepeat = (a: number, b: number) => h12(a).replace(/ (AM|PM)$/, x => (h12(b).slice(-3) === x ? '' : x));
+const dropRepeat = (a: number, b: number, c24: boolean) => h12(a, c24).replace(/ (AM|PM)$/, x => (h12(b, c24).slice(-3) === x ? '' : x));
 /** "3:00 to 5:00 PM". */
-export const rng = (a: number, b: number) => `${dropRepeat(a, b)} to ${h12(b)}`;
+export const rng = (a: number, b: number, c24 = clock24) => `${dropRepeat(a, b, c24)} to ${h12(b, c24)}`;
 /** A routine's window: "5:00 to 11:00 AM", or "From 9:30 PM" when it runs to bedtime. */
-export function win12(r: Pick<Routine, 'from' | 'to'>) { return r.to >= 23 && r.from > 18 ? `From ${h12(r.from)}` : rng(r.from, r.to); }
+export function win12(r: Pick<Routine, 'from' | 'to'>, c24 = clock24) { return r.to >= 23 && r.from > 18 ? `From ${h12(r.from, c24)}` : rng(r.from, r.to, c24); }
 /** The same, lower case at the start for the middle of a sentence. */
-export function win(r: Pick<Routine, 'from' | 'to'>) { const w = win12(r); return w.charAt(0).toLowerCase() + w.slice(1); }
+export function win(r: Pick<Routine, 'from' | 'to'>, c24 = clock24) { const w = win12(r, c24); return w.charAt(0).toLowerCase() + w.slice(1); }
 /** "in 5 hr 18 min", or "Due now". */
 export function until(h: number, now: number) {
   const m = Math.round((h - now) * 60); if (m <= 0) return 'Due now';
@@ -244,7 +244,7 @@ export function supplies(s: RoutinesState): Supply[] {
 export const daysLeft = (i: Item) => (i.perDay && i.left != null ? Math.floor(i.left / i.perDay) : null);
 
 export interface PeptideNext { i: Item; r: Routine | null; nextDay: number; when: string }
-export function peptides(s: RoutinesState, n: Now): PeptideNext[] {
+export function peptides(s: RoutinesState, n: Now, c24 = clock24): PeptideNext[] {
   return byType(s, 'Peptide').map(i => {
     const r = routineOf(s, i), done = isDone(s, n, i);
     // Its own days and its routines' days both count; an item in no routine on the tab goes by its own days alone.
@@ -252,7 +252,7 @@ export function peptides(s: RoutinesState, n: Now): PeptideNext[] {
     const on = (wd: number) => dueOnWd(i, wd) && (!placed || inRoutineOnWd(s, i, wd));
     let nextDay = 0;
     if (!(on(n.wd) && !done)) for (let k = 1; k <= 7; k++) if (on((n.wd + k) % 7)) { nextDay = k; break; }
-    const when = `${nextDay === 0 ? 'Today' : nextDay === 1 ? 'Tomorrow' : WD[(n.wd + nextDay) % 7]} ${h12(i.h)}`;
+    const when = `${nextDay === 0 ? 'Today' : nextDay === 1 ? 'Tomorrow' : WD[(n.wd + nextDay) % 7]} ${h12(i.h, c24)}`;
     return { i, r, nextDay, when };
   }).sort((a, b) => a.nextDay - b.nextDay || a.i.h - b.i.h);
 }

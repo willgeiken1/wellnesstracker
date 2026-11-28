@@ -5,6 +5,7 @@ import { font, useKit } from '@/components/kit';
 import { implementTile, type TileRenderProps } from '@/features/tiles';
 import { t } from '@/i18n/en';
 import { finite, lastIndex, series, stats, weekday, type Pillars } from '../model';
+import { useClockUnit } from '@/features/settings/prefs';
 import { clock, fill, hm } from '../format';
 import { HRV_NAME, rangeShort, shortTicks } from '../metric';
 import { rangeOf, usePageRange, useProgressData, pageRange } from '../store';
@@ -120,6 +121,7 @@ function HistoryTile({ size, options, body }: TileRenderProps) {
 /* ---------- 3. recovery: sleep, HRV, resting heart rate ---------- */
 const last = (v: (number | null)[]) => { const x = v[v.length - 1]; return finite(x) ? x : null; };
 function RecoveryTile({ size, options, body }: TileRenderProps) {
+  const ck = useClockUnit();
   const d = useProgressData(), k = useKit(), S = d.night, h = last(d.days.hrv), rh = last(d.days.rhr), hb = d.hrvBand, rb = d.rhrBand, goal = d.sleepGoalMin;
   const src = S?.source ?? (d.sources.oura || d.demo ? 'Oura' : 'Apple Health');
   if (!S && h == null && rh == null) return <View style={{ flex: 1 }}><NoData fs={size === 'S' ? 24 : 28} text={t('progressNoData')} /><Sub wrap style={{ marginTop: 6 }}>{t('progressRecoveryEmpty')}</Sub></View>;
@@ -147,7 +149,7 @@ function RecoveryTile({ size, options, body }: TileRenderProps) {
   }
   const order = [lead, ...(['sleep', 'hrv', 'rhr'] as const).filter(x => x !== lead)];
   const top = <Cols>{order.map(x => <View key={x}>{cols[x](22)}</View>)}</Cols>;
-  const bedWake = S && S.bed != null && S.wake != null ? [clock(S.bed), clock(S.wake)] : null;
+  const bedWake = S && S.bed != null && S.wake != null ? [clock(S.bed, ck), clock(S.wake, ck)] : null;
   if (size === 'M') return <View style={{ flex: 1 }} accessible accessibilityRole="image" accessibilityLabel={aria}>{top}<Hair style={{ marginTop: 'auto' }} />
     <Sub style={{ marginTop: 9 }}>{bedWake ? <>{t('progressInBed')} <B>{bedWake[0]}</B> {t('progressTo')} <B>{bedWake[1]}</B>, {fill(t('progressFromSrc'), { src })}</> : fill(t('progressFromSrcCap'), { src })}</Sub></View>;
   const ST = [['deep', 'progressDeep', 'sleep'], ['rem', 'recoveryRem', 'recovery'], ['core', 'progressCore', 'accent'], ['awake', 'progressAwake', 'food']] as const;

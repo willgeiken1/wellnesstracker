@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import Svg, { Circle, TSpan, Text as SvgText } from 'react-native-svg';
 import { Icon, KitText, Tappable, alpha, useKit, type IconName } from '@/components/kit';
 import { tokens } from '@/design/tokens';
+import { useClockUnit } from '@/features/settings/prefs';
 import { t } from '@/i18n/en';
 import { WellBar } from '../../food/tiles/well-bar';
 import { implementTile } from '../../tiles/registry';
@@ -24,9 +25,9 @@ import { B, Caption, Ck, Dot, Hair, Head, IRow, Ic, Kick, Num, OffIRow, RingG, S
 type Body = (p: { p: TileRenderProps; c: Ctx }) => ReactNode;
 function tile(Body: Body) {
   const Host = ({ p }: { p: TileRenderProps }) => {
-    const store = useActiveRoutinesStore(), { s, n } = useRoutines(store);
+    const store = useActiveRoutinesStore(), { s, n } = useRoutines(store), c24 = useClockUnit() === '24';
     if (!store) return null;
-    return <View style={{ width: p.body.w, height: p.body.h }}><Body p={p} c={{ s, n, store, live: !p.editing && !p.preview, w: p.body.w, h: p.body.h }} /></View>;
+    return <View style={{ width: p.body.w, height: p.body.h }}><Body p={p} c={{ s, n, store, live: !p.editing && !p.preview, w: p.body.w, h: p.body.h, c24 }} /></View>;
   };
   const Tile = (p: TileRenderProps) => <Host p={p} />;
   return Tile;
@@ -47,19 +48,19 @@ const range30 = (n: Now) => fill(t('routinesRange'), { a: monthDay(addDays(n.day
 
 /* 1. Sun path */
 const Sun: Body = ({ p, c }) => {
-  const k = useKit(), { s, n } = c, today = todayItems(s, n), left = today.filter(i => !markOf(s, n.day, i.id)).length, nx = nextItem(s, n), now = h12(n.h);
+  const k = useKit(), { s, n } = c, today = todayItems(s, n), left = today.filter(i => !markOf(s, n.day, i.id)).length, nx = nextItem(s, n), now = h12(n.h, c.c24);
   const byLeft = p.options.center === 'left';
-  const label = fill(t('routinesSunLabel'), { a: h12(5), b: h12(23), now, left }) + (nx ? ` ${fill(t('routinesSunNext'), { name: nx.name, time: h12(nx.h) })}` : '');
+  const label = fill(t('routinesSunLabel'), { a: h12(5, c.c24), b: h12(23, c.c24), now, left }) + (nx ? ` ${fill(t('routinesSunNext'), { name: nx.name, time: h12(nx.h, c.c24) })}` : '');
   const big = byLeft ? (left ? fill(t('routinesNLeft'), { n: left }) : t('routinesAllDone')) : now;
   const caps = byLeft ? fill(t('routinesNowCaps'), { now }) : left ? fill(t('routinesNLeftToday'), { n: left }) : t('routinesAllDoneToday');
   if (p.size === 'M') {
     return <View style={{ flex: 1, flexDirection: 'row', gap: 12 }}>
-      <View style={{ width: 206, marginTop: -6, marginLeft: -6 }}><SunPath s={s} n={n} width={206} big={big} caps={caps} label={label} /></View>
+      <View style={{ width: 206, marginTop: -6, marginLeft: -6 }}><SunPath s={s} n={n} c24={c.c24} width={206} big={big} caps={caps} label={label} /></View>
       <View style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
         {byLeft ? <><Num v={today.length - left} unit={fill(t('routinesOfN'), { n: today.length })} fs={28} /><Sub style={{ marginTop: 4 }}>{t('routinesDoneToday')}</Sub></>
           : <><Num v={left} unit={t('routinesLeftWord')} fs={28} /><Sub style={{ marginTop: 4 }}>{fill(t('routinesOfNToday'), { n: today.length })}</Sub></>}
         <View style={auto}>{nx ? <>
-          <Kick color={cOf(k, rById(s, nx.routines[0]))}>{fill(t('routinesNextAt'), { time: h12(nx.h) })}</Kick>
+          <Kick color={cOf(k, rById(s, nx.routines[0]))}>{fill(t('routinesNextAt'), { time: h12(nx.h, c.c24) })}</Kick>
           <Title size={13.5} lines={2} style={{ marginTop: 5 }}>{nx.name}</Title>
         </> : <Sub>{t('routinesNothingLeft')}</Sub>}</View>
       </View>
@@ -70,7 +71,7 @@ const Sun: Body = ({ p, c }) => {
     const r = nx ? rById(s, nx.routines[0]) : null;
     foot = <Plate>{nx && r ? <>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Kick color={cOf(k, r)}>{`${r.name} · ${h12(nx.h)} · ${until(nx.h, n.h)}`}</Kick>
+        <Kick color={cOf(k, r)}>{`${r.name} · ${h12(nx.h, c.c24)} · ${until(nx.h, n.h)}`}</Kick>
         <KitText weight={600} size={14} numberOfLines={1} style={{ marginTop: 5 }}>{nx.name} <KitText weight={500} size={14} color="text-muted">{nx.dose}</KitText></KitText>
       </View>
       <Ck i={nx} c={c} next />
@@ -88,11 +89,11 @@ const Sun: Body = ({ p, c }) => {
           <Segs s={s} n={n} items={its} color={color} h={5} />
         </View>;
       })}</View>
-      {nx ? <Sub style={{ marginTop: 9, textAlign: 'right' }}>{t('routinesNext')} <B>{nx.name}</B>, {h12(nx.h)}</Sub> : null}
+      {nx ? <Sub style={{ marginTop: 9, textAlign: 'right' }}>{t('routinesNext')} <B>{nx.name}</B>, {h12(nx.h, c.c24)}</Sub> : null}
     </>;
   }
   return <View style={col}>
-    <View style={{ marginTop: -10, marginHorizontal: -10 }}><SunPath s={s} n={n} width={c.w + 20} big={big} caps={caps} label={label} /></View>
+    <View style={{ marginTop: -10, marginHorizontal: -10 }}><SunPath s={s} n={n} c24={c.c24} width={c.w + 20} big={big} caps={caps} label={label} /></View>
     <View style={auto}>{foot}</View>
   </View>;
 };
@@ -113,18 +114,18 @@ const Next: Body = ({ p, c }) => {
   if (p.size === 'S') return <View style={col}>
     <Kick color={color}>{until(nx.h, n.h)}</Kick>
     <Title lines={2} style={{ marginTop: 6 }}>{nx.name}</Title>
-    <Sub style={{ marginTop: 2 }}>{`${nx.dose} · ${h12(nx.h)}`}</Sub>
+    <Sub style={{ marginTop: 2 }}>{`${nx.dose} · ${h12(nx.h, c.c24)}`}</Sub>
     <View style={auto}>{go}</View>
   </View>;
   const later = todayItems(s, n).filter(i => !markOf(s, n.day, i.id) && i !== nx), then = later[0];
-  const side = p.options.then === 'window' && r ? <Sub style={{ marginTop: 3 }}>{`${r.name} ${win(r)}`}</Sub>
-    : then ? <Sub style={{ marginTop: 3 }}>{t('routinesThen')} <B>{then.name}</B>, {h12(then.h)}</Sub> : <Sub style={{ marginTop: 3 }}>{t('routinesLastOne')}</Sub>;
+  const side = p.options.then === 'window' && r ? <Sub style={{ marginTop: 3 }}>{`${r.name} ${win(r, c.c24)}`}</Sub>
+    : then ? <Sub style={{ marginTop: 3 }}>{t('routinesThen')} <B>{then.name}</B>, {h12(then.h, c.c24)}</Sub> : <Sub style={{ marginTop: 3 }}>{t('routinesLastOne')}</Sub>;
   const mm = Math.max(0, Math.round((nx.h - n.h) * 60)), H = Math.floor(mm / 60), M = mm % 60;
   const onHand = nx.left != null && nx.perDay ? ` · ${fill(t('routinesDaysOnHand'), { n: Math.floor(nx.left / nx.perDay) })}` : '';
   return <View style={col}>
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Kick color={color}>{`${r?.name ?? ''} · ${h12(nx.h)}`}</Kick>
+        <Kick color={color}>{`${r?.name ?? ''} · ${h12(nx.h, c.c24)}`}</Kick>
         <KitText weight={700} size={19} lineHeight={1.2} tracking={-0.02} numberOfLines={1} style={{ marginTop: 6 }}>{nx.name}</KitText>
         <Sub style={{ marginTop: 2 }}>{nx.dose + onHand}</Sub>
         {side}
@@ -153,24 +154,24 @@ const RoutineTile: Body = ({ p, c }) => {
     const first = open[0];
     return <View style={col}><Head icon={rIcon(r)} title={r.name} color={color} />
       <Num v={cn.done} unit={fill(t('routinesOfN'), { n: cn.n })} fs={30} style={{ marginTop: 12 }} />
-      <Sub style={{ marginTop: 4 }}>{win12(r)}</Sub>
+      <Sub style={{ marginTop: 4 }}>{win12(r, c.c24)}</Sub>
       <View style={auto}><Segs s={s} n={n} items={its} color={color} />
-        <Sub style={{ marginTop: 8 }}>{first ? <><B>{fill(t('routinesNItemsLeft'), { n: plural(open.length, t('routinesItem'), t('routinesItems')) })}</B>{` · ${fill(t('routinesNextLower'), { time: h12(first.h) })}`}</> : <B>{t('routinesAllDone')}</B>}</Sub>
+        <Sub style={{ marginTop: 8 }}>{first ? <><B>{fill(t('routinesNItemsLeft'), { n: plural(open.length, t('routinesItem'), t('routinesItems')) })}</B>{` · ${fill(t('routinesNextLower'), { time: h12(first.h, c.c24) })}`}</> : <B>{t('routinesAllDone')}</B>}</Sub>
       </View></View>;
   }
   if (p.size === 'M') {
     const at = Math.max(0, Math.min(its.length - 3, its.indexOf(open[0] ?? its[its.length - 1]))), show = its.slice(at, at + 3);
-    return <View style={col}><Head icon={rIcon(r)} title={r.name} meta={`${fill(t('routinesNOfM'), { n: cn.done, m: cn.n })} · ${win(r)}`} color={color} />
+    return <View style={col}><Head icon={rIcon(r)} title={r.name} meta={`${fill(t('routinesNOfM'), { n: cn.done, m: cn.n })} · ${win(r, c.c24)}`} color={color} />
       <View style={{ marginTop: 6 }}>{show.map((i, j) => <IRow key={i.id} i={i} c={c} next={i.id === nxId} h={38} first={j === 0} color={color} />)}</View></View>;
   }
   const rows = [...its, ...off].slice(0, 5), rh = Math.min(46, Math.floor(176 / rows.length));
-  return <View style={col}><Head icon={rIcon(r)} title={r.name} meta={win12(r)} color={color} />
+  return <View style={col}><Head icon={rIcon(r)} title={r.name} meta={win12(r, c.c24)} color={color} />
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 12 }}>
       <View style={{ flex: 1 }}><Num v={cn.done} unit={fill(t('routinesOfNDone'), { n: cn.n })} fs={26} /></View>
       <Sub>{open.length ? fill(t('routinesNItemsLeft'), { n: plural(open.length, t('routinesItem'), t('routinesItems')) }) : t('routinesAllDone')}</Sub>
     </View>
     <View style={{ marginTop: 9 }}><Segs s={s} n={n} items={its} color={color} /></View>
-    <View style={auto}>{rows.map((i, j) => its.includes(i) ? <IRow key={i.id} i={i} c={c} next={i.id === nxId} h={rh} skip={i.id === nxId} first={j === 0} color={color} /> : <OffIRow key={i.id} i={i} h={rh} first={j === 0} />)}</View>
+    <View style={auto}>{rows.map((i, j) => its.includes(i) ? <IRow key={i.id} i={i} c={c} next={i.id === nxId} h={rh} skip={i.id === nxId} first={j === 0} color={color} /> : <OffIRow key={i.id} i={i} c24={c.c24} h={rh} first={j === 0} />)}</View>
   </View>;
 };
 
@@ -206,7 +207,7 @@ const Overview: Body = ({ p, c }) => {
     const list = <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>{rs.map((r, j) => {
       const cn = count(s, r.id, n), full = cn.n > 0 && cn.done === cn.n, color = cOf(k, r);
       return <View key={r.id} style={{ height: 36, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: j ? 1 : 0, borderTopColor: k.c.hair }}>
-        <Dot color={color} /><Title size={13.5}>{r.name}</Title><Sub style={{ flex: 1 }}>{fill(t('routinesFromTime'), { time: h12(r.from) })}</Sub>
+        <Dot color={color} /><Title size={13.5}>{r.name}</Title><Sub style={{ flex: 1 }}>{fill(t('routinesFromTime'), { time: h12(r.from, c.c24) })}</Sub>
         {full ? <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}><Icon name="check" size={12} color={k.c['on-accent']} /></View>
           : <KitText weight={600} size={12.5} numeric>{pausedNow(s, n, r) ? t('routinesPaused') : `${cn.done}/${cn.n}`}</KitText>}
       </View>;
@@ -220,10 +221,10 @@ const Overview: Body = ({ p, c }) => {
     <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}><View style={{ flex: 1 }}><Num v={done} unit={fill(t('routinesOfNDone'), { n: today.length })} fs={28} /></View><Sub>{fill(t('routinesNLeftTodayLower'), { n: today.length - done })}</Sub></View>
     <View style={{ marginTop: 12 }}>{rs.map((r, j) => {
       const its = rItems(s, r.id, n), cn = count(s, r.id, n), color = cOf(k, r);
-      return <Tappable key={r.id} dim="row" disabled={!c.live} accessibilityRole="button" accessibilityLabel={`${r.name}, ${win(r)}, ${cn.done} of ${cn.n} done`} onPress={() => routinesRoutes.detail(r.id)}
+      return <Tappable key={r.id} dim="row" disabled={!c.live} accessibilityRole="button" accessibilityLabel={`${r.name}, ${win(r, c.c24)}, ${cn.done} of ${cn.n} done`} onPress={() => routinesRoutes.detail(r.id)}
         style={{ height: 56, flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: j ? 1 : 0, borderTopColor: k.c.hair }}>
         <Thumb tile from={r.from} to={r.to} color={color} />
-        <View style={{ flex: 1, minWidth: 0 }}><Title size={14}>{r.name}</Title><Sub style={{ marginTop: 1 }}>{win12(r)}</Sub></View>
+        <View style={{ flex: 1, minWidth: 0 }}><Title size={14}>{r.name}</Title><Sub style={{ marginTop: 1 }}>{win12(r, c.c24)}</Sub></View>
         <View style={{ width: 96 }}>{its.length ? <Segs s={s} n={n} items={its} color={color} /> : null}</View>
         <View style={{ minWidth: 40, alignItems: 'flex-end' }}>{pausedNow(s, n, r) ? <KitText weight={600} size={11} color="text-muted">{t('routinesPaused')}</KitText>
           : <KitText weight={700} size={15} lineHeight={1} numeric>{cn.done}<KitText weight={600} size={11} color="text-muted">{`/${cn.n}`}</KitText></KitText>}</View>
@@ -391,7 +392,7 @@ function Sites({ h, n }: { h: number; n: Now }) {
   })}</View>;
 }
 const PeptidesTile: Body = ({ p, c }) => {
-  const k = useKit(), { s, n } = c, ps = peptides(s, n), color = k.c.sleep;
+  const k = useKit(), { s, n } = c, ps = peptides(s, n, c.c24), color = k.c.sleep;
   if (!ps.length) return <View style={[col, { justifyContent: 'flex-end' }]}><Title>{t('routinesNoPeptides')}</Title>
     <View style={{ marginTop: 10 }}><TBtn kind="ghost" color={color} icon="plus" label={t('routinesAdd')} live={c.live} onPress={() => routinesRoutes.add({ type: 'Peptide' })} /></View></View>;
   const gauge = (x: (typeof ps)[number], sz: number) => <RingG size={sz} sw={sz > 50 ? 6 : 5} frac={(x.i.left ?? 0) / (x.i.vial ?? 1)} color={color} label={fill(t('routinesDosesLeft'), { left: x.i.left ?? 0, vial: x.i.vial ?? 0 })}>
@@ -441,7 +442,7 @@ const Meds: Body = ({ p, c }) => {
   }
   const due = l.filter(i => !markOf(s, n.day, i.id));
   if (p.size === 'S') return <View style={col}><Num v={due.length} unit={t('routinesDue')} fs={30} /><Sub style={{ marginTop: 4 }}>{fill(t('routinesOfNToday'), { n: l.length })}</Sub>
-    <View style={auto}>{due[0] ? <><Title size={13.5}>{due[0].name}</Title><Sub>{h12(due[0].h)}</Sub></> : <Sub>{t('routinesAllTaken')}</Sub>}</View></View>;
+    <View style={auto}>{due[0] ? <><Title size={13.5}>{due[0].name}</Title><Sub>{h12(due[0].h, c.c24)}</Sub></> : <Sub>{t('routinesAllTaken')}</Sub>}</View></View>;
   return <View style={[col, { justifyContent: 'flex-end' }]}>{l.slice(0, 3).map((i, j) => <IRow key={i.id} i={i} c={c} next={false} h={38} first={j === 0} color={cOf(k, rById(s, i.routines[0]))} />)}</View>;
 };
 
