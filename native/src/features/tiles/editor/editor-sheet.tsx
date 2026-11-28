@@ -16,10 +16,10 @@ import { FRAMES } from '../geometry';
 import { SWATCHES, TILE_GOALS, TILE_UNITS, TINT_KEY, canTint, isSwatch, ownToken, tileUnits, type GoalKey } from '../look';
 import { defaultStyle, firstSize, optionValues, optionsOf, sameOptions, sizesOf, stylesOf } from '../model';
 import { tileRoutes } from '../nav';
+import { isTilePage } from '../registry';
 import { tileEdit, type TileStorage } from '../store';
 import { TileFrame } from '../tile-frame';
 import { TileIcon } from '../tile-icon';
-import { isTilePage } from '../tray-sheet';
 import type { LayoutEntry, TileDef, TileOptionValues, TilePageConfig, TilePageId, TileSize } from '../types';
 import { EmptyBlock, SheetHeader, fill, sheetBg } from '../ui';
 import { useTileRepository, useTileStore } from '../use-tiles';
@@ -27,7 +27,18 @@ import { EdGlyph, SizeGlyph } from './glyphs';
 import { GOALS, stepGoal, type GoalCtx } from './goals';
 import { TileStage, type Change } from './stage';
 
-type Pick0 = Pick<LayoutEntry, 'style' | 'size' | 'options'>;
+export type Pick0 = Pick<LayoutEntry, 'style' | 'size' | 'options'>;
+/**
+ * The editor opened from Add a tile: the tile is not on the page yet, so every change goes to a draft the tray keeps, the
+ * header goes back to the tiles, there is no goal, Reset or Remove, and a button pinned to the bottom adds it as shown.
+ */
+export interface AddMode {
+  def: TileDef;
+  pick: Pick0;
+  onPick: (p: Pick0) => void;
+  onBack: () => void;
+  onAdd: () => void;
+}
 const SIZES: TileSize[] = ['S', 'M', 'L'];
 const SIZE_WORD: Record<TileSize, string> = { S: t('tilesSizeS'), M: t('tilesSizeM'), L: t('tilesSizeL') };
 /** Each unit this editor can set for one tile: its row title and its two choices [value, short label, spoken label]. */
@@ -73,26 +84,28 @@ function startOf(cfg: TilePageConfig, def: TileDef): Pick0 {
   return { style, size, options: optionValues(def, style, d?.[3]) };
 }
 
-function Editor({ page, id, storage, close }: { page: TilePageId; id: string; storage?: TileStorage | null; close: () => void }) {
+export function Editor({ page, id, storage, close, add }: { page: TilePageId; id: string; storage?: TileStorage | null; close: () => void; add?: AddMode }) {
   const { colors, mode, reduceMotion: rm } = useTheme();
   const insets = useSafeAreaInsets();
   const { store, state, cfg } = useTileStore(page, storage);
   const repo = useTileRepository();
   const [prefs, setPref] = useSettingsPrefs();
   // An id that is not on the page opens the page's first tile, as the grid's customize did.
-  const entry = state.tiles.find(e => e.id === id) ?? state.tiles[0] ?? null;
-  const def = entry ? cfg.tiles.find(d => d.id === entry.id) ?? null : null;
+  const entry: LayoutEntry | null = add ? { id: add.def.id, ...add.pick } : state.tiles.find(e => e.id === id) ?? state.tiles[0] ?? null;
+  const def = add ? add.def : entry ? cfg.tiles.find(d => d.id === entry.id) ?? null : null;
   // Closing the sheet (Done, a swipe down or Remove) takes the outline off the tile.
-  useEffect(() => () => { if (tileEdit.get().customizing) tileEdit.customize(page, null); }, [page]);
+  const adding = !!add;
+  useEffect(() => () => { if (!adding && tileEdit.get().customizing) tileEdit.customize(page, null); }, [page, adding]);
   const [goalRev, bump] = useState(0);
   const [change, setChange] = useState<{ c: Change; seq: number }>({ c: null, seq: 0 });
-  const units = def ? TILE_UNITS[`${page}:${def.id}`] ?? [] : [], goalKeys = def ? TILE_GOALS[`${page}:${def.id}`] ?? [] : [];
+  const units = def ? TILE_UNITS[`${page}:${def.id}`] ?? [] : [], goalKeys = def && !add ? TILE_GOALS[`${page}:${def.id}`] ?? [] : [];
   const ctx = useMemo<GoalCtx>(() => ({ repo, prefs, set: setPref, units: { ...prefs.units, ...(tileUnits(entry?.options) ?? {}) } }),
-    [repo, prefs, setPref, entry?.options]); // eslint-disable-line react-hooks/exhaustive-deps
+    [repo, prefs, setPref, entry?.options]);
   // What the tile and its goals were when the sheet opened, for Revert.
   const [was] = useState(() => entry ? { pick: { style: entry.style, size: entry.size, options: copy(entry.options) } as Pick0,
     goals: Object.fromEntries(goalKeys.map(g => [g, safeGet(g, ctx)])) as Partial<Record<GoalKey, number>> } : null);
   const [headH, setHeadH] = useState(60);
+  const [barH, setBarH] = useState(88);
   const [stageBottom, setStageBottom] = useState(400);
   const mini = useSharedValue(0);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -109,7 +122,8 @@ function Editor({ page, id, storage, close }: { page: TilePageId; id: string; st
   void goalRev;
 
   const apply = (next: Pick0, c: Change) => {
-    store.customize(entry.id, { style: next.style, size: next.size, options: next.options });
+    if (add) add.onPick({ style: next.style, size: next.size, options: next.options });
+    else store.customize(entry.id, { style: next.style, size: next.size, options: next.options });
     setChange(x => ({ c, seq: x.seq + 1 }));
   };
   const setStyle = (key: string, dir?: 1 | -1) => {
@@ -152,7 +166,7 @@ function Editor({ page, id, storage, close }: { page: TilePageId; id: string; st
   // Once the preview scrolls away, a small copy of it stays pinned under the header.
   const onScroll = (y: number) => {
     const on = y + headH + 24 > stageBottom ? 1 : 0;
-    if (on !== mini.value) mini.value = rm ? on : withTiming(on, { duration: 240, easing: Easing.bezier(0.2, 0.8, 0.2, 1) });
+    if (on !== mini.get()) mini.set(rm ? on : withTiming(on, { duration: 240, easing: Easing.bezier(0.2, 0.8, 0.2, 1) }));
   };
 
   const dark = mode === 'dark';
@@ -184,10 +198,11 @@ function Editor({ page, id, storage, close }: { page: TilePageId; id: string; st
   const f = FRAMES[entry.size] ?? FRAMES.M, mk = Math.min(96 / f.h, 210 / f.w);
 
   return <View style={[s.root, { backgroundColor: sheetBg(colors, mode) }]}>
-    <ScrollView ref={scrollRef} style={s.root} contentContainerStyle={[s.pad, { paddingBottom: 40 + insets.bottom }]} stickyHeaderIndices={[0]}
+    <ScrollView ref={scrollRef} style={s.root} contentContainerStyle={[s.pad, { paddingBottom: (add ? barH + 16 : 40) + insets.bottom }]} stickyHeaderIndices={[0]}
       scrollEventThrottle={16} onScroll={e => onScroll(e.nativeEvent.contentOffset.y)}>
       <View onLayout={(e: LayoutChangeEvent) => setHeadH(e.nativeEvent.layout.height)}>
-        <EditorHeader dirty={dirty} onDone={close} onRevert={revert} colors={colors} mode={mode} />
+        {add ? <AddHeader onBack={add.onBack} colors={colors} mode={mode} />
+          : <EditorHeader dirty={dirty} onDone={close} onRevert={revert} colors={colors} mode={mode} />}
       </View>
       <View>
         <View style={s.id}>
@@ -259,9 +274,9 @@ function Editor({ page, id, storage, close }: { page: TilePageId; id: string; st
           </View>
         </> : null}
 
-        {def.editExtra ? <View style={s.extra}>{def.editExtra({ close })}</View> : null}
+        {def.editExtra && !add ? <View style={s.extra}>{def.editExtra({ close })}</View> : null}
 
-        <View style={s.act}>
+        {add ? null : <View style={s.act}>
           <Tappable dim={atStart ? 'none' : 'fill'} disabled={atStart} accessibilityRole="button" accessibilityState={{ disabled: atStart }} onPress={reset} style={[s.btn, card]}>
             <EdGlyph name="refresh" size={16} color={atStart ? colors.ghost : colors.text} />
             <Text style={[s.btnT, { color: atStart ? colors.ghost : colors.text }]}>{t('teReset')}</Text>
@@ -270,9 +285,11 @@ function Editor({ page, id, storage, close }: { page: TilePageId; id: string; st
             <EdGlyph name="x" size={16} color={colors.danger} />
             <Text style={[s.btnT, { color: colors.danger }]}>{fill(t('tilesRemoveFrom'), { page: cfg.label })}</Text>
           </Tappable>
-        </View>
+        </View>}
       </View>
     </ScrollView>
+    {add ? <AddBar label={fill(t('tilesAddTo'), { page: cfg.label })} spoken={fill(t('tilesAddToLabel'), { title: def.title, page: cfg.label, size: SIZE_WORD[entry.size], style: styles[idx]?.name || fill(t('tilesStyleN'), { n: idx + 1 }) })}
+      onPress={add.onAdd} bottom={insets.bottom} onHeight={setBarH} colors={colors} mode={mode} /> : null}
     <Animated.View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="te-mini"
       style={[s.mb, miniStyle, { top: headH, backgroundColor: sheetBg(colors, mode), boxShadow: `0 1px 0 ${colors.hair}` }]}>
       <View style={{ width: f.w * mk, height: f.h * mk, borderRadius: 14, overflow: 'hidden' }}>
@@ -313,6 +330,34 @@ function EditorHeader({ dirty, onDone, onRevert, colors, mode }: { dirty: boolea
         </Pressable>
       </Animated.View>
     </View>
+  </View>;
+}
+
+/** Add a tile's header: back to the tiles on the left, the title in the middle. */
+function AddHeader({ onBack, colors, mode }: { onBack: () => void; colors: ThemeColors; mode: ThemeMode }) {
+  return <View style={[s.sh, { backgroundColor: sheetBg(colors, mode) }]}>
+    <View style={s.side}><Pressable accessibilityRole="button" accessibilityLabel={t('tilesBackLabel')} onPress={onBack} hitSlop={4}
+      style={({ pressed }) => [s.shBtn, s.back, pressed && { opacity: 0.45 }]}>
+      <EdGlyph name="chevron-left" size={20} color={colors.accent} />
+      <Text style={[s.shL, { color: colors.accent }]}>{t('tilesBackToTiles')}</Text>
+    </Pressable></View>
+    <Text accessibilityRole="header" numberOfLines={1} style={[s.shT, { color: colors.text }]}>{t('tilesTrayHomeTitle')}</Text>
+    <View style={s.side} />
+  </View>;
+}
+
+/** The Add button pinned to the bottom of Add a tile's preview, over a fade so the last rows show it floats. */
+function AddBar({ label, spoken, onPress, bottom, onHeight, colors, mode }: {
+  label: string; spoken: string; onPress: () => void; bottom: number; onHeight: (h: number) => void; colors: ThemeColors; mode: ThemeMode;
+}) {
+  const bg = sheetBg(colors, mode);
+  return <View testID="te-addbar" style={[s.ab, { paddingBottom: 14 + bottom }]} onLayout={e => onHeight(e.nativeEvent.layout.height)}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { experimental_backgroundImage: `linear-gradient(to top, ${bg} 72%, ${rgba(bg, 0)})` }]} />
+    <Tappable dim="fill" accessibilityRole="button" accessibilityLabel={spoken} onPress={onPress}
+      style={[s.abBtn, { backgroundColor: colors.accent, boxShadow: `0 8px 20px -12px ${rgba(colors.accent, 0.7)}` }]}>
+      <TileIcon name="plus" size={18} color={colors['on-accent']} />
+      <Text style={[s.abT, { color: colors['on-accent'] }]}>{label}</Text>
+    </Tappable>
   </View>;
 }
 
@@ -404,4 +449,8 @@ const s = StyleSheet.create({
   btnT: font(600, 15),
   mb: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 6, paddingHorizontal: 20, paddingBottom: 12 },
   mt: { flex: 1, minWidth: 0 },
+  back: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingLeft: 2 },
+  ab: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 14, paddingHorizontal: 16 },
+  abBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 52, borderRadius: 16 },
+  abT: { fontFamily: tokens.font.heading, fontSize: 16, letterSpacing: -0.16 },
 });

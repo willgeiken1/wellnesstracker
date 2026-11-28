@@ -4,6 +4,8 @@ export function reanimatedMock() {
   const RN = require('react-native');
   const React = require('react');
   const id = (v: unknown) => v;
+  // A shared value with Reanimated 4's get() and set() beside .value.
+  const sharedValue = (v: unknown) => { const sv = { value: v, get: () => sv.value, set: (n: unknown) => { sv.value = n; } }; return sv; };
   const ease = Object.assign(() => 0, { bezier: () => id, inOut: () => id, ease: id, linear: id, out: () => id });
   return {
     __esModule: true,
@@ -13,11 +15,11 @@ export function reanimatedMock() {
     measure: () => null, runOnJS: (f: unknown) => f, runOnUI: (f: unknown) => f, scrollTo: () => {},
     useAnimatedRef: () => React.useRef(null), useAnimatedStyle: (f: () => unknown) => f(),
     useFrameCallback: () => ({ setActive: () => {}, isActive: false, callbackId: 0 }),
-    useScrollOffset: () => ({ value: 0 }), useSharedValue: (v: unknown) => React.useRef({ value: v }).current,
+    useScrollOffset: () => ({ value: 0 }), useSharedValue: (v: unknown) => React.useRef(sharedValue(v)).current,
     withDelay: (_d: number, v: unknown) => v, withRepeat: (v: unknown) => v, withSequence: (...v: unknown[]) => v[v.length - 1], withTiming: id,
     withSpring: id, withDecay: id, useDerivedValue: (f: () => unknown) => ({ value: f() }), useAnimatedProps: (f: () => unknown) => f(),
     useAnimatedReaction: () => {}, useAnimatedScrollHandler: () => () => {}, useReducedMotion: () => false,
-    ReduceMotion: { System: 'system', Always: 'always', Never: 'never' }, makeMutable: (v: unknown) => ({ value: v }),
+    ReduceMotion: { System: 'system', Always: 'always', Never: 'never' }, makeMutable: (v: unknown) => sharedValue(v),
     View: RN.View, ScrollView: RN.ScrollView, Text: RN.Text, Image: RN.Image, FlatList: RN.FlatList, createAnimatedComponent: id,
     // Entering, exiting and layout builders: every chained call returns the same builder.
     ...Object.fromEntries(['FadeIn', 'FadeOut', 'FadeInDown', 'FadeInUp', 'FadeOutDown', 'FadeOutUp', 'SlideInDown', 'SlideOutDown', 'SlideInRight', 'SlideOutRight',

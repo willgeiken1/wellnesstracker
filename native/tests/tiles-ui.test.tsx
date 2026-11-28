@@ -68,10 +68,12 @@ describe('tile grid screens', () => {
   it('the tray lists tiles not on the page and adds one', async () => {
     const storage = fakeStorage();
     await wrap(<TileTraySheet page="training" storage={storage} />);
-    expect(screen.getByText('Training tiles')).toBeTruthy();
-    expect(screen.getByText(/2 of 12 tiles are not on Training yet\./)).toBeTruthy();
+    expect(screen.getByText('Add a tile')).toBeTruthy();
+    expect(screen.getByText('2 of 12 tiles are not on Training yet. Add one as it is, or tap it to choose how it looks first.')).toBeTruthy();
     expect(screen.getByText('Reset Training tiles')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Add Plan days, Medium'));
+    // Each card draws its tile live, at the size it will be added.
+    expect(screen.getByTestId('tray-card-plan')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Add Plan days to Training as it is'));
     await act(async () => { jest.advanceTimersByTime(600); });
     expect(routes.close).toHaveBeenCalled();
     expect(tileStoreFor(storage, 'training').getState().tiles.some(e => e.id === 'plan')).toBe(true);
@@ -84,16 +86,16 @@ describe('tile grid screens', () => {
     const inner = screen.getByTestId('sheet-frame');
     await fireEvent(inner.parent!, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 0 } } });
     expect(StyleSheet.flatten(screen.getByTestId('sheet-frame').props.style).height).toBeGreaterThan(500);
-    expect(screen.getByText('Training tiles')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Add Plan days, Medium'));
+    expect(screen.getByText('Add a tile')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Add Plan days to Training as it is'));
     await act(async () => { jest.advanceTimersByTime(600); });
     expect(tileStoreFor(storage, 'training').getState().tiles.some(e => e.id === 'plan')).toBe(true);
   });
 
   it('the Home tray has its own copy, filters and footnote', async () => {
     await wrap(<TileTraySheet page="home" storage={fakeStorage()} />);
-    expect(screen.getByText('Tile tray')).toBeTruthy();
-    expect(screen.getByText('14 tiles to choose from, each in its styles. Pick a style and a size, then add it to Home.')).toBeTruthy();
+    expect(screen.getByText('Add a tile')).toBeTruthy();
+    expect(screen.getByText('14 tiles are not on Home yet. Add one as it is, or tap it to pick its style and size first.')).toBeTruthy();
     expect(screen.getAllByText('Recovery and sleep').length).toBeGreaterThan(1);
     expect(screen.getByText('Tiles read Apple Health and Oura where a number comes from them.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('radio', { name: 'Food' }));

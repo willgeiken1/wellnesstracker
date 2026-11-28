@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type AccessibilityActionEvent } from 'react-native';
+import { StyleSheet, Text, View, type AccessibilityActionEvent } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { font } from '@/components/kit-style';
+import { Tappable } from '@/components/tappable';
 import type { ThemeColors, ThemeMode } from '@/design/tokens';
 import { t } from '@/i18n/en';
 import { colorMix, rgba } from '../depth';
@@ -64,6 +65,8 @@ export function TileStage({ cfg, def, pick, styles, change, seq, colors, mode, r
     const prev = last.current; last.current = pick; lastSeq.current = seq;
     drag.value = 0;
     const how = !change ? 'none' : rm ? 'fade' : change.how;
+    // The outgoing design lives for one transition, so it is set as the change lands and cleared when it has slid away.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one redraw per change, keyed to seq, never a loop.
     if (how === 'none' || how === 'size') { inX.value = 0; inO.value = 1; setOld(null); return; }
     setOld({ pick: prev, seq });
     if (how === 'slide' && change?.how === 'slide') {
@@ -86,11 +89,11 @@ export function TileStage({ cfg, def, pick, styles, change, seq, colors, mode, r
   const settle = (dx: number, vx: number) => {
     const dir: 1 | -1 = dx < 0 ? 1 : -1, can = dir === 1 ? !lastStyle : !first;
     if (can && (Math.abs(dx) > 60 || Math.abs(vx) > 500)) { onStep(dir); return; }
-    drag.value = rm ? 0 : withTiming(0, SLIDE);
+    drag.set(rm ? 0 : withTiming(0, SLIDE));
   };
   const pan = usePanGesture({
     enabled: many, activeOffsetX: [-8, 8], failOffsetY: [-10, 10],
-    onUpdate: e => { 'worklet'; const end = (e.translationX > 0 && first) || (e.translationX < 0 && lastStyle); drag.value = end ? e.translationX * 0.3 : e.translationX; },
+    onUpdate: e => { 'worklet'; const end = (e.translationX > 0 && first) || (e.translationX < 0 && lastStyle); drag.set(end ? e.translationX * 0.3 : e.translationX); },
     onDeactivate: e => { 'worklet'; runOnJS(settle)(e.translationX, e.velocityX); },
   });
 
@@ -110,15 +113,7 @@ export function TileStage({ cfg, def, pick, styles, change, seq, colors, mode, r
   const dark = mode === 'dark';
   return <View testID="te-stage" style={[s.stage, { paddingBottom: many ? 12 : 18, boxShadow: `inset 0 0 0 1px ${rgba(colors.text, 0.06)}` }]}
     onLayout={e => { setStageW(e.nativeEvent.layout.width); onLayoutBottom?.(e.nativeEvent.layout.y + e.nativeEvent.layout.height); }}>
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
-      <Defs>
-        <RadialGradient id="te-glow" cx={0.5} cy={0} fx={0.5} fy={0} r={1} gradientTransform="translate(0.5 0) scale(1.2 0.9) translate(-0.5 0)">
-          <Stop offset="0" stopColor={tint} stopOpacity={dark ? 0.16 : 0.14} /><Stop offset="0.7" stopColor={tint} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={dark ? rgba(colors.text, 0.035) : colorMix(colors.text, 0.04, colors.bg)} />
-      <Rect width="100%" height="100%" fill="url(#te-glow)" />
-    </Svg>
+    <StageGlow tint={tint} colors={colors} dark={dark} />
     <GestureDetector gesture={pan}>
       <View accessible accessibilityRole={many ? 'adjustable' : 'image'} accessibilityLabel={label}
         accessibilityActions={many ? [{ name: 'increment' }, { name: 'decrement' }] : undefined} onAccessibilityAction={onAction}>
@@ -145,11 +140,24 @@ export function TileStage({ cfg, def, pick, styles, change, seq, colors, mode, r
   </View>;
 }
 
+/** The stage's soft ground: a faint wash with a glow of the tile's colour from the top (the mockup's .te-stage and .tgl-pv). */
+export function StageGlow({ tint, colors, dark }: { tint: string; colors: ThemeColors; dark: boolean }) {
+  return <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+    <Defs>
+      <RadialGradient id="te-glow" cx={0.5} cy={0} fx={0.5} fy={0} r={1} gradientTransform="translate(0.5 0) scale(1.2 0.9) translate(-0.5 0)">
+        <Stop offset="0" stopColor={tint} stopOpacity={dark ? 0.16 : 0.14} /><Stop offset="0.7" stopColor={tint} stopOpacity={0} />
+      </RadialGradient>
+    </Defs>
+    <Rect width="100%" height="100%" fill={dark ? rgba(colors.text, 0.035) : colorMix(colors.text, 0.04, colors.bg)} />
+    <Rect width="100%" height="100%" fill="url(#te-glow)" />
+  </Svg>;
+}
+
 function Arrow({ dir, off, colors, onPress }: { dir: 1 | -1; off: boolean; colors: ThemeColors; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={t(dir < 0 ? 'tePrev' : 'teNext')} accessibilityState={{ disabled: off }} disabled={off}
-    onPress={onPress} hitSlop={8} style={({ pressed }) => [s.arr, { backgroundColor: rgba(colors.text, 0.07), opacity: off ? 0.3 : pressed ? 0.6 : 1 }]}>
+  return <Tappable dim="row" accessibilityRole="button" accessibilityLabel={t(dir < 0 ? 'tePrev' : 'teNext')} accessibilityState={{ disabled: off }} disabled={off}
+    onPress={onPress} hitSlop={8} style={[s.arr, { backgroundColor: rgba(colors.text, 0.07) }, off && { opacity: 0.3 }]}>
     <EdGlyph name={dir < 0 ? 'chevron-left' : 'chevron-right'} size={15} color={colors['text-muted']} />
-  </Pressable>;
+  </Tappable>;
 }
 function Dot({ on, tint, off, rm }: { on: boolean; tint: string; off: string; rm: boolean }) {
   const v = useSharedValue(on ? 1 : 0);

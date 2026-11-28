@@ -30,3 +30,10 @@ implementTile('training', 'volume', {
 - When `editing` or `preview` is true, the body gets no touches. Keep live controls and entrance motion off, and respect `reduceMotion`.
 - `pendingTiles(page)` lists what is still a stub. Unknown page or tile ids throw, so typos show in tests.
 - A tile's copy, names and options live in its catalogue entry. New UI strings go in `src/i18n/en.ts`.
+
+## Adding and editing a tile
+- Add a tile (`tray-sheet.tsx`) shows every tile not on the page, each drawn live at the style and size it would be added in. Add on a card adds it as shown. A tap opens the same editor as Edit tile (`editor/editor-sheet.tsx`, its `add` mode): changes go to a draft the tray keeps until Add, and there is no goal, Reset or Remove.
+- Besides a tile's own catalogue options, an entry's `options` can hold two kinds of extra key that the editor writes and every page keeps:
+  - `u.<unit>` (`u.weight`, `u.energy`, `u.water`, `u.distance`, `u.height`, `u.clock`): this tile's own unit, when it differs from Settings. Only the units listed for the tile in `TILE_UNITS` (`look.ts`) are offered; renderers read them through `tileUnits(options)`.
+  - `tint`: a theme colour token from `SWATCHES` that replaces the tile's own colour, where `canTint` allows it.
+- Goals in the editor (`TILE_GOALS`, `editor/goals.ts`) are the same goals Settings, Goals edits, not per-tile values.
