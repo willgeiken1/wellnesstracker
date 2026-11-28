@@ -1,3 +1,4 @@
+import { clockHM, type ClockUnit } from '@/features/settings/clock';
 import type { Unit } from '@/features/onboarding/model';
 import { IN, LB } from './model';
 
@@ -30,10 +31,10 @@ export const fromLen = (v: number, unit: Unit) => unit === 'lb' ? v * IN : v;
 
 /** Hours as "6h 53m". */
 export function hm(hours: number) { const m = Math.round(hours * 60); return `${Math.floor(m / 60)}h ${m % 60}m`; }
-/** Minutes after midnight as a clock time, "6:21 AM". */
-export function clock(min: number) {
-  const m = ((Math.round(min) % 1440) + 1440) % 1440, h = Math.floor(m / 60), mm = m % 60;
-  return `${h % 12 || 12}:${String(mm).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+/** Minutes after midnight as a clock time, "6:21 AM", or "06:21" on a 24-hour clock. */
+export function clock(min: number, c: ClockUnit = '12') {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return clockHM(Math.floor(m / 60), m % 60, c);
 }
 /** A moment as a clock time. */
 export const clockAt = (ms: number) => { const d = new Date(ms); return clock(d.getHours() * 60 + d.getMinutes()); };

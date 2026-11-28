@@ -145,7 +145,7 @@ export function useTileDay(): Repository | null {
   // The phone-only build swaps in its own provider, which keeps its context private, so this goes through useAuth.
   try { return useAuth().repository ?? null; } catch { return null; }
 }
-/** The day a food tile shows, with the energy unit from Settings (`eu`). */
+/** The day a food tile shows, with the energy unit (`eu`) and clock (`ck`) from Settings or the tile's own units. */
 export function useDayData(repo: Repository) {
   useFoodRevision(repo);
   const sel = useFoodDay();
@@ -153,6 +153,6 @@ export function useDayData(repo: Repository) {
   const own = useUnitOverride()?.water, saved = readWater(repo);
   // A tile with its own water unit shows the same water in that unit.
   const water = own && (own === 'ml') !== (saved.unit === 'ml') ? { ...saved, unit: own === 'ml' ? 'ml' as const : 'oz' as const } : saved;
-  const eu = useEnergyUnit(), wk = useSettingsPrefs()[0].units.week;
-  return { ...sel, view, water, eu, wk, next: nextMealId(dayView(repo, sel.today, { today: sel.today })) };
+  const units = useSettingsPrefs()[0].units, eu = useEnergyUnit(), wk = units.week, ck = units.clock;
+  return { ...sel, view, water, eu, wk, ck, next: nextMealId(dayView(repo, sel.today, { today: sel.today })) };
 }

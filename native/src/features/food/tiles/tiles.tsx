@@ -7,7 +7,7 @@ import { t } from '@/i18n/en';
 import { fill } from '../../tiles/ui';
 import type { TileRenderProps } from '../../tiles/types';
 import { addSaved, addWater, comboKcal, comboProtein, mealName, quickAdd } from '../actions';
-import { clock, daySums, known, macrosComplete, roundOr, eatingWindow, foodsLine, grams, kcalOf, num, oftenFoods, plural, shortDate, streak, weekDays, weekday, weekLetters, weekNames, type DayView, type WeekFirst } from '../day';
+import { daySums, known, macrosComplete, roundOr, eatingWindow, foodsLine, grams, kcalOf, num, oftenFoods, plural, shortDate, streak, weekDays, weekday, weekLetters, weekNames, type DayView, type WeekFirst } from '../day';
 import { combos, recentFoods, shiftDay, type Food } from '../model';
 import { foodRoutes } from '../nav';
 import { burnedOn, pickFoodDay } from '../selection';
@@ -15,6 +15,7 @@ import { Cells, Gauge, MACRO_COLOR, MacroRings, SplitBar, WaterIcon, macroPercen
 import { WellBar } from './well-bar';
 import { enLabel, enNum, enText, enValue } from '../energy';
 import { litresOn, quickContainers, sizeNum, sizeSpoken, sizeText, unitLabel, waterAmt, waterNum, type Container } from '../water';
+import { clockH, clockMs, hourMark, type ClockUnit } from '../../settings/clock';
 import { B, Cols, Dot, Hair, Ic, KV, Kick, Num, Plate, Plus, Stripes, Sub, TileButton, Title, useDayData, useShade, useTileDay } from './kit';
 
 type Data = ReturnType<typeof useDayData>;
@@ -259,7 +260,7 @@ const Meals: TileBody = ({ p, repo, d }) => {
           <Ic name={m.icon} outline={none} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><Title size={14} style={{ flexShrink: 0 }}>{m.name}</Title>
-              {m.time && !none ? <Sub size={11.5} style={tabular}>{clock(m.time)}</Sub> : null}</View>
+              {m.time && !none ? <Sub size={11.5} style={tabular}>{clockMs(m.time, d.ck)}</Sub> : null}</View>
             <Sub size={12}>{sub}</Sub>
           </View>
           {none ? null : <KitText weight={700} size={14.5} lineHeight={1} numeric>{val(m)}</KitText>}
@@ -424,9 +425,9 @@ const Micros: TileBody = ({ p, d }) => {
 const T0 = 5, T1 = 23;
 const X = (h: number, w: number) => (Math.max(T0, Math.min(T1, h)) - T0) / (T1 - T0) * w;
 const hours = (ms: number) => { const x = new Date(ms); return x.getHours() + x.getMinutes() / 60; };
-const hm = (h: number) => { const H = Math.floor(h), M = Math.round((h - H) * 60); return new Date(2000, 0, 1, H + (M === 60 ? 1 : 0), M === 60 ? 0 : M).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); };
+const hm = (h: number, c: ClockUnit) => clockH(h, c);
 const dur = (h: number) => { let H = Math.floor(h), M = Math.round((h - H) * 60); if (M === 60) { H++; M = 0; } return `${H}h${M ? ` ${M}m` : ''}`; };
-const TICKS: [number, string][] = [[6, '6 AM'], [12, 'Noon'], [18, '6 PM'], [22, '10 PM']];
+const TICKS = [6, 12, 18, 22];
 function windowOf(d: Data) {
   const v = d.view, w = eatingWindow(v), now = hours(Date.now());
   const ms = v.meals.filter(m => !m.empty && m.time).map((m, i) => ({ t: hours(m.time!), k: m.kcal, i: v.meals.indexOf(m) + 0 * i }));
@@ -435,7 +436,7 @@ function windowOf(d: Data) {
 function Timeline({ d, w, h, mh, mw = 6, target, ticks }: { d: Data; w: number; h: number; mh: number; mw?: number; target: number; ticks?: boolean }) {
   const k = useKit(), shade = useShade(), W = windowOf(d), base = h - 3, end = W.live ? Math.max(W.last ?? 0, W.now) : W.last;
   return <View accessible accessibilityRole="image" style={{ height: h, width: w, marginBottom: ticks ? 17 : 0 }}
-    accessibilityLabel={W.first == null ? t('foodNothingLoggedYet') : tx('foodWindowA11y', { from: hm(W.first), to: hm(W.last!) }) + (W.live ? ` ${t('foodSoFar')}` : '') + (target ? `, ${tx('foodTargetHours', { n: target })}` : '')}>
+    accessibilityLabel={W.first == null ? t('foodNothingLoggedYet') : tx('foodWindowA11y', { from: hm(W.first, d.ck), to: hm(W.last!, d.ck) }) + (W.live ? ` ${t('foodSoFar')}` : '') + (target ? `, ${tx('foodTargetHours', { n: target })}` : '')}>
     <View style={{ position: 'absolute', left: 0, right: 0, top: base - 1, height: 2, borderRadius: 1, backgroundColor: k.c['hair-2'] }} />
     {W.first != null ? <View style={{ position: 'absolute', left: X(W.first, w), width: Math.max(4, X(end!, w) - X(W.first, w)), top: base - 2.5, height: 5, borderRadius: 999,
       backgroundColor: k.dark ? mix(k.c.food, k.c['surface-2'], 0.48) : mix(k.c.food, k.c.surface, 0.34) }} /> : null}
@@ -445,17 +446,17 @@ function Timeline({ d, w, h, mh, mw = 6, target, ticks }: { d: Data; w: number; 
       return <View key={i} style={{ position: 'absolute', left: X(m.t, w) - mw / 2, width: mw, top: base - 2.5 - hh, height: hh, borderTopLeftRadius: mw / 2, borderTopRightRadius: mw / 2, borderBottomLeftRadius: 1, borderBottomRightRadius: 1, backgroundColor: shade(m.i), boxShadow: `0px 0px 0px 1.5px ${k.c.surface}` }} />; })}
     {W.live ? <View style={{ position: 'absolute', left: X(W.now, w) - 0.75, width: 1.5, top: base - mh - 2, height: mh + 6, borderRadius: 1, backgroundColor: alpha(k.c.text, 0.75) }}>
       <View style={{ position: 'absolute', left: -2.25, top: -3, width: 6, height: 6, borderRadius: 3, backgroundColor: k.c.text }} /></View> : null}
-    {ticks ? TICKS.map(([x, l]) => <KitText key={l} weight={600} size={10} lineHeight={1} color="text-muted" style={{ position: 'absolute', top: h + 7, left: X(x, w) - 20, width: 40, textAlign: 'center' }}>{l}</KitText>) : null}
+    {ticks ? TICKS.map(x => <KitText key={x} weight={600} size={10} lineHeight={1} color="text-muted" style={{ position: 'absolute', top: h + 7, left: X(x, w) - 20, width: 40, textAlign: 'center' }}>{hourMark(x, d.ck)}</KitText>) : null}
   </View>;
 }
 const Timing: TileBody = ({ p, repo, d }) => {
   const k = useKit(), W = windowOf(d), tg = Number(p.options.target) || 0, span = W.first == null ? 0 : (W.live ? Math.max(W.last!, W.now) : W.last!) - W.first;
   const close = tg && W.first != null ? W.first + tg : null;
-  const note = W.first == null ? t('foodNothingLoggedYet') : tg ? W.live ? <>{t('foodWindowCloses')} <B>{hm(close!)}</B></> : span <= tg ? tx('foodInsideWindow', { n: tg }) : tx('foodPastWindow', { d: dur(span - tg), n: tg })
-    : <>{t('foodLastMeal')} <B>{hm(W.last!)}</B></>;
-  if (p.size === 'S') return <View style={col}><Num v={dur(span)} fs={28} /><Sub style={{ marginTop: 4 }}>{W.first == null ? t('foodNoMealsYet') : `${W.live ? t('foodSoFarSince') : t('foodFrom')} ${hm(W.first)}`}</Sub>
+  const note = W.first == null ? t('foodNothingLoggedYet') : tg ? W.live ? <>{t('foodWindowCloses')} <B>{hm(close!, d.ck)}</B></> : span <= tg ? tx('foodInsideWindow', { n: tg }) : tx('foodPastWindow', { d: dur(span - tg), n: tg })
+    : <>{t('foodLastMeal')} <B>{hm(W.last!, d.ck)}</B></>;
+  if (p.size === 'S') return <View style={col}><Num v={dur(span)} fs={28} /><Sub style={{ marginTop: 4 }}>{W.first == null ? t('foodNoMealsYet') : `${W.live ? t('foodSoFarSince') : t('foodFrom')} ${hm(W.first, d.ck)}`}</Sub>
     <View style={{ marginTop: 'auto' }}><Timeline d={d} w={p.body.w} h={26} mh={20} mw={5} target={tg} /><Sub style={{ marginTop: 8 }}>{note}</Sub></View></View>;
-  const stats = <View style={{ alignItems: 'flex-end' }}><Sub>{t('foodFirst')} <B>{W.first != null ? hm(W.first) : t('foodNone')}</B></Sub><Sub style={{ marginTop: 3 }}>{t('foodLast')} <B>{W.last != null ? hm(W.last) : t('foodNone')}</B></Sub></View>;
+  const stats = <View style={{ alignItems: 'flex-end' }}><Sub>{t('foodFirst')} <B>{W.first != null ? hm(W.first, d.ck) : t('foodNone')}</B></Sub><Sub style={{ marginTop: 3 }}>{t('foodLast')} <B>{W.last != null ? hm(W.last, d.ck) : t('foodNone')}</B></Sub></View>;
   const top = <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}><View style={{ flex: 1 }}><Num v={dur(span)} unit={W.live ? t('foodSoFar') : t('foodWindowWord')} fs={28} /><Sub style={{ marginTop: 4 }}>{note}</Sub></View>{stats}</View>;
   if (p.size === 'M') return <View style={col}>{top}<View style={{ marginTop: 'auto' }}><Timeline d={d} w={p.body.w} h={32} mh={26} mw={7} target={tg} ticks /></View></View>;
   const days = weekDays(d.day, d.wk), gw = p.body.w - 22, liveI = days.indexOf(d.today);
@@ -475,7 +476,7 @@ const Timing: TileBody = ({ p, repo, d }) => {
         </View>
       </View>)}</View>
       <View style={{ flexDirection: 'row', columnGap: 8, marginTop: 9 }}><View style={{ width: 14 }} /><View style={{ height: 10, width: gw }}>
-        {TICKS.map(([x, l]) => <KitText key={l} weight={600} size={10} lineHeight={1} color="text-muted" style={{ position: 'absolute', top: 0, left: X(x, gw) - 20, width: 40, textAlign: 'center' }}>{l}</KitText>)}</View></View>
+        {TICKS.map(x => <KitText key={x} weight={600} size={10} lineHeight={1} color="text-muted" style={{ position: 'absolute', top: 0, left: X(x, gw) - 20, width: 40, textAlign: 'center' }}>{hourMark(x, d.ck)}</KitText>)}</View></View>
     </View>
   </View>;
 };

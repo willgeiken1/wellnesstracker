@@ -16,7 +16,7 @@ import type { RoutinesStore } from '../store';
 /* The Routines tiles' own type and parts (pagetiles-routines.js: rtt-n, rtt-s, rtt-t, rtt-k, rtt-hd, rtt-btn, rtt-ck, rtt-ir, rtt-seg). */
 
 /** What every tile body gets: the state, now, the store, and whether its controls are live. */
-export interface Ctx { s: RoutinesState; n: Now; store: RoutinesStore; live: boolean; w: number; h: number }
+export interface Ctx { s: RoutinesState; n: Now; store: RoutinesStore; live: boolean; w: number; h: number; /** Settings, Units, Time (or the tile's own) is 24-hour. */ c24: boolean }
 
 /** A big number with its small unit (`.rtt-n`). */
 /** Nested text takes its parent's tracking unless it sets its own; a unit after a tightly tracked number reads untracked. */
@@ -119,7 +119,7 @@ export const colorOfItem = (c: Ctx, i: Item, k: ReturnType<typeof useKit>) => k.
 export function IRow({ i, c, next, h, skip, first, color }: { i: Item; c: Ctx; next: boolean; h: number; skip?: boolean; first: boolean; color: string }) {
   const k = useKit(), m = markOf(c.s, c.n.day, i.id), done = m === 'd', sk = m === 's';
   return <View style={{ height: h, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: first ? 0 : 1, borderTopColor: k.c.hair }}>
-    <KitText weight={600} size={12} numeric color={next ? color : 'text-muted'} numberOfLines={1} style={{ width: 58, flexShrink: 0, opacity: sk ? 0.5 : 1 }}>{h12(i.h)}</KitText>
+    <KitText weight={600} size={12} numeric color={next ? color : 'text-muted'} numberOfLines={1} style={{ width: 58, flexShrink: 0, opacity: sk ? 0.5 : 1 }}>{h12(i.h, c.c24)}</KitText>
     <View style={{ flex: 1, minWidth: 0, gap: 1, opacity: sk ? 0.5 : 1 }}>
       <KitText weight={600} size={14} lineHeight={1.2} numberOfLines={1} style={done ? { textDecorationLine: 'line-through', opacity: 0.55 } : undefined}>{i.name}</KitText>
       <KitText weight={500} size={12} lineHeight={1.2} color="text-muted" numberOfLines={1}>{i.dose}</KitText>
@@ -133,10 +133,10 @@ export function IRow({ i, c, next, h, skip, first, color }: { i: Item; c: Ctx; n
   </View>;
 }
 /** An item not due today, in a tile. */
-export function OffIRow({ i, h, first }: { i: Item; h: number; first: boolean }) {
+export function OffIRow({ i, h, first, c24 }: { i: Item; h: number; first: boolean; c24: boolean }) {
   const k = useKit();
   return <View style={{ height: h, flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: first ? 0 : 1, borderTopColor: k.c.hair }}>
-    <KitText weight={600} size={12} numeric color="text-muted" style={{ width: 58, opacity: 0.5 }}>{h12(i.h)}</KitText>
+    <KitText weight={600} size={12} numeric color="text-muted" style={{ width: 58, opacity: 0.5 }}>{h12(i.h, c24)}</KitText>
     <View style={{ flex: 1, minWidth: 0, gap: 1, opacity: 0.5 }}>
       <KitText weight={600} size={14} lineHeight={1.2} numberOfLines={1}>{i.name}</KitText>
       <KitText weight={500} size={12} lineHeight={1.2} color="text-muted" numberOfLines={1}>{i.dose}</KitText>

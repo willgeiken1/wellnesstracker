@@ -13,8 +13,10 @@ const spY = (x: number) => { const d = (x - 146) / 128; return 122 - 96 * Math.s
 export const spP = (h: number): [number, number] => { const x = spX(Math.max(5, Math.min(23, h))); return [x, spY(x)]; };
 const arcD = (h1: number, h2: number) => { const a = spP(h1), b = spP(h2); return `M${a[0].toFixed(1)} ${a[1].toFixed(1)} A128 96 0 0 1 ${b[0].toFixed(1)} ${b[1].toFixed(1)}`; };
 
-export function SunPath({ s, n, width, only, big, caps, small, label }: {
+export function SunPath({ s, n, width, only, big, caps, small, label, c24 }: {
   s: RoutinesState; n: Now; width: number;
+  /** The axis on a 24-hour clock; absent follows the Routines clock. */
+  c24?: boolean;
   /** Draw only this routine (the detail screen). */
   only?: string; big: string; caps?: string; small?: boolean; label: string;
 }) {
@@ -36,7 +38,7 @@ export function SunPath({ s, n, width, only, big, caps, small, label }: {
   for (let h = 5; h <= 23; h++) {
     const x = spX(h), mj = (h - 5) % 3 === 0;
     ticks.push(<Line key={`t${h}`} x1={x} y1={125} x2={x} y2={mj ? 132 : 128} stroke={c['hair-2']} strokeWidth={1.6} strokeLinecap="round" opacity={h < now ? 0.4 : 1} />);
-    if (mj) ticks.push(<SvgText key={`l${h}`} x={x} y={144} fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={10} letterSpacing={0.2} textAnchor="middle">{hax(h)}</SvgText>);
+    if (mj) ticks.push(<SvgText key={`l${h}`} x={x} y={144} fill={c['text-muted']} fontFamily={tokens.font.bodyStrong} fontSize={10} letterSpacing={0.2} textAnchor="middle">{hax(h, c24)}</SvgText>);
   }
   return <View accessible accessibilityRole="image" accessibilityLabel={label} style={{ width, height }}>
     <Svg width={width} height={height} viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ overflow: 'visible' }}>

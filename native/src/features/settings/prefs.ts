@@ -25,3 +25,6 @@ export function useSettingsPrefs(): [SettingsPrefs, (path: string, value: unknow
   }, [storage]);
   return [prefs, set];
 }
+
+/** The clock a tile or screen shows: Settings, Units, Time, or the tile's own Time when the tile editor gave it one. */
+export const useClockUnit = (): SettingsPrefs['units']['clock'] => useSettingsPrefs()[0].units.clock;

@@ -195,7 +195,10 @@ export class TrainingData {
       const p = this.plans.read(), live = this.live(), liveRow = live ? this.workout.active() : undefined;
       const templates = this.workout.templates();
       const ids = p.days.length ? p.days.map(d => d.routineId) : templates.map(r => r.id);
-      const nextIndex = p.days.length ? nextPlanDay(this.repo, new Date(this.now), this.plans)?.index ?? this.plans.nextIndex() : 0;
+      let nextIndex = p.days.length ? nextPlanDay(this.repo, new Date(this.now), this.plans)?.index ?? this.plans.nextIndex() : 0;
+      // While the plan's next day is the one running, the day after it is up next, so the plan still shows what comes after.
+      const liveRoutine = liveRow?.data.routine_id;
+      if (liveRoutine != null && ids.length > 1 && ids[nextIndex] === liveRoutine) nextIndex = (nextIndex + 1) % ids.length;
       const days: PlanDayView[] = ids.map((routineId, index) => {
         const r = this.repo.get('routines', routineId);
         const ex = this.workout.templateExercises(routineId).map(e => {
@@ -207,8 +210,7 @@ export class TrainingData {
         const kind = liveRow?.data.routine_id === routineId ? 'live' : index === nextIndex ? 'next' : '';
         return { routineId, index, name: String(r?.data.name ?? ''), exercises: ex, sets: ex.reduce((n, e) => n + e.sets, 0), last: last ? String(last.data.day) : null, kind };
       });
-      let next = days.find(d => d.kind === 'next') ?? null;
-      if (next && live && next.kind === 'next' && days.length > 1 && liveRow?.data.routine_id === next.routineId) next = days[(next.index + 1) % days.length];
+      const next = days.find(d => d.kind === 'next') ?? null;
       // The week's target is the chosen split's (the same as the score's), and the plan's only when no split is chosen.
       const target = weeklyTarget(this.repo);
       return { mode: p.mode, perWeek: Math.max(1, Math.min(7, Math.round(target) || 3)), days, next };
