@@ -6,8 +6,8 @@ import { AppState } from 'react-native';
 import Constants from 'expo-constants';
 import type { Repository } from '@/data/repository';
 import { useSettingsPrefs, type SettingsPrefs } from '@/features/settings/prefs';
-import { dayKey, normalize, type RoutinesState } from '@/features/routines/model';
-import { ROUTINES_KEY } from '@/features/routines/store';
+import { dayKey, type RoutinesState } from '@/features/routines/model';
+import { readStoredRoutines } from '@/features/routines/store';
 import { readReminder } from '@/features/progress/local';
 import { MEAL_REMINDERS, planReminders, plannedWorkoutDays, type MealKey, type PlannedReminder } from './plan';
 import { askedCount, subscribeAsked, syncReminders } from './notifier';
@@ -29,7 +29,7 @@ export function mealsLoggedOn(repo: Repository, day: string): MealKey[] {
 export function reminderPlan(repo: Repository | null | undefined, rem: SettingsPrefs['rem'], now = Date.now()): PlannedReminder[] {
   const read = <T,>(f: () => T, none: T): T => { if (!repo) return none; try { return f(); } catch { return none; } };
   // Look around first's sample routines come with Remind me on, as a sample; they never go on the phone.
-  const routines = repo?.owner === 'demo' ? null : read<RoutinesState | null>(() => normalize(repo!.localGet(ROUTINES_KEY)), null);
+  const routines = repo?.owner === 'demo' ? null : read<RoutinesState | null>(() => readStoredRoutines(repo!), null);
   const mealsLogged = rem.food ? read<MealKey[]>(() => mealsLoggedOn(repo!, dayKey(new Date(now))), []) : [];
   const timer = rem.rest ? read<RestTimer | null>(() => repo!.localGet<RestTimer | null>('timer') ?? null, null) : null;
   const photo = read<boolean>(() => readReminder(repo!), false);

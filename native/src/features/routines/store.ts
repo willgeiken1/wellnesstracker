@@ -4,11 +4,15 @@ import {
   ALL_DAYS, MAX_ON_HAND, addDays, clock, demoState, emptyState, itemById, normalize, nowOf, pretty, rById,
   type HiddenRoutine, type Item, type ItemKind, type ItemType, type Mark, type Now, type Routine, type RoutineColor, type RoutinesState,
 } from './model';
+import { dropWhenOwnerChanges } from '@/core/session-memory';
+import { guardRoutinesStore, peekRoutinesState, routineTablesIo } from './data/sqlite-store';
 
 /*
- * The Routines data adapter. The screens and tiles talk only to `RoutinesStore`; this file keeps it in the app's local
- * storage (the repository's owner-scoped local table, like Water and the shell prefs), one JSON document under ROUTINES_KEY.
- * The real Routines data layer can replace `createLocalRoutinesStore` with anything that meets the same interface.
+ * The Routines data adapter. The screens and tiles talk only to `RoutinesStore`. `createLocalRoutinesStore` keeps each
+ * account's routines on the phone, in that account's daily_* tables (data/sqlite-store.ts): a routine, an item, its place
+ * in a routine, a pause and a check-off are each a row of their own. ROUTINES_KEY is only where an earlier build kept the
+ * whole state as one JSON document; one found there is moved into the tables and the key is cleared.
+ * The store the tab and the Home tiles share is dropped when the account changes or signs out (core/session-memory.ts).
  */
 
 export const ROUTINES_KEY = 'routines';
@@ -86,10 +90,12 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
   };
   const edit = (fn: (s: RoutinesState) => void) => { const s = structuredCloneState(read()); fn(s); write(s); };
   io.subscribe?.(() => {
-    if (saving) return;
-    // Another writer changed the stored copy: read it again next time.
-    const stored = normalize(io.get());
-    if (stored && JSON.stringify(stored) !== JSON.stringify(cache)) { cache = stored; listeners.forEach(l => l()); }
+    // Nothing read yet: the first read takes what is stored then, the demo's seed included.
+    if (saving || cache === null) return;
+    // Another writer changed the stored copy: show what it holds now. Nothing stored (a restore that emptied it) reads
+    // as an empty state, so an open screen never keeps routines that are gone and writes them back on the next tap.
+    const stored = normalize(io.get()) ?? emptyState();
+    if (JSON.stringify(stored) !== JSON.stringify(cache)) { cache = stored; listeners.forEach(l => l()); }
   });
   const setMark = (s: RoutinesState, day: string, id: string, m: Mark | null) => {
     const prev = s.log[day]?.[id] ?? null, i = itemById(s, id);
@@ -158,15 +164,19 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
 }
 function structuredCloneState(s: RoutinesState): RoutinesState { return JSON.parse(JSON.stringify(s)) as RoutinesState; }
 
-/** The store for one account, in the app's local storage. The demo account starts with the sample routines. */
+/** The store for one account, kept in the phone's daily_* tables (data/sqlite-store.ts). A document an earlier build
+ * left under ROUTINES_KEY is taken into the tables once. The demo account starts with the sample routines. */
 export function createLocalRoutinesStore(repo: Repository): RoutinesStore {
-  return createRoutinesStore({
-    get: () => repo.localGet(ROUTINES_KEY),
-    save: s => repo.localSave(ROUTINES_KEY, s),
-    subscribe: l => repo.subscribe(l),
+  // The shared store below follows one account: it is dropped on sign-out and whenever the account changes.
+  dropWhenOwnerChanges(ROUTINES_KEY, () => setActiveRoutinesStore(null));
+  return guardRoutinesStore(createRoutinesStore(routineTablesIo(repo, {
+    legacyKey: ROUTINES_KEY,
     seed: repo.owner === 'demo' ? () => demoState() : undefined,
-  });
+  })));
 }
+
+/** This account's routines as they are now, read without opening a store and without writing anything. */
+export const readStoredRoutines = (repo: Repository): RoutinesState | null => peekRoutinesState(repo, ROUTINES_KEY);
 
 /* ---------- the store the tab, tiles and screens share ---------- */
 

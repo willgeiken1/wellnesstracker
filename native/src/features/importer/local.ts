@@ -1,6 +1,8 @@
 import type { Draft } from "../../data/workout/store";
 import type { Repository } from "../../data/repository";
 import { syncedTables, validateRow, type Table } from "../../data/rows";
+import { ROUTINES_KEY, readStoredRoutines } from "../routines/store";
+import { emptyState, normalize } from "../routines/model";
 import {
   type ImportPlan,
   stableJson,
@@ -126,7 +128,7 @@ export function commitPendingAccountImport(guest: Repository, account: Repositor
         Object.keys(local).flatMap((key) => {
           // A workout removed since the restore takes its unsaved set rows with it.
           if (key.startsWith("draft:") && guest.get("entries", key.slice(6))?.deleted_at !== null) return [];
-          const value = guest.localGet<unknown>(key);
+          const value = key === ROUTINES_KEY ? routinesNow(guest) : guest.localGet<unknown>(key);
           return value === undefined || value === null ? [] : [[key, value]];
         }),
       );
@@ -317,6 +319,16 @@ export const PHOTO_ADDRESS_KEYS = ["profilePhoto", "profilePhotoLeftovers", "pro
  */
 const REPLACE_CLEARS = ["foodWater", "routines", "progressNeck", "progressBodyFat", "split:def", "split:state", "plans:definition", "plans:name",
   ...PHOTO_ADDRESS_KEYS];
+/**
+ * The phone's routines as a restore sees them: a document still under the old key, or else the routines kept in this
+ * account's own tables. A document written under the key is taken into the tables by the Routines store on its next
+ * read, replacing them, so a merge has to start from what the tables hold.
+ */
+const routinesNow = (repo: Repository): unknown => {
+  // A document the store couldn't read is dropped by it, so the tables are what the phone holds then.
+  const raw = repo.localGet<unknown>(ROUTINES_KEY);
+  return (raw != null && normalize(raw) ? raw : readStoredRoutines(repo)) ?? undefined;
+};
 /** Details a restore never takes from the file: the importer's own bookkeeping, AI photos and barcode caches. */
 const skipped = (key: string) => key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:");
 
@@ -390,12 +402,14 @@ export function restoreNativeLocal<T>(
     if (mode === "replace") {
       const drafts = typeof repo.localSnapshot === "function" ? Object.keys(repo.localSnapshot()).filter((key) => key.startsWith("draft:")) : [];
       for (const key of [...REPLACE_CLEARS, ...drafts]) if (!Object.hasOwn(backup.local, key) && repo.localGet(key) != null) repo.localSave(key, null);
+      // Routines kept in the tables go too: an empty state under the key replaces them on the store's next read.
+      if (!Object.hasOwn(backup.local, ROUTINES_KEY) && readStoredRoutines(repo) != null) repo.localSave(ROUTINES_KEY, emptyState());
     }
     for (const [key, value] of Object.entries(backup.local)) {
       if (skipped(key)) continue;
       const fresh = key.startsWith("draft:") && newEntries.has(key.slice(6));
       // Replace puts the file's details back over the phone's; a merge only fills in what the phone does not have.
-      const mine = mode === "merge" && !fresh ? repo.localGet(key) : undefined;
+      const mine = mode === "merge" && !fresh ? (key === ROUTINES_KEY ? routinesNow(repo) : repo.localGet(key)) : undefined;
       // A history a Replace cleared is kept as null: nothing there, so the file's history comes in whole.
       if (mine !== undefined && mine !== null) {
         const merged = mergeHistory(key, mine, value);

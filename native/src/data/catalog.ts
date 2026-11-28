@@ -1,5 +1,6 @@
+import { routineColumns } from './routine-catalog';
 // Physical columns shared by local repositories and wire validation. No arbitrary payload blobs.
-export const columns = {
+const wireColumns = {
   "profile": {
     "name": "text",
     "dob": "text",
@@ -171,5 +172,11 @@ export const columns = {
     "tz": "text"
   }
 } as const;
+export const columns = { ...wireColumns, ...routineColumns } as const;
 export type Table = keyof typeof columns;
-export const syncedTables = Object.keys(columns) as Table[];
+/** Daily routines stay on this phone until their row-sync migration ships. They are not on the wire. */
+export const routineTables = Object.keys(routineColumns) as Table[];
+/** The wire catalog. The server has exactly these tables. */
+export const syncedTables = Object.keys(wireColumns) as Table[];
+/** Every owner-scoped row table in the phone database. */
+export const localTables: Table[] = [...syncedTables, ...routineTables];

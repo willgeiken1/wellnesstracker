@@ -5,8 +5,9 @@ import { sampleRow } from '../../../fixtures/demo';
 import { today } from './model';
 import { t } from '../../i18n/en';
 import { WATER_KEY, readWater } from '../food/water';
-import { ROUTINES_KEY } from '../routines/store';
-import { demoState, emptyState, normalize, type RoutinesState } from '../routines/model';
+import { ROUTINES_KEY, readStoredRoutines } from '../routines/store';
+import { commitRoutinesState } from '../routines/data/sqlite-store';
+import { demoState, emptyState, type RoutinesState } from '../routines/model';
 /** Unknown legacy provenance is rejected before an account request as well as
  * at the transfer boundary. Nothing is erased and no sample can be enqueued. */
 export function assertDemoTransferSafe(source:Repository) {
@@ -109,14 +110,14 @@ export function promoteDemo(source:Repository,destination:Repository) {
  * replacing any it already has. An item keeps only the routines the account will have.
  */
 function carryRoutines(source:Repository,destination:Repository) {
-  const from=normalize(source.localGet(ROUTINES_KEY));
+  const from=readStoredRoutines(source);
   if(!from)return;
   const sample=demoState();
   const fixture=new Set([...sample.routines,...sample.hidden,...sample.items].map(x=>x.id));
   const routines=[...from.routines,...from.hidden.map(({sub:_sub,...r})=>{void _sub;return r;})].filter(r=>!fixture.has(r.id));
   const items=from.items.filter(i=>!fixture.has(i.id));
   if(!routines.length&&!items.length)return;
-  const stored=normalize(destination.localGet(ROUTINES_KEY)),into:RoutinesState=stored??emptyState();
+  const stored=readStoredRoutines(destination),into:RoutinesState=stored??emptyState();
   const haveR=new Set([...into.routines,...into.hidden].map(r=>r.id)),haveI=new Set(into.items.map(i=>i.id));
   const newR=routines.filter(r=>!haveR.has(r.id)),newI=items.filter(i=>!haveI.has(i.id));
   if(!newR.length&&!newI.length)return;
@@ -132,5 +133,7 @@ function carryRoutines(source:Repository,destination:Repository) {
   const next:RoutinesState={...into,routines:[...into.routines,...newR],items:[...into.items,...newI.map(i=>({...i,routines:i.routines.filter(r=>known.has(r))}))],log:pick(from.log,into.log)};
   const used=pick(from.used,into.used);
   if(Object.keys(used).length)next.used=used;
-  destination.localSave(ROUTINES_KEY,next);
+  // The routines live in the account's own daily_* tables; a document still under the old key is now in `next`.
+  commitRoutinesState(destination,next,null);
+  if(destination.localGet(ROUTINES_KEY)!=null)destination.localSave(ROUTINES_KEY,null);
 }

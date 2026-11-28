@@ -145,10 +145,10 @@ describe('edit routines', () => {
     const store = demoStore();
     await render(<RoutinesReorder store={store} />, { wrapper });
     expect(screen.getByText('Drag to reorder. Routines show on the tab in this order.')).toBeTruthy();
-    expect(screen.getByText('Supplement & enhancer stack')).toBeTruthy();
+    expect(screen.getByText('Supplement & booster stack')).toBeTruthy();
     await act(async () => { fireEvent.press(screen.getByText('Restore')); });
     expect(store.read().routines.map(r => r.id)).toEqual(['morning', 'midday', 'night', 'stack']);
-    expect(showToast).toHaveBeenCalledWith('Supplement & enhancer stack is back', expect.objectContaining({ action: expect.anything() }));
+    expect(showToast).toHaveBeenCalledWith('Supplement & booster stack is back', expect.objectContaining({ action: expect.anything() }));
   });
 
   it('moves a routine with the accessibility actions', async () => {

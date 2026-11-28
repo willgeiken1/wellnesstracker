@@ -25,7 +25,7 @@ describe('routines store', () => {
     const m = memory(() => demoState());
     const store = createRoutinesStore(m.io);
     expect(store.read().routines.map(r => r.name)).toEqual(['Morning', 'Midday', 'Night']);
-    expect(store.read().hidden.map(r => r.name)).toEqual(['Supplement & enhancer stack']);
+    expect(store.read().hidden.map(r => r.name)).toEqual(['Supplement & booster stack']);
     expect(m.stored()?.items).toHaveLength(12);
     // A second store over the same storage reads what was saved rather than seeding again.
     const again = createRoutinesStore({ ...m.io, seed: () => emptyState() });
