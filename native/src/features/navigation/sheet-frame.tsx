@@ -34,10 +34,23 @@ export function SheetFrame({ detent, children, ios = Platform.OS === 'ios' }: { 
   const insets = useSafeAreaInsets(), { height } = useWindowDimensions();
   const [collapsed, setCollapsed] = useState(false);
   const own = Math.round((height - insets.top - LARGE_TOP) * detent);
-  if (ios) return <View testID="sheet-frame" style={{ height: own }}>{children}</View>;
+  if (ios) return <View testID="sheet-frame" style={{ height: own }}><ScrollFinderStop />{children}</View>;
   return <View style={{ flex: 1 }} onLayout={e => setCollapsed(e.nativeEvent.layout.height < COLLAPSED)}>
     <View testID="sheet-frame" style={collapsed ? { height: own } : { flex: 1 }}>{children}</View>
   </View>;
+}
+
+/**
+ * An empty first child that ends react-native-screens' search for a sheet's scroll view. On iOS a form sheet follows
+ * each first child down from its screen, and the first scroll view it meets is moved to the screen's own frame, origin
+ * and all, unless that scroll view sits directly in the screen's content. A sheet whose body is a scroll view (Add a
+ * tile, Edit tile, a page section, the rest timer) sits inside this frame, so its scroll view was moved down by the
+ * sheet's height and the sheet showed only its black background. A one-height sheet has no use for that search (it is
+ * for dragging a sheet between heights), so it stops here: this view has no children and is never flattened away.
+ */
+function ScrollFinderStop() {
+  return <View testID="sheet-scroll-stop" collapsable={false} pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants"
+    style={{ position: 'absolute', width: 0, height: 0 }} />;
 }
 
 /** A stack's `screenLayout`: fixed-height sheets get the frame, every other screen is left as it is. */
