@@ -175,7 +175,7 @@ describe('the + actions and edit mode', () => {
     await act(async () => { h.start?.run?.(); });
     expect(router.push).toHaveBeenLastCalledWith('/workout');
     await act(async () => { h.weigh?.run?.(); });
-    expect(router.push).toHaveBeenLastCalledWith('/progress');
+    expect(router.push).toHaveBeenLastCalledWith('/progress/log-weight');
     await act(async () => { h.water?.run?.(); });
     expect(router.push).toHaveBeenLastCalledWith('/food/water');
     expect(showToast).not.toHaveBeenCalled();

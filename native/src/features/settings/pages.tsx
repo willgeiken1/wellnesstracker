@@ -23,7 +23,7 @@ import { devicePreferencesUnsaved, saveDevicePreferences, useDevicePreferences }
 import { LEGAL_LINKS, openPage } from './links';
 import { iconArt, iconId } from './app-icon';
 import { st } from './copy';
-import { APP_VERSION, Avatar, useWho } from './home';
+import { APP_UPDATE, APP_VERSION, Avatar, useWho } from './home';
 import { AvatarCameraButton } from './avatar-photo';
 import { useSettingsPrefs, type SettingsPrefs } from './prefs';
 import { actionSheet } from './sheet-actions';
@@ -609,6 +609,7 @@ export function AboutPage() {
     <Gap />
     <List footer={st('settingsFreeAtLaunch')}>
       <ListRow title={st('settingsVersion')} value={APP_VERSION} chevron={false} />
+      {APP_UPDATE ? <ListRow title={st('settingsUpdate')} value={APP_UPDATE} chevron={false} testID="settings-update" /> : null}
     </List>
     <ListFooter>{st('aboutDisclaimer')}</ListFooter>
   </SetPage>;

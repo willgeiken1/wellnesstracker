@@ -86,7 +86,8 @@ export function Home() {
     water: { run: () => { logForToday(); go('/food/water'); }, label: t('homeLogWater'), hint: waterHint(tiles?.data.water), hints: waterHints(tiles?.data.water) },
     meal: { run: () => { logForToday(); go('/food/log'); } },
     start: { run: () => go('/workout') },
-    weigh: { run: () => go('/progress') },
+    // The weigh-in sheet, as the mockup's Log weight opens it, not the Progress page.
+    weigh: { run: () => go('/progress/log-weight') },
   });
 
   // The backdrop sits behind the scroll, so the page moves over it while it stays nearly still.
