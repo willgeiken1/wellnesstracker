@@ -1,5 +1,6 @@
 import { heroLayout } from '../src/features/home/hero/layout';
 import { ENT, GLINT, HeroMotion, MORPH, SWEEP } from '../src/features/home/hero/motion';
+import { swipeDrag, swipeLean, swipeTarget } from '../src/features/home/hero/day-swipe';
 import { heroView, type HeroDayIn, type HeroInput } from '../src/features/home/hero/model';
 import { HERO_DEFAULT_GOALS, heroInput, lastWeek, trainingMinutes } from '../src/features/home/hero/data';
 import { MAP_DEFAULTS, readMapPrefs } from '../src/features/home/hero/prefs';
@@ -147,7 +148,7 @@ describe('the Aurora clock', () => {
     const m = new HeroMotion(393, { reduceMotion: false }), settle = jest.fn();
     m.onSettle = settle;
     m.start(day, 0, true);
-    expect(m.setDay({ values: [1, 1, 1], rest: false }, true, -1, 1000)).toBe(true);
+    expect(m.setDay({ values: [1, 1, 1], rest: false }, true, -1, 1000)).toBe('cross');
     const mid = m.frame(1000 + MORPH / 2);
     expect(mid.busy).toBe(true);
     expect(mid.f.nextFade).toBe(1);
@@ -159,6 +160,52 @@ describe('the Aurora clock', () => {
     while (r.busy && t < 6000) { t += 16; r = m.frame(t); if (r.f.joinGlint > 0) expect(r.f.join).toBeGreaterThan(0); }
     expect(t).toBeLessThan(1000 + MORPH + 320 + SWEEP + GLINT + 100);
     expect(r.f.join).toBe(1e4);
+  });
+  test('a day change mid crossing carries on from what is on screen instead of snapping', () => {
+    const m = new HeroMotion(393, { reduceMotion: false }), settle = jest.fn();
+    m.onSettle = settle;
+    m.start(day, 0, true);
+    m.setDay({ values: [1, 1, 1], rest: false }, true, 1, 1000);
+    const before = m.frame(1000 + 150).f;
+    // Early in the crossing the rising curtains take the new day's shape and keep their height.
+    expect(m.setDay({ values: [0.2, 0.3, 0.4], rest: false }, true, 1, 1150)).toBe('replace');
+    const after = m.frame(1150).f;
+    expect(after.nextT).toBeCloseTo(before.nextT, 5);
+    expect(after.curFade).toBeCloseTo(before.curFade, 5);
+    expect(after.fill).toEqual(before.fill);
+    expect(after.yaw).toBeCloseTo(before.yaw, 5);
+    expect(settle).not.toHaveBeenCalled();
+    // Further up, the rising curtains become the leaving ones at the height they reached.
+    const late = m.frame(1150 + 500).f;
+    expect(m.setDay({ values: [1, 0, 0], rest: false }, true, -1, 1650)).toBe('promote');
+    const next = m.frame(1650).f;
+    expect(next.curT).toBeCloseTo(late.nextT, 5);
+    expect(next.curFade).toBeCloseTo(1, 5);
+    expect(next.nextT).toBeCloseTo(0, 5);
+    expect(next.yaw).toBeCloseTo(late.yaw, 5);
+  });
+  test('a swipe hands its turn to the day change, which eases it out', () => {
+    const m = new HeroMotion(393, { reduceMotion: false });
+    m.start(day, 0, true);
+    m.beginDrag(); m.dragTo(0.3); m.takeTurn();
+    m.setDay({ values: [1, 1, 1], rest: false }, true, 1, 1000);
+    expect(m.frame(1000).f.yaw).toBeCloseTo(0.3, 5);
+    let t = 1000, r = m.frame(t);
+    while (r.busy && t < 4000) { t += 16; r = m.frame(t); }
+    expect(r.f.yaw).toBe(0);
+  });
+  test('a swipe on the map: past 64 pt or a flick goes to the day on that side, never past today or the week', () => {
+    expect(swipeTarget(-80, 0, 3)).toBe(4);
+    expect(swipeTarget(80, 0, 3)).toBe(2);
+    expect(swipeTarget(-30, 0, 3)).toBeNull();
+    expect(swipeTarget(-30, -900, 3)).toBe(4);
+    expect(swipeTarget(-30, 900, 3)).toBeNull();
+    expect(swipeTarget(-200, -2000, 6)).toBeNull();
+    expect(swipeTarget(200, 2000, 0)).toBeNull();
+    expect(swipeDrag(-100, 6)).toBeCloseTo(-30, 5);
+    expect(swipeDrag(-100, 3)).toBe(-100);
+    expect(swipeLean(-60)).toEqual({ x: -21, opacity: expect.closeTo(1 - 60 / 180, 5) });
+    expect(swipeLean(-400).opacity).toBe(0.45);
   });
   test('without motion a new day swaps at once', () => {
     const m = new HeroMotion(393, { reduceMotion: true });

@@ -1,8 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Tappable } from '@/components/tappable';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { Easing, runOnJS, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
+import { SWIPE } from './day-swipe';
 import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { KitText } from '@/components/themed-text';
 import type { HeroWeekDay } from './model';
@@ -63,18 +64,27 @@ function DayLabel({ on, still, children }: { on: boolean; still: boolean; childr
 export interface WeekProps {
   width: number; week: HeroWeekDay[]; sel: number; colors: Record<string, string>; sky: SkyTokens; dark: boolean; glow: number;
   reduceMotion: boolean; build: boolean; onSelect: (i: number) => void;
+  /** A swipe on the map (day-swipe.ts): the glow leans toward the day it heads for, a day per three quarters of the width. */
+  swipe?: SharedValue<number>;
 }
 
-export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduceMotion, build, onSelect }: WeekProps) {
+export function HeroWeek({ width: RW, week, sel, colors, sky, dark, glow, reduceMotion, build, onSelect, swipe }: WeekProps) {
   const pc = [colors.training, colors.food, colors.sleep];
   const cx0 = RW / 2, H = WK.H;
   // The selection glow follows the finger while sliding and springs onto the chosen day.
   const selX = useSharedValue(sel), dragging = useSharedValue(0), shown = useSharedValue(build && !reduceMotion ? 0 : 1);
-  useEffect(() => { if (!dragging.value) selX.value = reduceMotion ? sel : withTiming(sel, WEEK_MOTION.settle); }, [sel, reduceMotion]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A day reached by a swipe on the map springs on from where the leaning glow stands, not from the last day.
+  useLayoutEffect(() => {
+    if (dragging.value) return;
+    const lean = swipe ? swipe.value / (RW * SWIPE.weekSpan) : 0;
+    if (lean) selX.value = Math.max(0, Math.min(6, selX.value - lean));
+    selX.value = reduceMotion ? sel : withTiming(sel, WEEK_MOTION.settle);
+  }, [sel, reduceMotion]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (build && !reduceMotion) shown.value = withDelay(380, withTiming(1, { duration: 640, easing: Easing.out(Easing.cubic) })); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const selStyle = useAnimatedStyle(() => {
-    const dw = RW / 7, x = (selX.value + 0.5) * dw, dx = x - RW / 2;
-    return { transform: [{ translateX: selX.value * dw }, { translateY: WK.top + WK.Rr - Math.sqrt(WK.Rr * WK.Rr - dx * dx) - WK.top }] };
+    const at = Math.max(0, Math.min(6, selX.value - (swipe ? swipe.value / (RW * SWIPE.weekSpan) : 0)));
+    const dw = RW / 7, x = (at + 0.5) * dw, dx = x - RW / 2;
+    return { transform: [{ translateX: at * dw }, { translateY: WK.top + WK.Rr - Math.sqrt(WK.Rr * WK.Rr - dx * dx) - WK.top }] };
   });
   const fade = useAnimatedStyle(() => ({ opacity: shown.value, transform: [{ translateY: (1 - shown.value) * 10 }] }));
 
