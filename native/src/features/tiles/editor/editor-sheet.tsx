@@ -111,7 +111,7 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
   const [was] = useState(() => entry ? { pick: { style: entry.style, size: entry.size, options: copy(entry.options) } as Pick0,
     // Every goal is kept, since changing what a tile shows can bring a different goal's control into view.
     goals: Object.fromEntries(ALL_GOALS.map(g => [g, safeGet(g, ctx)])) as Partial<Record<GoalKey, number>>, units: ctx.units,
-    stored: repo && goalKeys.length ? safeStored(repo, goalDay) : null } : null);
+    stored: repo && !add ? safeStored(repo, goalDay) : null } : null);
   const [touched, setTouched] = useState<readonly GoalKey[]>([]);
   const [headH, setHeadH] = useState(60);
   const [barH, setBarH] = useState(88);

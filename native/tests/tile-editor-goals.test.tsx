@@ -104,6 +104,15 @@ describe('which goal a tile edits', () => {
     expect(screen.getByLabelText('Raise goal weight')).toBeTruthy();
   });
 
+  it('puts back a goal weight that was never set when the Goal tile opened on the training plan', async () => {
+    const repo = await open('goal', 'progress', { goal: 'plan' });
+    await fireEvent.press(screen.getByRole('radio', { name: 'Weight' }));
+    await fireEvent.press(screen.getByLabelText('Raise goal weight'));
+    expect(repo.list('goals')).toHaveLength(1);
+    await fireEvent.press(screen.getByTestId('te-revert'));
+    expect(repo.list('goals')).toHaveLength(0);
+  });
+
   it('offers no goal while it shows the training plan', async () => {
     await open('goal', 'progress', { goal: 'plan' });
     expect(screen.queryByLabelText('Raise goal weight')).toBeNull();

@@ -92,6 +92,12 @@ export function ForceDark({ children }: PropsWithChildren) {
     : { ...theme, mode: 'dark' as const, colors: createTheme('dark', theme.palette, theme.trueBlack) }, [theme]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
+/** Draws its children with these colours in place of the theme's: a tile with a colour of its own. */
+export function WithColors({ colors, children }: PropsWithChildren<{ colors: ReturnType<typeof useThemeState>['colors'] }>) {
+  const theme = useTheme();
+  const value = useMemo(() => theme.colors === colors ? theme : { ...theme, colors }, [theme, colors]);
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
 export function useTheme() {
   const theme = useContext(ThemeContext);
   if (!theme) throw new Error('ThemeProvider is required');

@@ -34,6 +34,8 @@ const HOME_TOKEN: Record<string, keyof ThemeColors> = {
 };
 /** Home's Insight Score and Week draw every pillar in its own colour, so they keep their colours. */
 export const canTint = (cfg: TilePageConfig, def: TileDef) => !(cfg.variant === 'home' && (def.id === 'score' || def.id === 'week'));
+/** Colours a tile draws in besides its own, which its colour of its own replaces too: the Goal tile's gauge takes the colour of the goal it shows. */
+const TINT_ALSO: Partial<Record<string, readonly (keyof ThemeColors)[]>> = { 'progress:goal': ['training', 'sleep'] };
 /** The colour token the editor shows for a tile with no colour of its own. */
 export function ownToken(cfg: TilePageConfig, def: TileDef): keyof ThemeColors {
   return (cfg.variant === 'home' ? HOME_TOKEN[def.id] : undefined) ?? def.color;
@@ -42,7 +44,7 @@ export function ownToken(cfg: TilePageConfig, def: TileDef): keyof ThemeColors {
 /** The theme colours a tile is drawn with: its tokens swapped for the colour it was given, the theme's as they are otherwise. */
 export function tintedColors(cfg: TilePageConfig, def: TileDef, colors: ThemeColors, tint: string | undefined): ThemeColors {
   if (!isSwatch(tint) || !canTint(cfg, def)) return colors;
-  const to = colors[tint], keys = new Set<keyof ThemeColors>([def.color, ownToken(cfg, def)]);
+  const to = colors[tint], keys = new Set<keyof ThemeColors>([def.color, ownToken(cfg, def), ...(TINT_ALSO[`${cfg.id}:${def.id}`] ?? [])]);
   let same = true;
   for (const k of keys) if (colors[k] !== to) same = false;
   if (same) return colors;

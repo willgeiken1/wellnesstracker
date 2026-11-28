@@ -1,5 +1,6 @@
 import { memo, useMemo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { WithColors } from '@/design/theme-provider';
 import { tokens, type ThemeColors, type ThemeMode } from '@/design/tokens';
 import { gridTile, studioTile, type DepthShadow } from './depth';
 import { BODY_TOP, FRAMES, HEAD_H, PAD } from './geometry';
@@ -59,6 +60,8 @@ export const TileFrame = memo(function TileFrame({ cfg, def, entry, colors: them
     // One tile failing to draw leaves the rest of the page working; it shows its frame and header only.
     content = null;
   }
+  // Bodies that read the theme themselves (useTheme, useKit) draw in the tile's own colour too.
+  const tinted = (n: ReactNode) => colors === theme ? n : <WithColors colors={colors}>{n}</WithColors>;
   const spec = cfg.variant === 'home' ? studioTile(colors, mode) : gridTile(colors, mode);
   return <View style={{ width: f.w, height: f.h }}>
     <TileSurface spec={spec} width={f.w} height={f.h} extraShadows={lift} />
@@ -69,7 +72,7 @@ export const TileFrame = memo(function TileFrame({ cfg, def, entry, colors: them
         {meta ? <Text numberOfLines={1} style={[styles.meta, { color: colors['text-muted'] }]}>{meta}</Text> : null}
       </View> : null}
       <View pointerEvents={editing || preview ? 'none' : 'box-none'} style={[styles.body, { top: head ? BODY_TOP : PAD, width: body.w, height: body.h }]}>
-        {units ? <UnitOverrideContext.Provider value={units}>{content}</UnitOverrideContext.Provider> : content}</View>
+        {tinted(units ? <UnitOverrideContext.Provider value={units}>{content}</UnitOverrideContext.Provider> : content)}</View>
     </View>
   </View>;
 });
