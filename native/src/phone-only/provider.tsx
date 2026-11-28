@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type PropsWithChildren 
 import type { AuthState } from '../auth/provider';
 import { openLocalDatabase } from '../data/database';
 import type { Repository } from '../data/repository';
+import { clearSessionMemory } from '../core/session-memory';
 import { seedDemo } from '../../fixtures/demo';
 const AuthContext = createContext<AuthState | null>(null);
 export function useAuth() {
@@ -34,7 +35,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     pending: 0, conflicts: 0, syncStatus: 'idle',
     lookAround: () => setDemo(true),
     signIn: async () => 'authUnavailable', createAccount: async () => 'authUnavailable',
-    signOut: async () => { setDemo(false); }, syncNow: async () => {},
+    // Leaving the demo drops what was held in memory for it, as the account build does.
+    signOut: async () => { clearSessionMemory(); setDemo(false); }, syncNow: async () => {},
     retryBoot: () => { setRepository(null); setError(null); setAttempt(value => value + 1); },
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

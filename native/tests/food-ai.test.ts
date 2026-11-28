@@ -14,6 +14,7 @@ import {
   stopFoodAiRequests,
 } from "../src/features/food/ai/service";
 import { memoryRepository } from "./workout-repository";
+import { ROUTINE_SENTINELS, routineFixtureRows } from "../fixtures/routines";
 const response = [
   {
     name: "Synthetic rice",
@@ -121,6 +122,20 @@ test("no profile, Health, Oura, or derived values can join meal egress", async (
   ])
     await expect(service.describe(text)).rejects.toThrow();
   expect(client).toHaveBeenCalledTimes(1);
+});
+test("no routine name, dose, unit, note, site or supply can join meal egress", async () => {
+  const repo = memoryRepository();
+  for (const row of routineFixtureRows()) repo.save(row.table, row.data, row.id);
+  expect(repo.list("daily_logs")).toHaveLength(2);
+  setConsent(repo, true);
+  const client = jest.fn(async () => response),
+    service = new FoodAiService(repo, client);
+  await service.describe("Synthetic rice");
+  expect(client).toHaveBeenCalledTimes(1);
+  const wire = JSON.stringify(client.mock.calls);
+  for (const sentinel of ROUTINE_SENTINELS) expect(wire).not.toContain(sentinel);
+  expect(wire).not.toMatch(/daily_|Zzyq|zq-unit|scribble|thigh/i);
+  expect(JSON.stringify(mealPayload("Synthetic rice"))).not.toMatch(/daily_|Zzyq/);
 });
 test("thumbnail switch removes existing bytes, does not restore them, revocation clears waiting photos", () => {
   const repo = memoryRepository(),

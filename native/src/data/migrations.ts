@@ -129,4 +129,60 @@ CREATE TABLE pauses (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGE
 CREATE TABLE purges (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, from_day TEXT, to_day TEXT, cutoff_ms INTEGER, tz TEXT, PRIMARY KEY(owner_id,id));
 --> statement-breakpoint
 CREATE UNIQUE INDEX purges_owner_version ON purges(owner_id,updated_at,device_id) WHERE cutoff_ms IS NOT NULL;`;
-export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }, { idx: 3, when: 1792238400003, tag: '0003_workout_local', breakpoints: true }, { idx: 4, when: 1792238400004, tag: '0004_v1_columns', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql, m0003: workoutLocalSql, m0004: v1ColumnsSql } };
+// Daily routines. Local only: no server table exists, and the sync gate for them is off.
+export const dailyRoutinesSql = `CREATE TABLE IF NOT EXISTS daily_blocks (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, name TEXT, color TEXT, position INTEGER, start_min INTEGER, end_min INTEGER, days_mask INTEGER, hidden INTEGER, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS daily_items (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, name TEXT, kind TEXT, type TEXT, compound_id TEXT, note TEXT, time_min INTEGER, start_day TEXT, on_hand INTEGER, on_hand_day TEXT, on_hand_at INTEGER, mixed_day TEXT, calc_vial REAL, calc_vial_unit TEXT, calc_water REAL, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS daily_placements (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, block_id TEXT, item_id TEXT, position INTEGER, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS daily_compounds (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, name TEXT, amount REAL, unit TEXT, start_day TEXT, archived_at INTEGER, chart_line INTEGER, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS daily_logs (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, item_id TEXT, compound_id TEXT, day TEXT, status TEXT, amount REAL, unit TEXT, note TEXT, at INTEGER, site TEXT, rest INTEGER, undone INTEGER, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS daily_types (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, name TEXT, position INTEGER, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS daily_prefs (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, last_block_id TEXT, day_rollover_hour INTEGER, focus_mode INTEGER, tips_hidden INTEGER, history_graph TEXT, home_next_hidden INTEGER, setup_status TEXT, setup_answers TEXT, setup_at INTEGER, added TEXT, type_tabs TEXT, collapsed_blocks TEXT, reveal_blocks TEXT, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS daily_logs_owner_day ON daily_logs(owner_id,day);`;
+// The Routines screens' store: columns for what the screens keep that the tables had no place for, and pauses.
+// Local only, like 0005. Each changed table is rebuilt with its new columns and its rows copied over, so the step
+// also runs on a database where it ran before. on_hand keeps fractional grams, which its INTEGER column stores as REAL.
+export const dailyRoutinesLocalSql = `CREATE TABLE daily_blocks_0006 (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, name TEXT, color TEXT, position INTEGER, start_min INTEGER, end_min INTEGER, days_mask INTEGER, hidden INTEGER, app_id TEXT, remind INTEGER, hidden_sub TEXT, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+INSERT INTO daily_blocks_0006 (owner_id, id, updated_at, deleted_at, device_id, name, color, position, start_min, end_min, days_mask, hidden) SELECT owner_id, id, updated_at, deleted_at, device_id, name, color, position, start_min, end_min, days_mask, hidden FROM daily_blocks;
+--> statement-breakpoint
+DROP TABLE daily_blocks;
+--> statement-breakpoint
+ALTER TABLE daily_blocks_0006 RENAME TO daily_blocks;
+--> statement-breakpoint
+CREATE TABLE daily_items_0006 (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, name TEXT, kind TEXT, type TEXT, compound_id TEXT, note TEXT, time_min INTEGER, start_day TEXT, on_hand INTEGER, on_hand_day TEXT, on_hand_at INTEGER, mixed_day TEXT, calc_vial REAL, calc_vial_unit TEXT, calc_water REAL, app_id TEXT, position INTEGER, dose TEXT, days_mask INTEGER, per_day REAL, vial REAL, supply_word TEXT, site TEXT, mixed TEXT, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+INSERT INTO daily_items_0006 (owner_id, id, updated_at, deleted_at, device_id, name, kind, type, compound_id, note, time_min, start_day, on_hand, on_hand_day, on_hand_at, mixed_day, calc_vial, calc_vial_unit, calc_water) SELECT owner_id, id, updated_at, deleted_at, device_id, name, kind, type, compound_id, note, time_min, start_day, on_hand, on_hand_day, on_hand_at, mixed_day, calc_vial, calc_vial_unit, calc_water FROM daily_items;
+--> statement-breakpoint
+DROP TABLE daily_items;
+--> statement-breakpoint
+ALTER TABLE daily_items_0006 RENAME TO daily_items;
+--> statement-breakpoint
+CREATE TABLE daily_placements_0006 (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, block_id TEXT, item_id TEXT, position INTEGER, item_rank INTEGER, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+INSERT INTO daily_placements_0006 (owner_id, id, updated_at, deleted_at, device_id, block_id, item_id, position) SELECT owner_id, id, updated_at, deleted_at, device_id, block_id, item_id, position FROM daily_placements;
+--> statement-breakpoint
+DROP TABLE daily_placements;
+--> statement-breakpoint
+ALTER TABLE daily_placements_0006 RENAME TO daily_placements;
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS daily_pauses (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, block_id TEXT, from_day TEXT, until_day TEXT, why TEXT, position INTEGER, PRIMARY KEY(owner_id,id));`;
+// What a done check-off took off an item's on-hand count, so taking the tick back puts back exactly that. Local only,
+// like 0005 and 0006. daily_logs is rebuilt with the new column and its rows copied over, as 0006 does. The journal
+// runs it once per database; a second run would drop the column's values, since only the older columns are copied.
+export const dailyUsedLocalSql = `CREATE TABLE daily_logs_0007 (owner_id TEXT NOT NULL, id TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER, device_id TEXT NOT NULL, item_id TEXT, compound_id TEXT, day TEXT, status TEXT, amount REAL, unit TEXT, note TEXT, at INTEGER, site TEXT, rest INTEGER, undone INTEGER, on_hand_used REAL, PRIMARY KEY(owner_id,id));
+--> statement-breakpoint
+INSERT INTO daily_logs_0007 (owner_id, id, updated_at, deleted_at, device_id, item_id, compound_id, day, status, amount, unit, note, at, site, rest, undone) SELECT owner_id, id, updated_at, deleted_at, device_id, item_id, compound_id, day, status, amount, unit, note, at, site, rest, undone FROM daily_logs;
+--> statement-breakpoint
+DROP TABLE daily_logs;
+--> statement-breakpoint
+ALTER TABLE daily_logs_0007 RENAME TO daily_logs;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS daily_logs_owner_day ON daily_logs(owner_id,day);`;
+export default { journal: { entries: [{ idx: 0, when: 1792238400000, tag: '0000_local_rows', breakpoints: true }, { idx: 1, when: 1792238400001, tag: '0001_sync_conflicts', breakpoints: true }, { idx: 2, when: 1792238400002, tag: '0002_minimal_tombstones', breakpoints: true }, { idx: 3, when: 1792238400003, tag: '0003_workout_local', breakpoints: true }, { idx: 4, when: 1792238400004, tag: '0004_v1_columns', breakpoints: true }, { idx: 5, when: 1792238400005, tag: '0005_daily_routines', breakpoints: true }, { idx: 6, when: 1792238400006, tag: '0006_daily_routines_local', breakpoints: true }, { idx: 7, when: 1792238400007, tag: '0007_daily_used_local', breakpoints: true }] }, migrations: { m0000: initialSql, m0001: conflictSql, m0002: tombstoneSql, m0003: workoutLocalSql, m0004: v1ColumnsSql, m0005: dailyRoutinesSql, m0006: dailyRoutinesLocalSql, m0007: dailyUsedLocalSql } };

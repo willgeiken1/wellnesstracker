@@ -7,6 +7,7 @@ import { Repository } from '../../src/data/repository';
 import { createPhoneBackup } from '../../src/phone-only/backup';
 import { commitImport, commitPendingAccountImport, nativeBackup, nativeBackupPlan, previewImport, restoreNativeLocal } from '../../src/features/importer/local';
 import { DEVICE_A } from '../../fixtures/sync';
+import { createLocalRoutinesStore, readStoredRoutines } from '../../src/features/routines/store';
 
 /** Photo files are kept in their own test; this restore holds no photo addresses. */
 const noPhotos = { names: () => null, settle: () => {} };
@@ -115,6 +116,38 @@ test('a merge adds the records of a water, routine or body history that only the
   } finally { sqlite.close(); }
 });
 
+/* Routines live in the phone's own daily_* tables. These restores go through the Routines store, as the app does. */
+const fixtureItem = (name: string) => ({ name, type: 'Supplement' as const, kind: 'check' as const, amt: null, unit: '', routines: ['morning'], time: 8, hand: '', mixed: '', note: null });
+
+test('a merge keeps the routines kept in the tables and adds the ones only the file has', async () => {
+  const { sqlite, repo } = await setup();
+  try {
+    const store = createLocalRoutinesStore(repo);
+    const { item: mine } = store.addItem(fixtureItem('Fixture vitamin'));
+    store.toggleDone(mine.id);
+    expect(repo.localGet('routines')).toBeFalsy();
+    const theirs = { ...readStoredRoutines(repo)!, items: [{ ...readStoredRoutines(repo)!.items[0], id: 'ifile', name: 'Fixture tea' }], log: {} };
+    restoreNativeLocal(repo, { format: 'insight-phone-only', version: 1, rows: {}, local: { routines: theirs } }, new Set(), 'merge', noPhotos);
+    const after = createLocalRoutinesStore(repo).read();
+    expect(after.items.map(i => i.name)).toEqual(['Fixture vitamin', 'Fixture tea']);
+    expect(Object.values(after.log).flatMap(m => Object.keys(m))).toEqual([mine.id]);
+    expect(repo.localGet('routines')).toBeFalsy();
+  } finally { sqlite.close(); }
+});
+
+test('a backup made after the move to the tables brings the routines back, and a Replace without them clears the tables', async () => {
+  const made = await setup(), fresh = await setup();
+  try {
+    createLocalRoutinesStore(made.repo).addItem(fixtureItem('Fixture vitamin'));
+    const backup = nativeBackup(JSON.parse(createPhoneBackup(made.repo)))!;
+    expect(backup.local.routines).toBeTruthy();
+    restoreNativeLocal(fresh.repo, backup, new Set(), 'merge', noPhotos);
+    expect(createLocalRoutinesStore(fresh.repo).read().items.map(i => i.name)).toEqual(['Fixture vitamin']);
+    restoreNativeLocal(fresh.repo, { ...backup, local: {} }, new Set(), 'replace', noPhotos);
+    expect(createLocalRoutinesStore(fresh.repo).read().items).toEqual([]);
+  } finally { made.sqlite.close(); fresh.sqlite.close(); }
+});
+
 test('a backup restored while signed out brings its phone-side details to the first account, but not its photo addresses', async () => {
   const { sqlite, repo: guest } = await setup();
   try {
@@ -135,6 +168,40 @@ test('a backup restored while signed out brings its phone-side details to the fi
     expect(account.localGet('profilePhoto')).toBeUndefined();
     expect(guest.localGet('pwaPendingAccountLocal')).toBeNull();
   } finally { sqlite.close(); }
+});
+
+test('a Replace updates a Routines screen that is already open, so its next tap keeps the Replace', async () => {
+  for (const local of [{}, { routines: { v: 1, routines: [], hidden: [], items: [], log: {} } }]) {
+    const { sqlite, repo } = await setup();
+    try {
+      const open = createLocalRoutinesStore(repo);
+      const { item } = open.addItem(fixtureItem('Fixture vitamin'));
+      let told = 0;
+      open.subscribe(() => { told++; });
+      // A file without routines, and one whose routines are empty of everything.
+      restoreNativeLocal(repo, { format: 'insight-phone-only', version: 1, rows: {}, local }, new Set(), 'replace', noPhotos);
+      expect(told).toBeGreaterThan(0);
+      expect(open.read().items).toEqual([]);
+      open.toggleDone(item.id);
+      expect(createLocalRoutinesStore(repo).read().items).toEqual([]);
+    } finally { sqlite.close(); }
+  }
+});
+
+test('routines restored while signed out reach the first account after the Routines tab took them into the tables', async () => {
+  const made = await setup(), { sqlite, repo: guest } = await setup();
+  try {
+    createLocalRoutinesStore(made.repo).addItem(fixtureItem('Fixture vitamin'));
+    const backup = nativeBackup(JSON.parse(createPhoneBackup(made.repo)))!;
+    commitImport(guest, previewImport(guest, nativeBackupPlan(backup), 'merge', true), true);
+    restoreNativeLocal(guest, backup, new Set(), 'merge', noPhotos);
+    // Opening the tab moves the document into the guest's tables and clears the key.
+    expect(createLocalRoutinesStore(guest).read().items.map(i => i.name)).toEqual(['Fixture vitamin']);
+    expect(guest.localGet('routines')).toBeFalsy();
+    const account = new Repository(drizzle(sqliteClient(sqlite)), '20000000-0000-4000-8000-000000000002', DEVICE_A, () => '30000000-0000-4000-8000-000000000778');
+    commitPendingAccountImport(guest, account);
+    expect(createLocalRoutinesStore(account).read().items.map(i => i.name)).toEqual(['Fixture vitamin']);
+  } finally { made.sqlite.close(); sqlite.close(); }
 });
 
 test('a merge keeps one copy of a routine the phone shows that the file still has hidden, and the other way round', async () => {

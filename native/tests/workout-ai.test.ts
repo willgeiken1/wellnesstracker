@@ -9,6 +9,7 @@ import { aiState, FOOD_AI_CONSENT_VERSION, setConsent } from '../src/features/fo
 import { assertWorkoutPayload, buildWorkoutFacts } from '../src/features/workout/ai/guard';
 import { WorkoutSummaryService, savedWorkoutSummary, summaryLength, setSummaryLength, rateWorkoutSummary } from '../src/features/workout/ai/service';
 import { createWorkoutEndpointClient } from '../src/features/workout/ai/client';
+import { ROUTINE_SENTINELS, routineFixtureRows } from '../fixtures/routines';
 const response = { summary: 'You completed your sets. Keep building consistency.', remaining: 4, limit: 5 };
 function fixture() {
     const repo = memoryRepository(), store = new WorkoutStore(repo), session = store.start(undefined, Date.now() - 60000);
@@ -87,6 +88,22 @@ test('explicit phone projection ignores sentinel fields on workout, entry, set a
     for (const sentinel of JSON.stringify(vectors.sentinels).match(/917\d+/g) ?? [])
         expect(JSON.stringify(wire)).not.toContain(sentinel);
     expect(savedWorkoutSummary(repo, session.id)?.summary).toBe(response.summary);
+});
+test('no routine name, dose, unit, note, site or supply can join the workout summary request', async () => {
+    const { repo, session } = fixture();
+    for (const row of routineFixtureRows())
+        repo.save(row.table, row.data, row.id);
+    expect(repo.list('daily_items')).toHaveLength(2);
+    setConsent(repo, true);
+    const request = jest.fn(async () => response);
+    const client = createWorkoutEndpointClient(request, () => aiState(repo), () => '2026-10-29', () => 'UTC');
+    await new WorkoutSummaryService(repo, client).generate(session.id);
+    expect(request).toHaveBeenCalledTimes(1);
+    const wire = JSON.stringify(request.mock.calls);
+    for (const sentinel of ROUTINE_SENTINELS)
+        expect(wire).not.toContain(sentinel);
+    expect(wire).not.toMatch(/daily_|Zzyq|zq-unit|scribble|thigh/i);
+    expect(JSON.stringify(buildWorkoutFacts(new WorkoutStore(repo), session.id))).not.toMatch(/daily_|Zzyq/);
 });
 test.each(vectors.allowed)('shared phone vector accepts %s', name => {
     expect(() => assertWorkoutPayload({ exercises: [{ name, sets: 1, reps: 8, volume: 100 }] })).not.toThrow();

@@ -16,6 +16,7 @@ import { syncTables } from '../src/data/sync/flags';
 import type { Repository } from '../src/data/repository';
 import * as Network from 'expo-network';
 import { SETTINGS_PREFS_KEY, loadSettingsPrefs, withPref } from '../src/features/settings/prefs';
+import { activeRoutinesStore, createLocalRoutinesStore, setActiveRoutinesStore } from '../src/features/routines/store';
 
 jest.mock('expo-secure-store',()=>({getItemAsync:jest.fn(),setItemAsync:jest.fn(),deleteItemAsync:jest.fn(),WHEN_UNLOCKED_THIS_DEVICE_ONLY:6}));
 jest.mock('../src/auth/client', () => ({ getAuthClient: jest.fn(() => null), clearLocalSession: jest.fn(async()=>{}) }));
@@ -90,6 +91,26 @@ test('restores session, reacts to AppState, switches A to B during upload and is
   expect(observed.session).toBeNull(); expect(observed.demo).toBe(false);
   expect(observed.bootExportOwner?.()).toBeNull();
   await view.unmount(); expect(fixture.unsubscribe).toHaveBeenCalled(); app.mockRestore();
+});
+test('the Routines store the tab and tiles share is dropped when the account changes and when it signs out', async () => {
+  const a=fixtureRepo(OWNER_A), b=fixtureRepo(OWNER_B), guest=fixtureRepo('guest');
+  jest.mocked(openLocalDatabase).mockResolvedValue({wipeAll:jest.fn(),forOwner:owner=>owner===OWNER_A?a:owner===OWNER_B?b:guest});
+  const fixture=clientFixture();const view=await render(<AuthProvider client={fixture.client}><Probe/></AuthProvider>);
+  await waitFor(()=>expect(observed.ready).toBe(true));expect(observed.repository).toBe(a);
+  const held=createLocalRoutinesStore(a);
+  await act(async()=>{setActiveRoutinesStore(held,a);});
+  expect(activeRoutinesStore()).toBe(held);
+  await act(async()=>{fixture.emit(session(OWNER_B));});
+  await waitFor(()=>expect(observed.repository).toBe(b));
+  expect(activeRoutinesStore()).toBeNull();
+  await act(async()=>{setActiveRoutinesStore(held,b);});
+  // Gone before this account's rows are erased, not only once the next account is shown.
+  const wipe=jest.mocked(b.wipe).getMockImplementation()!;let atWipe:unknown='not wiped';
+  jest.mocked(b.wipe).mockImplementation(()=>{atWipe=activeRoutinesStore();wipe();});
+  await act(async()=>{await observed.signOut();});
+  await waitFor(()=>expect(observed.repository).toBe(guest));
+  expect(b.wipe).toHaveBeenCalledTimes(1);expect(atWipe).toBeNull();expect(activeRoutinesStore()).toBeNull();
+  await view.unmount();
 });
 test('unset config enters isolated demo without a transport and can leave demo', async () => {
   const guest = fixtureRepo('guest'), demo = fixtureRepo('demo');

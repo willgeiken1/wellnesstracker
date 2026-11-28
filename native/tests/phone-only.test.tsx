@@ -5,6 +5,7 @@ import { memoryRepository } from './workout-repository';
 import { seedDemo } from '../fixtures/demo';
 import { createPhoneBackup } from '../src/phone-only/backup';
 import { health, widgets, push } from '../src/phone-only/capabilities';
+import { keepSessionMemory, sessionMemory } from '../src/core/session-memory';
 jest.mock('../src/data/database', () => ({ openLocalDatabase: jest.fn() }));
 jest.mock('../fixtures/demo', () => ({ seedDemo: jest.fn() }));
 let observed: ReturnType<typeof useAuth>;
@@ -25,7 +26,10 @@ test('phone-only boots guest SQLite, disables auth and sync, and preserves data 
   await act(() => observed.lookAround());
   await waitFor(() => expect(observed.repository).toBe(demo));
   expect(seedDemo).toHaveBeenCalledWith(demo);
+  // What the demo held in memory goes when the demo is left.
+  keepSessionMemory('demo', 'synthetic-key', { step: 2 });
   await act(() => observed.signOut());
+  expect(sessionMemory('demo', 'synthetic-key')).toBeNull();
   await waitFor(() => expect(observed.repository).toBe(guest));
   expect(observed.session).toBeNull();
   expect(observed.pending).toBe(0);

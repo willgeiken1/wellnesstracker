@@ -361,7 +361,7 @@ export function demoState(n: Now = nowOf()): RoutinesState {
   s.routines = s.routines.map(r => ({ ...r, remind: true }));
   const it = (id: string, name: string, amt: number | null, unit: string, dose: string, type: ItemType, kind: ItemKind, rt: string, h: number, extra: Partial<Item> = {}): Item =>
     ({ id, name, amt, unit, dose, type, kind, routines: [rt], h, days: null, created: since, ...extra });
-  s.hidden = [{ ...R('stack', 'Supplement & enhancer stack', 15, 16, 'food'), remind: true, sub: 'Its 3 items now live on their tabs' }];
+  s.hidden = [{ ...R('stack', 'Supplement & booster stack', 15, 16, 'food'), remind: true, sub: 'Its 3 items now live on their tabs' }];
   s.items = [
     it('vd3', 'Vitamin D3', 2000, 'IU', '2,000 IU', 'Supplement', 'dose', 'morning', 7 + 10 / 60, { left: 48, perDay: 1, sup: 'softgels' }),
     it('k2', 'Vitamin K2', 100, 'mcg', '100 mcg', 'Supplement', 'dose', 'morning', 7 + 10 / 60, { left: 52, perDay: 1, sup: 'capsules' }),

@@ -5,8 +5,9 @@ import type { Repository } from '@/data/repository';
 import type { Row } from '@/data/rows';
 import { WorkoutStore } from '@/data/workout/store';
 import { meals } from '@/features/food/model';
-import { normalize, type RoutinesState } from '@/features/routines/model';
-import { ROUTINES_KEY } from '@/features/routines/store';
+import type { ItemType, RoutinesState } from '@/features/routines/model';
+import { t } from '@/i18n/en';
+import { readStoredRoutines } from '@/features/routines/store';
 import { rpeKey } from '@/features/workout/logger/model';
 import { cardioName } from '@/features/workout/training-data';
 import { addDays, daysBetween, finite, type ProgressData } from './model';
@@ -111,7 +112,7 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
         const itemRows: unknown[][] = [];
         for (const r of all) for (const i of tab.items.filter(x => x.routines.includes(r.id)))
           itemRows.push([r.name, hours(r.from), hours(r.to), weekdays(r.days), hidden.has(r.id) ? 'hidden' : pausedOn(r, d.today) ? 'paused' : 'on',
-            i.name, i.type, i.dose, hours(i.h), weekdays(i.days), i.left ?? null, i.note ?? '']);
+            i.name, typeName(i.type), i.dose, hours(i.h), weekdays(i.days), i.left ?? null, i.note ?? '']);
         files.push({ name: 'routine-items.csv', csv: csv(['routine', 'routine_from', 'routine_to', 'routine_days', 'routine_state', 'item', 'type', 'dose', 'time', 'item_days', 'on_hand', 'note'], itemRows) });
         const history: unknown[][] = [];
         for (const day of Object.keys(tab.log).filter(keep).sort()) for (const [id, mark] of Object.entries(tab.log[day])) {
@@ -125,7 +126,9 @@ export function buildCsvs(repo: Repository, d: ProgressData, kinds: readonly Exp
   return files;
 }
 /** The Routines tab's saved state for this account, or null when it has none. */
-function routinesTab(repo: Repository): RoutinesState | null { try { return normalize(repo.localGet<unknown>(ROUTINES_KEY)); } catch { return null; } }
+/** The type as the app shows it. The stored key 'Enhancer' reads as Booster. */
+const typeName = (type: ItemType) => (type === 'Enhancer' ? t('routinesTEnhancer') : type);
+function routinesTab(repo: Repository): RoutinesState | null { try { return readStoredRoutines(repo); } catch { return null; } }
 const hours = (h: unknown) => typeof h === 'number' && Number.isFinite(h) ? `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}` : null;
 const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const weekdays = (days: number[] | null) => !days || days.length >= 7 ? 'every day' : [...days].sort().map(x => WEEKDAY[x] ?? '').join(' ');
