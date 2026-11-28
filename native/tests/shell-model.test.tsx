@@ -1,4 +1,4 @@
-import { DOCK, dockBottom, fadeHeight, labelOffset, layoutArc, layoutDock, pageEndSpace } from '../src/features/shell/geometry';
+import { DOCK, dockBottom, fadeHeight, fitHint, labelPlace, labelWidth, layoutArc, layoutDock, pageEndSpace } from '../src/features/shell/geometry';
 import { ACTIONS, MAX_ACTIONS, PAGES, chosenActions, customizeOrder, defaultActionIds, defaultHint, nextMeal, pageForRoute, toggleDraft, visiblePages } from '../src/features/shell/pages';
 import { EMPTY_PREFS, SHELL_PREFS_KEY, loadPrefs, readPrefs, withActions, withHidden } from '../src/features/shell/prefs';
 
@@ -100,9 +100,16 @@ describe('the bar\'s geometry', () => {
     // Closed, every action starts on the + itself.
     expect(home.every(item => item.from.x === 335.5 - 26 && item.from.y === 800 - 26)).toBe(true);
   });
-  test('a name sits right of its button while it fits, and left near the top of the curve', () => {
-    expect(labelOffset(W, 138.4, 140)).toEqual({ left: 62, side: 'r' });
-    expect(labelOffset(W, 299.9, 140)).toEqual({ left: -150, side: 'l' });
+  test('only the top action\'s name goes on the left; every other name sits on the right, in the room its row leaves', () => {
+    expect(labelPlace(W, 138.4, false)).toEqual({ side: 'r', room: W - 12 - (138.4 + 52 + 8) });
+    expect(labelPlace(W, 199.5, false)).toEqual({ side: 'r', room: W - 12 - (199.5 + 52 + 8) });
+    expect(labelPlace(W, 299.9, true)).toEqual({ side: 'l', room: 299.9 - 8 - 12 });
+  });
+  test('the fullest hint that fits is used, then shorter ones, and the last when none fits', () => {
+    expect(labelWidth('Log a meal', 'Dinner is next')).toBeCloseTo(101.9, 0);
+    expect(fitHint('Log a meal', ['Breakfast is next', 'Breakfast next'], 140)).toBe('Breakfast is next');
+    expect(fitHint('Log a meal', ['Breakfast is next', 'Breakfast next'], 120)).toBe('Breakfast next');
+    expect(fitHint('Log a meal', ['Breakfast is next', 'Breakfast next'], 60)).toBe('Breakfast next');
   });
 });
 

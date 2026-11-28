@@ -1,4 +1,4 @@
-import { t, type MessageKey } from '@/i18n/en';
+import { en, t, type MessageKey } from '@/i18n/en';
 import type { ActionIconName, NavIconName } from './icons';
 
 /** The five pages on the bar, in bar order. `route` is the file under app/(tabs); `color` is the theme colour the page's
@@ -94,6 +94,15 @@ export function nextMeal(now: Date): 'breakfast' | 'lunch' | 'dinner' {
 }
 /** The default hint for an action, before a page gives a live one. */
 export function defaultHint(action: QuickAction, now: Date): string {
-  if (action.id === 'meal') return t('shellMealNext').replace('{meal}', t(`shellMeal_${nextMeal(now)}`));
-  return t(action.hint);
+  return defaultHints(action, now)[0];
+}
+/** The default hint and its shorter forms, longest first: the arc uses the fullest one that fits beside its button. A shorter
+ * form lives under `shellHintShort_<key>` next to the hint's own `shellHint_<key>`. */
+export function defaultHints(action: QuickAction, now: Date): string[] {
+  if (action.id === 'meal') {
+    const meal = t(`shellMeal_${nextMeal(now)}`);
+    return [t('shellMealNext').replace('{meal}', meal), t('shellMealNextShort').replace('{meal}', meal)];
+  }
+  const short = action.hint.replace('shellHint_', 'shellHintShort_');
+  return short in en ? [t(action.hint), t(short as MessageKey)] : [t(action.hint)];
 }

@@ -6,13 +6,15 @@ import { useTheme } from '@/design/theme-provider';
 import { tokens } from '@/design/tokens';
 import { t } from '@/i18n/en';
 import { alpha, mix, shellColors } from './colors';
-import { ITEM_PRESS_SCALE, labelOffset, layoutArc, SPRINGS } from './geometry';
+import { fitHint, ITEM_PRESS_SCALE, LABEL_TYPE, labelPlace, layoutArc, SPRINGS } from './geometry';
 import { ActionIcon, type ActionIconName } from './icons';
 import { useSpringPress } from './press';
 import Reanimated from 'react-native-reanimated';
 import type { PageColor } from './pages';
 
-export interface FanAction { id: string; label: string; hint: string; icon: ActionIconName }
+/** `hint` is the full line under the name; `hints`, when given, lists it and its shorter forms, longest first, so the arc can
+ * use the fullest one that fits beside its button. */
+export interface FanAction { id: string; label: string; hint: string; hints?: readonly string[]; icon: ActionIconName }
 export interface FanProps {
   open: boolean; width: number; height: number; plus: { x: number; y: number };
   pageLabel: string; color: PageColor; actions: FanAction[];
@@ -43,7 +45,7 @@ function Item({ action, index, count, open, x, y, from, width, color, first, onR
   const { colors, mode, reduceMotion } = useTheme();
   const shell = shellColors(colors, mode);
   const travel = useState(() => new Animated.Value(reduceMotion ? 1 : 0))[0], fade = useState(() => new Animated.Value(0))[0];
-  const [label, setLabel] = useState<{ w: number; h: number } | null>(null);
+  const [labelH, setLabelH] = useState<number | null>(null);
   const press = useSpringPress(ITEM_PRESS_SCALE, reduceMotion);
   useEffect(() => {
     if (reduceMotion) {
@@ -63,8 +65,11 @@ function Item({ action, index, count, open, x, y, from, width, color, first, onR
   }, [open, index, count, reduceMotion, travel, fade]);
   const tint = first ? color : mix(color, shell.dark ? 0.17 : 0.1, colors.surface);
   const ink = first ? (shell.dark ? colors.bg : colors['on-accent']) : color;
-  const place = label ? labelOffset(width, x, label.w) : { left: 62, side: 'r' as const };
-  const measure = (e: LayoutChangeEvent) => { const { width: w, height: h } = e.nativeEvent.layout; if (!label || label.w !== w || label.h !== h) setLabel({ w, h }); };
+  // Only the top action's name goes on the left; the rest sit on the right, each in the room its row leaves.
+  const place = labelPlace(width, x, index === count - 1), left = place.side === 'l';
+  const hint = fitHint(action.label, action.hints?.length ? action.hints : [action.hint], place.room);
+  const measure = (e: LayoutChangeEvent) => { const h = e.nativeEvent.layout.height; if (h !== labelH) setLabelH(h); };
+  const fit = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.75 } as const;
   return <Animated.View pointerEvents={open ? 'box-none' : 'none'} style={{ position: 'absolute', left: 0, top: 0, width: 52, height: 52, opacity: fade,
     transform: [
       { translateX: travel.interpolate({ inputRange: [0, 1], outputRange: [from.x, x] }) },
@@ -78,24 +83,21 @@ function Item({ action, index, count, open, x, y, from, width, color, first, onR
         <ActionIcon name={action.icon} color={ink} />
       </Reanimated.View>
     </Tappable>
-    {/* The label sits in a wide, empty box beside the button and keeps its own width inside it. Placed straight in the
-        52 pt item it was squeezed to the item's width less its offset, and every label read "Lo…" (`.lab` is nowrap). */}
-    <View testID={`fan-${action.id}-label`} pointerEvents="box-none" style={{ position: 'absolute', top: label ? 26 - label.h / 2 : 0, width: LABEL_ROOM,
-      left: place.side === 'l' && label ? place.left + label.w - LABEL_ROOM : place.left, alignItems: place.side === 'l' ? 'flex-end' : 'flex-start' }}>
+    {/* The name sits in a box exactly as wide as the room on its side, and its bubble takes its own width inside it, so a name
+        can never reach across its own button or off the screen. Text that would not fit shrinks a little instead of being cut. */}
+    <View testID={`fan-${action.id}-label`} pointerEvents="box-none" style={{ position: 'absolute', top: labelH == null ? 0 : 26 - labelH / 2,
+      left: left ? -LABEL_TYPE.gap - place.room : 52 + LABEL_TYPE.gap, width: place.room, alignItems: left ? 'flex-end' : 'flex-start' }}>
     <Tappable dim="none" accessible={false} onPress={onRun} onLayout={measure} hitSlop={10}
-      style={({ pressed }) => ({ opacity: label ? 1 : 0,
-        alignItems: place.side === 'l' ? 'flex-end' : 'flex-start', paddingTop: 6, paddingBottom: 7, paddingHorizontal: 12, borderRadius: 14,
+      style={({ pressed }) => ({ opacity: labelH == null ? 0 : 1, maxWidth: place.room,
+        alignItems: left ? 'flex-end' : 'flex-start', paddingTop: 6, paddingBottom: 7, paddingHorizontal: LABEL_TYPE.padX, borderRadius: 14,
         backgroundColor: colors.surface, boxShadow: `inset 0px 0px 0px ${pressed ? 1.5 : 1}px ${pressed ? colors.accent : colors.hair}, ${shell.lift}`,
         transform: [{ scale: pressed ? 1.03 : 1 }] })}>
-      <ThemedText numberOfLines={1} style={{ fontFamily: tokens.font.bodyStrong, fontSize: 14, lineHeight: 16.1, color: colors.text, textAlign: place.side === 'l' ? 'right' : 'left' }}>{action.label}</ThemedText>
-      <ThemedText numberOfLines={1} style={{ marginTop: 1, fontFamily: tokens.font.body, fontSize: tokens.type.caption, lineHeight: 16, color: colors['text-muted'], textAlign: place.side === 'l' ? 'right' : 'left' }}>{action.hint}</ThemedText>
+      <ThemedText {...fit} style={{ fontFamily: tokens.font.bodyStrong, fontSize: LABEL_TYPE.name, lineHeight: 16.1, color: colors.text, textAlign: left ? 'right' : 'left' }}>{action.label}</ThemedText>
+      <ThemedText {...fit} style={{ marginTop: 1, fontFamily: tokens.font.body, fontSize: LABEL_TYPE.hint, lineHeight: 16, color: colors['text-muted'], textAlign: left ? 'right' : 'left' }}>{hint}</ThemedText>
     </Tappable>
     </View>
   </Animated.View>;
 }
-
-/** Room for a label beside its button: wider than any label, so a label is never cut short. */
-export const LABEL_ROOM = 320;
 
 /** The + button's quick actions, swept up an arc from the button, with the page's name and Customize above them. */
 export function Fan({ open, width, height, plus, pageLabel, color, actions, onRun, onCustomize }: FanProps) {

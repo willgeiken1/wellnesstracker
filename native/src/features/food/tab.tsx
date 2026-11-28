@@ -56,14 +56,17 @@ export function FoodTab({ repo }: { repo: Repository }) {
   const saved = combos(repo);
   const yesterday = dayView(repo, shiftDay(sel.today, -1), { today: sel.today });
   useQuickActions('food', {
-    meal: { run: () => foodRoutes.log(next), hint: fill(t('shellMealNext'), { meal: nextName }) },
+    meal: { run: () => foodRoutes.log(next), hint: fill(t('shellMealNext'), { meal: nextName }),
+      hints: [fill(t('shellMealNext'), { meal: nextName }), fill(t('shellMealNextShort'), { meal: nextName })] },
     scan: { run: () => foodRoutes.barcode(next) },
     water: { run: () => { if (first) addWater(repo, sel.today, { c: first }); else foodRoutes.water(); },
-      hint: first ? `${first.name}, ${sizeText(first.oz, water.unit)}` : undefined },
+      hint: first ? `${first.name}, ${sizeText(first.oz, water.unit)}` : undefined,
+      hints: first ? [`${first.name}, ${sizeText(first.oz, water.unit)}`, fill(t('foodWaterAdds'), { size: sizeText(first.oz, water.unit) })] : undefined },
     quick: { run: () => foodRoutes.quick(next) },
     saved: { run: () => foodRoutes.saved(next), hint: saved.length ? fill(t('foodNSaved'), { n: saved.length }) : undefined },
     copy: { run: () => foodRoutes.copy(yesterday.logged),
-      hint: yesterday.logged ? `${plural(yesterday.logged, t('foodMealWord'), t('foodMealsWord'))}, ${enAmt(yesterday.eaten, eu)}` : undefined },
+      hint: yesterday.logged ? `${plural(yesterday.logged, t('foodMealWord'), t('foodMealsWord'))}, ${enAmt(yesterday.eaten, eu)}` : undefined,
+      hints: yesterday.logged ? [`${plural(yesterday.logged, t('foodMealWord'), t('foodMealsWord'))}, ${enAmt(yesterday.eaten, eu)}`, t('shellHint_copy'), t('shellHintShort_copy')] : undefined },
     tiles: { run: () => tileEdit.set('food', true) },
   });
 

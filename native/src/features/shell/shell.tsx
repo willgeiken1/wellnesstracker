@@ -12,7 +12,7 @@ import { Dock } from './dock';
 import { Fan, Scrim, type FanAction } from './fan';
 import { dockBottom, fadeHeight, layoutDock } from './geometry';
 import { holdBuzz } from './haptics';
-import { ACTIONS, chosenActions, defaultHint, PAGES, pageForRoute, pageLabel, visiblePages, type PageKey } from './pages';
+import { ACTIONS, chosenActions, defaultHint, defaultHints, PAGES, pageForRoute, pageLabel, visiblePages, type PageKey } from './pages';
 import { useShellPrefs, withActions } from './prefs';
 import { pageHandlers, useShellEdit } from './registry';
 import { ShellToast, showToast } from './toast';
@@ -59,10 +59,15 @@ export function ShellChrome({ route, goTo }: ShellChromeProps) {
     const own = pageHandlers(page)[id]?.hint, action = ACTIONS[page].find(a => a.id === id)!;
     return own ?? defaultHint(action, new Date());
   }, []);
+  const hintsOf = (page: PageKey, id: string): readonly string[] => {
+    const own = pageHandlers(page)[id], action = ACTIONS[page].find(a => a.id === id)!;
+    if (own?.hint) return own.hints?.length ? own.hints : [own.hint];
+    return defaultHints(action, new Date());
+  };
   const [fanActions, setFanActions] = useState<FanAction[]>([]);
   // `ids` is a set just saved, which this draw's prefs do not have yet.
   const openFan = (ids: readonly string[] | undefined = prefs.actions[pageKey]) => {
-    setFanActions(chosenActions(pageKey, ids).map(a => ({ id: a.id, icon: a.icon, label: labelOf(pageKey, a.id), hint: hintOf(pageKey, a.id) })));
+    setFanActions(chosenActions(pageKey, ids).map(a => ({ id: a.id, icon: a.icon, label: labelOf(pageKey, a.id), hint: hintOf(pageKey, a.id), hints: hintsOf(pageKey, a.id) })));
     setOpen(true);
   };
   const run = (action: FanAction) => {

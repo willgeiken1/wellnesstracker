@@ -40,6 +40,12 @@ export function waterHint(w: { today: number; goal: number; unit: string } | und
   const u = w.unit === 'ml' ? 'ml' : 'oz';
   return fill(t('homeWaterHint'), { v: waterNum(w.today, u), goal: waterAmt(w.goal, u) });
 }
+/** The water hint and its shorter forms, longest first, for a row of the + arc with less room. */
+export function waterHints(w: { today: number; goal: number; unit: string } | undefined): string[] | undefined {
+  if (!w) return undefined;
+  const u = w.unit === 'ml' ? 'ml' : 'oz', v = { v: waterNum(w.today, u), goal: waterAmt(w.goal, u) };
+  return [fill(t('homeWaterHint'), v), fill(t('homeWaterHintShort'), v), fill(t('homeWaterHintTiny'), { v: waterAmt(w.today, u) })];
+}
 
 /** The page's top: the status bar's safe area, at least 47 points so a frame that reports none still clears it. */
 const MIN_TOP = 47;
@@ -77,7 +83,7 @@ export function Home() {
   useQuickActions('home', {
     edit: { run: () => tileEdit.set('home', true) },
     add: { run: () => tileRoutes().tray('home') },
-    water: { run: () => { logForToday(); go('/food/water'); }, label: t('homeLogWater'), hint: waterHint(tiles?.data.water) },
+    water: { run: () => { logForToday(); go('/food/water'); }, label: t('homeLogWater'), hint: waterHint(tiles?.data.water), hints: waterHints(tiles?.data.water) },
     meal: { run: () => { logForToday(); go('/food/log'); } },
     start: { run: () => go('/workout') },
     weigh: { run: () => go('/progress') },
