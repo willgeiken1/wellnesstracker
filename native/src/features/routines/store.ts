@@ -90,7 +90,8 @@ export function createRoutinesStore(io: { get(): unknown; save(s: RoutinesState)
   };
   const edit = (fn: (s: RoutinesState) => void) => { const s = structuredCloneState(read()); fn(s); write(s); };
   io.subscribe?.(() => {
-    if (saving) return;
+    // Nothing read yet: the first read takes what is stored then, the demo's seed included.
+    if (saving || cache === null) return;
     // Another writer changed the stored copy: show what it holds now. Nothing stored (a restore that emptied it) reads
     // as an empty state, so an open screen never keeps routines that are gone and writes them back on the next tap.
     const stored = normalize(io.get()) ?? emptyState();
