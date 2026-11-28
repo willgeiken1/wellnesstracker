@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Modal, StyleSheet, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
 import Animated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { Button, Eyebrow, KitText, useKit } from '@/components/kit';
@@ -49,6 +49,8 @@ export interface CoachProps {
   onSkip?: () => void;
   /** The overlay's size once laid out, for targets placed by the bar's geometry (the + and the tabs). */
   onSize?: (size: { width: number; height: number }) => void;
+  /** A tap inside the spotlight, which shows a control, uses that control after moving on. */
+  onHole?: () => void;
 }
 
 /**
@@ -56,7 +58,7 @@ export interface CoachProps {
  * in white, and a tip card with its eyebrow, title, line, dots and buttons. The hole and the card glide between targets in
  * 0.42 s; with Reduce Motion they jump. A tap anywhere moves on. It is a modal dialog named by the tip's title.
  */
-export function Coach({ kind, hole, side, eyebrow, title, body, index, count, color = 'accent', onNext, onSkip, onSize }: CoachProps) {
+export function Coach({ kind, hole, side, eyebrow, title, body, index, count, color = 'accent', onNext, onSkip, onSize, onHole }: CoachProps) {
   const k = useKit(), { reduceMotion } = useTheme();
   const win = useWindowDimensions();
   // The overlay's own size is the space the spotlight is drawn in; until it is laid out, the window's.
@@ -81,7 +83,12 @@ export function Coach({ kind, hole, side, eyebrow, title, body, index, count, co
   const card = useAnimatedStyle(() => ({ top: top.value, opacity: placed.value }));
   const fade = useAnimatedStyle(() => ({ opacity: shown.value }));
   const last = index === count - 1;
-  const tapAnywhere = { onStartShouldSetResponder: () => true, onResponderRelease: onNext };
+  const tapAnywhere = { onStartShouldSetResponder: () => true, onResponderRelease: (e: GestureResponderEvent) => {
+    const { locationX: px, locationY: py } = e.nativeEvent;
+    const inside = !!hole && px >= hole.x && px <= hole.x + hole.w && py >= hole.y && py <= hole.y + hole.h;
+    onNext();
+    if (inside && onHole) onHole();
+  } };
   const next = last ? t(kind === 'tour' ? 'obaStartExploring' : 'obaGotIt') : t('obaNext');
   return <Modal transparent visible animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onNext}>
     <Animated.View testID={`coach-${kind}`} style={[StyleSheet.absoluteFill, fade]} accessibilityViewIsModal

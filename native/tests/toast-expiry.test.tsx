@@ -43,3 +43,11 @@ describe('a toast ends for every screen, not just the one that showed it', () =>
     expect(screen.queryByTestId('shell-toast')).toBeNull();
   });
 });
+
+// A toast with Undo sits over the bottom of the page; only Undo itself should take a tap there.
+test('only the toast\'s action takes a tap; its dot and words let it through', async () => {
+  await act(() => showToast('Set deleted', { action: { label: 'Undo', onAction: jest.fn() } }));
+  await mount();
+  expect(screen.getByTestId('shell-toast')).toHaveProp('pointerEvents', 'box-none');
+  expect(screen.getByText('Set deleted')).toHaveProp('pointerEvents', 'none');
+});

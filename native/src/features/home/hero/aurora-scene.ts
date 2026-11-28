@@ -29,8 +29,13 @@ export interface SceneFrame {
   /** The all met join: front of the light in points (-100 none, 1e4 done) and its glint. */
   join: number; joinGlint: number;
 }
-interface Curtain { n: number; pos: Float32Array; up: Float32Array; side: Float32Array; s: Float32Array; k: Float32Array; w: Float32Array; lines: { start: number; n: number; closed: boolean }[] }
+interface Curtain {
+  n: number; pos: Float32Array; up: Float32Array; side: Float32Array; s: Float32Array; k: Float32Array; w: Float32Array; lines: { start: number; n: number; closed: boolean }[];
+  tint?: { key: string; r: Float64Array; g: Float64Array; b: Float64Array; lv: Float64Array; top: Float64Array };
+}
 
+/** The row under a curtain's base in the dark: black, opaque. One shared colour, as Skia only reads it. */
+const BLACK = Float32Array.of(0, 0, 0, 1);
 const smooth = (a: number, b: number, x: number) => { const t = c01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 const outCubic = (x: number) => 1 - Math.pow(1 - c01(x), 3);
 
@@ -151,11 +156,16 @@ export class AuroraScene {
       if (positions.length) canvas.drawVertices(Sk.MakeVertices(VertexMode.Triangles, positions, null, colors, indices, true), BlendMode.Dst, paint);
       positions = []; colors = []; indices = [];
     };
+    // Per point, what does not move from frame to frame: the pillar colour mix, the level and whether it is the top line.
+    const tint = this.tints(c, pc);
+    // The row heights in order: the one under the base, the glow rows (which crowd towards the base as the curtain grows)
+    // merged with the face rows. Reused for every point instead of a new sorted list each time.
+    const vs = new Float64Array(ROWS);
     for (const ln of c.lines) {
       if (positions.length + ln.n * ROWS > 60000) flush();
       const base = positions.length;
       for (let j = 0; j < ln.n; j++) {
-        const i = ln.start + j, k = c.k[i], top = k >= 8.5 ? 1 : 0, lv = k / 9, vG = g[i] * fade;
+        const i = ln.start + j, top = tint.top[i], lv = tint.lv[i], vG = g[i] * fade;
         const hx = tx[i] - bx[i], hy = ty[i] - by[i], hl = Math.hypot(hx, hy);
         // seen edge on, a ribbon is thinner than a pixel and would sparkle: fade it as its length along the line crowds
         const ia = ln.start + (ln.closed ? (j - 1 + ln.n) % ln.n : Math.max(0, j - 1)), ib = ln.start + (ln.closed ? (j + 1) % ln.n : Math.min(ln.n - 1, j + 1));
@@ -164,28 +174,34 @@ export class AuroraScene {
         const Bx = (bx[ib] - bx[ia]) / dsv, By = (by[ib] - by[ia]) / dsv;
         const pxPerS = hl > 0.05 ? Math.abs(Bx * hy - By * hx) / hl : Math.hypot(Bx, By);
         const eo = smooth(5, 22, pxPerS);
-        const w0 = c.w[i * 3], w1 = c.w[i * 3 + 1], w2 = c.w[i * 3 + 2], ws = w0 + w1 + w2 || 1;
-        const cr = (pc[0][0] * w0 + pc[1][0] * w1 + pc[2][0] * w2) / ws, cg = (pc[0][1] * w0 + pc[1][1] * w1 + pc[2][1] * w2) / ws, cb = (pc[0][2] * w0 + pc[1][2] * w1 + pc[2][2] * w2) / ws;
-        const vs: number[] = [hl > 0.01 ? -UNDER / hl : 0];
-        for (const d of GLOW) vs.push(hl > 0.01 ? Math.min(1, d / hl) : 0);
-        for (const v of FACE) vs.push(v);
-        vs.sort((a, b) => a - b);
-        for (const v of vs) {
-          const under = v < 0 ? 0 : 1;
+        const cr = tint.r[i], cg = tint.g[i], cb = tint.b[i];
+        const tall = hl > 0.01;
+        vs[0] = tall ? -UNDER / hl : 0;
+        for (let a = 0, b = 0, o = 1; o < ROWS; o++) {
+          const gv = a < GLOW.length ? (tall ? Math.min(1, GLOW[a] / hl) : 0) : Infinity;
+          if (b >= FACE.length || gv <= FACE[b]) { vs[o] = gv; a++; } else { vs[o] = FACE[b]; b++; }
+        }
+        // The first row is the smallest: below the base, or 0 for a curtain flat on the globe.
+        const m = vG * eo, cw = (0.5 + 0.5 * top) * dpr, glowD = (2.6 + 2 * top) * dpr;
+        const ht = 0.35 + 0.25 * lv + 0.15 * top, li = (0.75 + 0.4 * lv) * (1 + 1.2 * top), q = (0.28 + 0.14 * lv) * (1 + 0.25 * top);
+        const it = 0.18 - 0.18 * top, ir = cr + (ink[0] - cr) * it, ig = cg + (ink[1] - cg) * it, ib2 = cb + (ink[2] - cb) * it;
+        for (let o = 0; o < ROWS; o++) {
+          const v = vs[o];
           positions.push({ x: bx[i] + hx * v, y: by[i] + hy * v });
-          const dpx = Math.max(0, v) * hl * dpr, cw = (0.5 + 0.5 * top) * dpr;
-          const core = 1 - smooth(cw, cw + 1.2, dpx), glowL = Math.exp(-dpx / ((2.6 + 2 * top) * dpr));
+          // In the dark the row under the base is always black and opaque: nothing to work out.
+          if (dk && v < 0) { colors.push(BLACK); continue; }
+          const under = v < 0 ? 0 : 1;
+          const dpx = Math.max(0, v) * hl * dpr;
+          const core = 1 - smooth(cw, cw + 1.2, dpx), glowL = Math.exp(-dpx / glowD);
           const fall = Math.pow(Math.max(0, 1 - v), 1.9) * smooth(0, 0.05, v + 0.02), lower = Math.exp(-v * 9), cur = fall * 0.62 + lower * 0.5;
           const hiT = smooth(0.25, 0.95, v) * 0.55, ccr = cr + (hi[0] - cr) * hiT, ccg = cg + (hi[1] - cg) * hiT, ccb = cb + (hi[2] - cb) * hiT;
           let r: number, gg: number, bb: number, a: number;
           if (dk) {
-            const ht = 0.35 + 0.25 * lv + 0.15 * top, li = (0.75 + 0.4 * lv) * (1 + 1.2 * top), q = (0.28 + 0.14 * lv) * (1 + 0.25 * top);
             r = ((cr + (1 - cr) * ht) * core * 1.15 + cr * glowL * 0.42) * li + ccr * cur * q;
             gg = ((cg + (1 - cg) * ht) * core * 1.15 + cg * glowL * 0.42) * li + ccg * cur * q;
             bb = ((cb + (1 - cb) * ht) * core * 1.15 + cb * glowL * 0.42) * li + ccb * cur * q;
-            const m = vG * eo * under; r *= m; gg *= m; bb *= m; a = 1;
+            const mu = m * under; r *= mu; gg *= mu; bb *= mu; a = 1;
           } else {
-            const it = 0.18 - 0.18 * top, ir = cr + (ink[0] - cr) * it, ig = cg + (ink[1] - cg) * it, ib2 = cb + (ink[2] - cb) * it;
             const la = c01(core * (0.78 + 0.22 * lv + 0.3 * top)), ca = c01(cur * (0.17 + 0.07 * lv) * (1 + 0.35 * top) + glowL * (0.08 + 0.12 * top));
             a = (la + ca * (1 - la)) * vG * eo * under;
             const pr = ir * la + ccr * ca * (1 - la), pg = ig * la + ccg * ca * (1 - la), pb = ib2 * la + ccb * ca * (1 - la);
@@ -202,6 +218,21 @@ export class AuroraScene {
       }
     }
     flush();
+  }
+
+  /** Each point's pillar colour mix, level and top-line mark, worked out once per curtain and colours. */
+  private tints(c: Curtain, pc: [number, number, number][]) {
+    const key = pc.join();
+    if (c.tint?.key === key) return c.tint;
+    const r = new Float64Array(c.n), g = new Float64Array(c.n), b = new Float64Array(c.n), lv = new Float64Array(c.n), top = new Float64Array(c.n);
+    for (let i = 0; i < c.n; i++) {
+      const k = c.k[i];
+      top[i] = k >= 8.5 ? 1 : 0; lv[i] = k / 9;
+      const w0 = c.w[i * 3], w1 = c.w[i * 3 + 1], w2 = c.w[i * 3 + 2], ws = w0 + w1 + w2 || 1;
+      r[i] = (pc[0][0] * w0 + pc[1][0] * w1 + pc[2][0] * w2) / ws; g[i] = (pc[0][1] * w0 + pc[1][1] * w1 + pc[2][1] * w2) / ws; b[i] = (pc[0][2] * w0 + pc[1][2] * w1 + pc[2][2] * w2) / ws;
+    }
+    c.tint = { key, r, g, b, lv, top };
+    return c.tint;
   }
 
   /** Lit points: each met arc's end cap and its hill's summit, with a star flare while they ignite. */

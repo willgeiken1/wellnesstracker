@@ -40,7 +40,7 @@ function fixtureRepo(owner: string) {
   const listeners = new Set<() => void>();
   let pending = owner === OWNER_A ? [{ row: syntheticRow(), revision: '100:fixture' }] : [];
   return {
-    owner, syncFlags: {syncedV1Columns:false}, syncTables: () => syncTables(), pending: () => pending, conflicts: () => [],
+    owner, syncFlags: {syncedV1Columns:false}, syncTables: () => syncTables(), pending: () => pending, pendingCount: () => pending.length, conflicts: () => [],
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     ack: jest.fn(() => { pending = []; listeners.forEach(l => l()); }),
     wipe: jest.fn(() => {pending=[];listeners.forEach(l=>l());}), hasUnsynced:()=>pending.length>0,unsyncedCount:()=>pending.length,
@@ -635,7 +635,7 @@ test('createAccount rejects under-13 and missing DOB before auth or local writes
 
 test('confirmation-only signup cannot promote demo into a later different account',async()=>{
  const {memoryRepository}=require('./workout-repository') as typeof import('./workout-repository');
- const repos=new Map<string,Repository>();const repo=(owner:string)=>{if(!repos.has(owner))repos.set(owner,Object.assign(memoryRepository(),{owner,syncFlags:{syncedV1Columns:false},syncTables:()=>syncTables(),pending:()=>[],conflicts:()=>[],cursor:()=> '0',applyPage:jest.fn()}));return repos.get(owner)!;};
+ const repos=new Map<string,Repository>();const repo=(owner:string)=>{if(!repos.has(owner))repos.set(owner,Object.assign(memoryRepository(),{owner,syncFlags:{syncedV1Columns:false},syncTables:()=>syncTables(),pending:()=>[],pendingCount:()=>0,conflicts:()=>[],cursor:()=> '0',applyPage:jest.fn()}));return repos.get(owner)!;};
  const fixture=clientFixture(null);repo('device').localSave('demoUpgradePending',true);
  jest.mocked(openLocalDatabase).mockResolvedValue({forOwner:repo,wipeAll:jest.fn()});
  const {promoteDemo}=require('../src/features/onboarding/demo-transfer') as typeof import('../src/features/onboarding/demo-transfer');
@@ -786,7 +786,7 @@ function syncSwitchRepo(owner: string) {
   let pending: { row: ReturnType<typeof syntheticRow>; revision: string }[] = [];
   const notify = () => listeners.forEach(l => l());
   const repo = {
-    owner, syncFlags: {syncedV1Columns:false}, syncTables: () => syncTables(), pending: () => pending, conflicts: () => [],
+    owner, syncFlags: {syncedV1Columns:false}, syncTables: () => syncTables(), pending: () => pending, pendingCount: () => pending.length, conflicts: () => [],
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     localGet: (key: string) => local.get(key), localSave: (key: string, value: unknown) => { local.set(key, value); notify(); },
     ack: jest.fn(() => { pending = []; notify(); }),
