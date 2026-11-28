@@ -2,7 +2,7 @@ import type { Draft } from "../../data/workout/store";
 import type { Repository } from "../../data/repository";
 import { syncedTables, validateRow, type Table } from "../../data/rows";
 import { ROUTINES_KEY, readStoredRoutines } from "../routines/store";
-import { emptyState } from "../routines/model";
+import { emptyState, normalize } from "../routines/model";
 import {
   type ImportPlan,
   stableJson,
@@ -324,7 +324,11 @@ const REPLACE_CLEARS = ["foodWater", "routines", "progressNeck", "progressBodyFa
  * account's own tables. A document written under the key is taken into the tables by the Routines store on its next
  * read, replacing them, so a merge has to start from what the tables hold.
  */
-const routinesNow = (repo: Repository): unknown => repo.localGet<unknown>(ROUTINES_KEY) ?? readStoredRoutines(repo) ?? undefined;
+const routinesNow = (repo: Repository): unknown => {
+  // A document the store couldn't read is dropped by it, so the tables are what the phone holds then.
+  const raw = repo.localGet<unknown>(ROUTINES_KEY);
+  return (raw != null && normalize(raw) ? raw : readStoredRoutines(repo)) ?? undefined;
+};
 /** Details a restore never takes from the file: the importer's own bookkeeping, AI photos and barcode caches. */
 const skipped = (key: string) => key.startsWith("pwa") || key === "foodAi" || key.startsWith("barcode:");
 

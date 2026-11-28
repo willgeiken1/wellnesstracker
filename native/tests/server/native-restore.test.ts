@@ -170,6 +170,24 @@ test('a backup restored while signed out brings its phone-side details to the fi
   } finally { sqlite.close(); }
 });
 
+test('a Replace updates a Routines screen that is already open, so its next tap keeps the Replace', async () => {
+  for (const local of [{}, { routines: { v: 1, routines: [], hidden: [], items: [], log: {} } }]) {
+    const { sqlite, repo } = await setup();
+    try {
+      const open = createLocalRoutinesStore(repo);
+      const { item } = open.addItem(fixtureItem('Fixture vitamin'));
+      let told = 0;
+      open.subscribe(() => { told++; });
+      // A file without routines, and one whose routines are empty of everything.
+      restoreNativeLocal(repo, { format: 'insight-phone-only', version: 1, rows: {}, local }, new Set(), 'replace', noPhotos);
+      expect(told).toBeGreaterThan(0);
+      expect(open.read().items).toEqual([]);
+      open.toggleDone(item.id);
+      expect(createLocalRoutinesStore(repo).read().items).toEqual([]);
+    } finally { sqlite.close(); }
+  }
+});
+
 test('routines restored while signed out reach the first account after the Routines tab took them into the tables', async () => {
   const made = await setup(), { sqlite, repo: guest } = await setup();
   try {
