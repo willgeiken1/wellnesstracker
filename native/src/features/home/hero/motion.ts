@@ -31,7 +31,9 @@ export interface MotionFrame {
 export class HeroMotion {
   private rm: boolean;
   private ent = { on: false, t0: 0, flared: true };
-  private morph = { on: false, t0: 0, dir: 0, flared: true };
+  // fadeFrom: the leaving day's fade when this change began; tFrom: how far the rising day was already up; curT0: the leaving
+  // day's height (2 when fully up); yaw0: the globe's turn handed over from a swipe or the last change.
+  private morph = { on: false, t0: 0, dir: 0, flared: true, fadeFrom: 1, tFrom: 0, curT0: 2, yaw0: 0 };
   private gf = { cur: [0, 0, 0] as T3, to: [0, 0, 0] as T3, from: [0, 0, 0] as T3, rest: [0, 0, 0] as T3 };
   private vt = { from: [0, 0, 0] as T3, to: [0, 0, 0] as T3, p: 1 };
   private lit: T3 = [0, 0, 0]; private glint: T3 = [-1, -1, -1]; private met = [false, false, false];
@@ -77,18 +79,49 @@ export class HeroMotion {
     this.ent.on = false; this.gf.cur = this.gf.to.slice() as T3;
     if (!this.ent.flared) { this.ent.flared = true; this.litNow(); }
   }
-  /** A new day: with `animate`, the old curtains sink while the new ones rise and the arcs slide; dir swings the view. */
-  setDay(d: DayState, animate: boolean, dir: number, now: number) {
-    if (this.morph.on) this.finishMorph();
-    if (!animate || this.rm) { this.stats(d); this.gf.cur = this.gf.to.slice() as T3; this.vt.from = this.vt.to.slice() as T3; this.vt.p = 1; this.litNow(); return false; }
+  /** The crossing at `now`: the leaving day's height and fade, the rising day's height and the view's turn. */
+  private crossing(now: number) {
+    const m = this.morph, mt = now - m.t0, p = c01(mt / MORPH), d = m.tFrom > 0 ? 0 : 110;
+    const rise = outCubic((mt - d) / (MORPH - d));
+    return { mt, p, rise, curT: m.curT0, curFade: m.fadeFrom * (1 - outCubic(mt / 300)), nextT: m.tFrom + (1.05 - m.tFrom) * rise,
+      yaw: m.yaw0 * (1 - inOutCubic(p)) + m.dir * 0.16 * Math.sin(Math.PI * p) };
+  }
+  /**
+   * A new day: with `animate`, the old curtains sink while the new ones rise and the arcs slide; dir swings the view toward the new
+   * day and `turn` is the globe's turn handed over from a swipe, which eases out as the view swings. A change in the middle of another
+   * carries on from what is on screen instead of snapping: the rising day keeps its height (it becomes the leaving day once a third
+   * up; before that it takes the new day's shape and keeps rising), the leaving day keeps its fade, and the fills, values and turn
+   * slide on from where they are. Returns 'cross' for a fresh crossing, 'promote' when the scene should first keep its incoming
+   * curtains as the leaving ones, 'replace' when it should swap the incoming curtains for the new day's, or false for no motion.
+   */
+  setDay(d: DayState, animate: boolean, dir: number, now: number, turn = this.handoff): 'cross' | 'promote' | 'replace' | false {
+    this.handoff = 0;
+    if (!animate || this.rm) {
+      if (this.morph.on) this.finishMorph();
+      this.stats(d); this.gf.cur = this.gf.to.slice() as T3; this.vt.from = this.vt.to.slice() as T3; this.vt.p = 1; this.litNow(); return false;
+    }
+    let mode: 'cross' | 'promote' | 'replace' = 'cross', fadeFrom = 1, tFrom = 0, curT0 = 2, yaw0 = turn;
+    if (this.morph.on) {
+      const c = this.crossing(now);
+      yaw0 += c.yaw;
+      if (c.nextT >= 0.35) { mode = 'promote'; curT0 = c.nextT; }
+      else { mode = 'replace'; fadeFrom = c.curFade; tFrom = c.nextT; curT0 = c.curT; }
+    }
     const vp0 = outCubic(this.vt.p);
     this.vt.from = this.vt.from.map((v, i) => v + (this.vt.to[i] - v) * vp0) as T3; this.vt.p = 0;
     this.join = { t0: -1, done: false };
     this.gf.from = this.gf.cur.slice() as T3; this.stats(d);
     this.lit = [0, 0, 0]; this.glint = [-1, -1, -1];
-    this.morph = { on: true, t0: now, dir, flared: false };
-    return true;
+    this.morph = { on: true, t0: now, dir, flared: false, fadeFrom, tFrom, curT0, yaw0 };
+    return mode;
   }
+  /** A swipe that changes the day hands its turn to the change, which eases it out as the view swings toward the new day. */
+  takeTurn() { this.handoff = this.az; this.az = 0; this.dragging = false; this.rest(); }
+  private handoff = 0;
+  private kicker: () => void = () => {};
+  /** Asks the canvas for frames (it hands its own in with setKick). */
+  kick() { this.kicker(); }
+  setKick(fn: () => void) { this.kicker = fn; }
   private finishMorph() {
     if (!this.morph.on) return;
     this.morph.on = false; this.gf.cur = this.gf.to.slice() as T3; this.vt.p = 1;
@@ -106,7 +139,7 @@ export class HeroMotion {
   /** Forget the frame time, so the next frame after a pause doesn't jump. */
   rest() { this.last = 0; }
   /** A horizontal drag starts: the turn it starts from. */
-  beginDrag() { this.dragging = true; return this.az; }
+  beginDrag() { this.dragging = true; this.handoff = 0; return this.az; }
   /** The drag's turn, held to -0.5..0.5. */
   dragTo(az: number) { this.az = Math.max(-0.5, Math.min(0.5, az)); }
   /** Let go: the turn eases back to 0. */
@@ -131,14 +164,13 @@ export class HeroMotion {
       }
     }
     if (this.morph.on) {
-      const mt = now - this.morph.t0, p = c01(mt / MORPH);
-      curFade = 1 - outCubic(mt / 300); nextFade = 1; nextT = outCubic((mt - 110) / (MORPH - 110)) * 1.05; this.phase += dt * 0.0024;
-      const gq = outCubic((mt - 110) / (MORPH - 110));
-      for (let i = 0; i < 3; i++) this.gf.cur[i] = this.gf.from[i] + (this.gf.to[i] - this.gf.from[i]) * gq;
-      this.vt.p = c01((mt - 60) / (MORPH - 60));
-      swing = this.morph.dir * 0.16 * Math.sin(Math.PI * p);
-      if (!this.morph.flared && p >= 0.78) { this.morph.flared = true; if (!this.ent.on || this.ent.flared) this.igniteMet(now); }
-      if (p >= 1) { this.finishMorph(); curT = 2; curFade = 1; nextT = 0; nextFade = 0; swing = 0; } else busy = true;
+      const c = this.crossing(now);
+      curT = c.curT; curFade = c.curFade; nextFade = 1; nextT = c.nextT; this.phase += dt * 0.0024;
+      for (let i = 0; i < 3; i++) this.gf.cur[i] = this.gf.from[i] + (this.gf.to[i] - this.gf.from[i]) * c.rise;
+      this.vt.p = c01((c.mt - 60) / (MORPH - 60));
+      swing = c.yaw;
+      if (!this.morph.flared && c.p >= 0.78) { this.morph.flared = true; if (!this.ent.on || this.ent.flared) this.igniteMet(now); }
+      if (c.p >= 1) { this.finishMorph(); curT = 2; curFade = 1; nextT = 0; nextFade = 0; swing = 0; } else busy = true;
     }
     if (this.dragging) this.phase += dt * 0.0012;
     else if (this.az !== 0) { this.az *= Math.exp(-dt / 160); this.phase += dt * 0.0012; if (Math.abs(this.az) < 0.0008) this.az = 0; else busy = true; }

@@ -1408,7 +1408,7 @@ export const en = {
   homeHeroSessionDone: 'Session done', homeHeroGoalMet: 'Goal met', homeHeroHidden: 'Hidden · tap a tile to show', homeNumbersHidden: '{title} hidden. Show numbers', homeTapToShow: 'Tap to show',
   homeHeroMinLeft: '{n} min left · {pct}', homeHeroEnergyLeft: '{n} {u} left · {pct}', homeHeroSleepBelow: '{n} below goal · {pct}',
   homeHeroOf: 'of ', homeHeroOfGoal: 'of {goal}', homeHeroClearSky: 'A clear sky', homeHeroQuietDay: 'A quiet day',
-  homeHeroThisWeek: 'This week', homeHeroWeekNote: 'Tap or slide across the days.', homeHeroWeekShowing: 'Showing {day}. Tap Today to come back.',
+  homeHeroThisWeek: 'This week', homeHeroSwipeHint: 'Swipe left or right for another day.', homeHeroWeekNote: 'Tap or slide across the days.', homeHeroWeekShowing: 'Showing {day}. Tap Today to come back.',
   homeHeroDayScore: 'Day score {n}.', homeHeroShowDetails: 'Show details.', homeHeroTodaySuffix: ', today',
   homeHeroMapLabel: 'Your day', homeHeroCouldNotLoad: 'Your map could not load', homeHeroCouldNotLoadSub: 'Your numbers and tiles are below.',
   homeHeroGoalMetSpoken: 'goal met', homeHeroRestSpoken: 'rest day', homeHeroMinutes: '{n} of {goal} minutes', homeHeroSleepSpoken: '{n} of {goal} sleep',
