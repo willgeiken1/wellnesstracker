@@ -205,6 +205,21 @@ describe('first-Home tips', () => {
     expect(s.data.get(TIPS_KEY)).toBeNull();
     expect(s.data.get(TIPS_SEEN_KEY)).toBe(true);
   });
+  test.each([[{ x: 350, y: 70 }, true], [{ x: 100, y: 400 }, false]] as const)('in the last tip, a tap at %j opens Settings: %s', async (at, opens) => {
+    const { router } = jest.requireMock('expo-router') as { router: { push: jest.Mock } };
+    router.push.mockClear();
+    const s = store('user-1', { [TIPS_KEY]: '1' });
+    await wrap(<HomeTips store={s} hero={{ current: place(16, 44, 361, 588) }} avatar={{ current: place(333, 53, 44, 44) }} />);
+    await waitFor(() => expect(screen.getByTestId('coach-tips')).toBeTruthy());
+    for (let i = 0; i < 2; i++) await fireEvent.press(screen.getByTestId('coach-next'));
+    await waitFor(() => expect(screen.getByText('Tip 3 of 3')).toBeTruthy());
+    await act(async () => { await new Promise(done => setTimeout(done, 50)); });
+    await act(async () => { fireEvent(screen.getByTestId('coach-scrim'), 'responderRelease', { nativeEvent: { locationX: at.x, locationY: at.y } }); });
+    await act(async () => { await new Promise(done => setTimeout(done, 10)); });
+    expect(screen.queryByTestId('coach-tips')).toBeNull();
+    expect(s.data.get(TIPS_SEEN_KEY)).toBe(true);
+    expect(router.push.mock.calls).toEqual(opens ? [['/settings']] : []);
+  });
   test('the card sits under its target when it fits and over it when not; the scrim is darker for tips', () => {
     expect(cardTop({ x: 0, y: 100, w: 10, h: 100, r: 0 }, 150, 852, 'auto')).toBe(214);
     expect(cardTop({ x: 0, y: 700, w: 10, h: 60, r: 0 }, 150, 852, 'auto')).toBe(536);

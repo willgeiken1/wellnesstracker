@@ -4,7 +4,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { ThemeProvider } from '../src/design/theme-provider';
-import { Fan, LABEL_ROOM, type FanAction } from '../src/features/shell/fan';
+import { Fan, LABEL_ROOM, Scrim, type FanAction } from '../src/features/shell/fan';
 import { labelOffset, layoutArc } from '../src/features/shell/geometry';
 
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn(), impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
@@ -59,4 +59,14 @@ test('a label right of its button starts 10 pt past it; one on the left ends 10 
 test('the room is wide enough for the longest label the arc can show', () => {
   // The widest arc label on a phone is under 220 pt (a long hint at 11.5 pt); the box allows more than that.
   expect(LABEL_ROOM).toBeGreaterThanOrEqual(W * 0.75);
+});
+
+// Closing the actions faded the scrim out over 200 ms while it still took every tap, so a tap on the page right after
+// (a tab, the Settings initial) did nothing.
+test('the scrim lets taps through to the page as soon as the actions close', async () => {
+  const view = await render(<ThemeProvider><Scrim open onClose={() => {}} /></ThemeProvider>);
+  expect(screen.getByTestId('fan-scrim')).toHaveProp('pointerEvents', 'auto');
+  await view.rerender(<ThemeProvider><Scrim open={false} onClose={() => {}} /></ThemeProvider>);
+  const scrim = screen.queryByTestId('fan-scrim');
+  if (scrim) expect(scrim).toHaveProp('pointerEvents', 'none');
 });

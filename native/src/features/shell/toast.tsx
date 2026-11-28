@@ -72,8 +72,9 @@ export function ShellToast({ bottom }: { bottom: number }) {
     style={[{ position: 'absolute', left: 16, right: 16, bottom: 92 + bottom, minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10,
       paddingVertical: 10, paddingHorizontal: 16, borderRadius: 18, backgroundColor: mix(shell.pillInk, 0.06, shell.pill),
       boxShadow: `${shell.lift}, inset 0px 0px 0px 1px ${alpha(shell.pillInk, 0.12)}` }, motion]}>
-    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
-    <ThemedText style={{ flex: 1, color: shell.pillInk, fontFamily: tokens.font.bodyStrong, fontSize: 14, lineHeight: 18, letterSpacing: -0.07 }}>{shown.text}</ThemedText>
+    {/* Only the action answers a tap: the rest of the toast lets it through to the page under it. */}
+    <View pointerEvents="none" style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
+    <ThemedText pointerEvents="none" style={{ flex: 1, color: shell.pillInk, fontFamily: tokens.font.bodyStrong, fontSize: 14, lineHeight: 18, letterSpacing: -0.07 }}>{shown.text}</ThemedText>
     {shown.action && <Tappable dim="text" accessibilityRole="button" accessibilityLabel={shown.action.label} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
       onPress={() => { setGoneId(shown.id); takeAction(shown.id)?.onAction(); }}
       style={{ minHeight: 44, marginVertical: -6, marginRight: -8, paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center' }}>
