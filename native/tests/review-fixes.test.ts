@@ -140,7 +140,7 @@ describe('export', () => {
     expect(out[2]).toMatch(/,60,kg,5,,,,,,$/);
   });
   test('a warm-up logged on the phone exports its tag, with synced set columns off', () => {
-    const repo = memoryRepository(), store = new WorkoutStore(repo), start = Date.now() - 3_600_000;
+    const repo = memoryRepository(), store = new WorkoutStore(repo), start = new Date(2026, 10, 27, 12).getTime(); // noon on "today", whatever the real date
     const s = store.start(undefined, start), e = store.addExercise(s.id, 'Squat', 2);
     store.editDraft(e.id, 0, { weight: '40', reps: '5', tag: 'warmup' }); store.toggleDone(e.id, 0);
     store.editDraft(e.id, 1, { weight: '100', reps: '5' }); store.toggleDone(e.id, 1);
