@@ -12,7 +12,7 @@ export { TileIcon } from './tile-icon';
 export { TileSurface } from './tile-surface';
 export { gridTile, liftShadows, plate, raised, studioTile, well, type DepthSpec } from './depth';
 export { TileTraySheet } from './tray-sheet';
-export { TileCustomizeSheet } from './customize-sheet';
+export { TileEditorSheet } from './editor/editor-sheet';
 export { PageSections, useSections } from './sections';
 export { createSectionStore, resetSectionStores, sectionKey, sectionStoreFor, type PageSection } from './section-store';
 export { PageSectionSheet } from './section-sheet';

@@ -69,9 +69,9 @@ export const fittedSheet: NativeStackNavigationOptions = { ...sheet, sheetAllowe
 /** A pushed screen: in from the right, back with the edge swipe. It draws its own bar. */
 export const pushedScreen: NativeStackNavigationOptions = { headerShown: false };
 
-/** Customize a tile: Home's sheet is taller than the other pages' (it shows the tile's styles and sizes in a card). */
-export const tileEditSheet = (page?: unknown, id?: unknown) =>
-  mediumSheet(page === 'home' ? 'home-tile-edit' : page === 'training' && id === 'split' ? 'split-tile-edit' : 'tile-edit');
+/** Edit a tile: the tile editor, a large sheet on every page (its live preview, style, size, options, units, goal and colour). */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the route still passes its page and tile.
+export const tileEditSheet = (_page?: unknown, _id?: unknown): NativeStackNavigationOptions => largeSheet;
 
 /**
  * The root stack's routes that open over the tabs, with the design screen each one is. Read by app/_layout.tsx, so a

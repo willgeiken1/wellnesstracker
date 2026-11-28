@@ -9,7 +9,7 @@ One grid engine for Home, Training, Food, Progress and Routines. Import from `sr
 - Edit state lives in `tileEdit` (`get`, `subscribe`, `set(page, on)`, `end()`). The dock's Done calls `tileEdit.end()`. Leaving a tab should call `tileEdit.set(page, false)`.
 
 ## App wiring (once, outside this folder)
-- Sheet routes: `src/app/tiles/tray.tsx` renders `<TileTraySheet page={page} />`, `edit.tsx` renders `<TileCustomizeSheet page id />`, and `section.tsx` renders `<PageSectionSheet page id />`. Read `page` and `id` from the search params, and register each screen with `tileSheetOptions.tray`, `.edit` or `.section`.
+- Sheet routes: `src/app/tiles/tray.tsx` renders `<TileTraySheet page={page} />`, `edit.tsx` renders `<TileEditorSheet page id />` (the tile editor, `editor/`), and `section.tsx` renders `<PageSectionSheet page id />`. Read `page` and `id` from the search params, and register each screen with `tileSheetOptions.tray`, `.edit` or `.section`.
 - `configureTileToast((message, action?) => ...)` hands removes and resets to the shell's toast, with an Undo action.
 - `configureTileRoutes({...})` points tray, customize, section or close somewhere else if a page needs to.
 - The app root needs `GestureHandlerRootView`. Until it has one, the grid wraps itself.

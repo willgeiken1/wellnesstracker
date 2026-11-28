@@ -86,10 +86,11 @@ export class TrainingData {
   readonly today: string;
   readonly monday: string;
   private cache = new Map<string, unknown>();
-  constructor(readonly repo: Repository, readonly now = Date.now(), readonly fallbackName = 'Workout') {
+  /** `unit` draws every weight in that unit instead of the person's (a tile with its own units). */
+  constructor(readonly repo: Repository, readonly now = Date.now(), readonly fallbackName = 'Workout', unit?: Unit) {
     this.workout = new WorkoutStore(repo);
     this.plans = new PlanStore(repo);
-    this.unit = this.workout.unit();
+    this.unit = unit ?? this.workout.unit();
     this.today = localDay(new Date(now));
     this.monday = weekOf(new Date(now));
   }

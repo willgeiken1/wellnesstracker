@@ -1,10 +1,12 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { tokens, type ThemeColors, type ThemeMode } from '@/design/tokens';
 import { gridTile, studioTile, type DepthShadow } from './depth';
 import { BODY_TOP, FRAMES, HEAD_H, PAD } from './geometry';
 import { optionValues, styleOf } from './model';
 import { isPending } from './pending';
+import { TINT_KEY, tileUnits, tintedColors } from './look';
+import { UNIT_KEYS, UnitOverrideContext } from '@/features/settings/unit-override';
 import { TileIcon } from './tile-icon';
 import { TileSurface } from './tile-surface';
 import type { LayoutEntry, TileDef, TilePageConfig, TileRender, TileRenderer, TileRenderProps, TileSize } from './types';
@@ -32,7 +34,11 @@ export interface TileFrameProps {
  * renderer draws. Home's tiles use Home's own frame and draw their own header; a tile still on its pending stub gets
  * the engine's header so it reads as itself until its packet builds it.
  */
-export const TileFrame = memo(function TileFrame({ cfg, def, entry, colors, mode, reduceMotion, editing = false, preview = false, lift }: TileFrameProps) {
+export const TileFrame = memo(function TileFrame({ cfg, def, entry, colors: theme, mode, reduceMotion, editing = false, preview = false, lift }: TileFrameProps) {
+  // The tile's own colour and units (the tile editor): its colour tokens swapped, its units in force for what it draws.
+  const tintKey = entry.options[TINT_KEY], unitKey = UNIT_KEYS.map(k => entry.options[`u.${k}`] ?? '').join('|');
+  const colors = useMemo(() => tintedColors(cfg, def, theme, tintKey), [cfg, def, theme, tintKey]);
+  const units = useMemo(() => tileUnits(entry.options), [unitKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const f = FRAMES[entry.size] ?? FRAMES.S;
   const v = styleOf(def, entry.style);
   const render = rendererFor(v.render, entry.size);
@@ -62,7 +68,8 @@ export const TileFrame = memo(function TileFrame({ cfg, def, entry, colors, mode
         <Text numberOfLines={1} style={[styles.title, { color: colors.text }]}>{def.title}</Text>
         {meta ? <Text numberOfLines={1} style={[styles.meta, { color: colors['text-muted'] }]}>{meta}</Text> : null}
       </View> : null}
-      <View pointerEvents={editing || preview ? 'none' : 'box-none'} style={[styles.body, { top: head ? BODY_TOP : PAD, width: body.w, height: body.h }]}>{content}</View>
+      <View pointerEvents={editing || preview ? 'none' : 'box-none'} style={[styles.body, { top: head ? BODY_TOP : PAD, width: body.w, height: body.h }]}>
+        {units ? <UnitOverrideContext.Provider value={units}>{content}</UnitOverrideContext.Provider> : content}</View>
     </View>
   </View>;
 });

@@ -1,4 +1,5 @@
 import { readingOrder } from './geometry';
+import { extrasOf } from './look';
 import type { LayoutEntry, TileDef, TileOption, TileOptionValues, TilePageConfig, TileSize, TileStyle } from './types';
 
 /** A tile's styles. A tile without versions is its own single style, key 'A', named Standard. */
@@ -106,11 +107,12 @@ export function moveEntry(list: readonly LayoutEntry[], id: string, by: -1 | 1):
   }
   return list.slice();
 }
-/** The customize sheet's pick, applied: a style that lacks the size falls back to the style's first size. */
+/** The customize sheet's pick, applied: a style that lacks the size falls back to the style's first size. The tile's own
+ * units and colour (see look.ts) are kept as picked; every other option is made valid for the style. */
 export function customizeEntry(cfg: TilePageConfig, list: readonly LayoutEntry[], id: string, pick: { style: string; size: TileSize; options: TileOptionValues }): LayoutEntry[] {
   const def = cfg.tiles.find(d => d.id === id); if (!def) return list.slice();
   const size = sizesOf(def, pick.style).includes(pick.size) ? pick.size : firstSize(def, pick.style);
-  return readingOrder(list.map(s => s.id === id ? { id, size, style: pick.style, options: optionValues(def, pick.style, pick.options) } : s));
+  return readingOrder(list.map(s => s.id === id ? { id, size, style: pick.style, options: { ...optionValues(def, pick.style, pick.options), ...extrasOf(pick.options) } } : s));
 }
 
 /* ---------- tray ---------- */

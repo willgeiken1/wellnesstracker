@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react';
+import { useUnitOverride } from '@/features/settings/unit-override';
 import { emptyProgress, type ProgressData, type Range } from './model';
+import type { Unit } from '@/features/onboarding/model';
 
 /**
  * The Progress data the tab works out, shared with its tiles (drawn by the tile engine, also inside the tile tray and the
@@ -19,7 +21,18 @@ function fallback() {
   if (!empty || empty.today !== today) empty = emptyProgress(today, 'lb');
   return empty;
 }
-export const useProgressData = () => useSyncExternalStore(subscribe, readProgress, readProgress);
+// A tile with its own units sees the same data in its unit: weights and lengths convert where they are shown. Lengths follow
+// the weight unit on these tiles (lb with inches, kg with centimetres), so a tile with only its own length unit takes that.
+const inUnit = new WeakMap<ProgressData, Partial<Record<Unit, ProgressData>>>();
+function withUnit(d: ProgressData, unit: Unit | undefined): ProgressData {
+  if (!unit || unit === d.unit) return d;
+  let m = inUnit.get(d); if (!m) { m = {}; inUnit.set(d, m); }
+  return (m[unit] ??= { ...d, unit });
+}
+export function useProgressData() {
+  const d = useSyncExternalStore(subscribe, readProgress, readProgress), own = useUnitOverride();
+  return withUnit(d, own?.weight ?? (own?.height ? (own.height === 'cm' ? 'kg' : 'lb') : undefined));
+}
 
 export const pageRange = () => range;
 export function setPageRange(next: Range) { if (next !== range) { range = next; emit(); } }

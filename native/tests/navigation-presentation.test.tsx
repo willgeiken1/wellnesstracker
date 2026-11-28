@@ -36,7 +36,7 @@ type Want = 'push' | 'large' | number | 'fit';
  * A number is a medium sheet's measured height as a share of the 852 pt phone. */
 const DESIGN: [string, string, Want, Record<string, unknown>?][] = [
   ['tile-tray', 'tiles/tray', 'large'], ['home-add-tile', 'tiles/tray', 'large', { page: 'home' }],
-  ['tile-edit', 'tiles/edit', 0.252, { page: 'training' }], ['home-tile-edit', 'tiles/edit', 0.462, { page: 'home' }],
+  ['tile-edit', 'tiles/edit', 'large', { page: 'training' }], ['home-tile-edit', 'tiles/edit', 'large', { page: 'home' }],
   ['page-section', 'tiles/section', 0.252], ['tab-bar', 'tab-bar', 'fit'],
   ['workout-active', 'workout', 'push'], ['workout-detail', 'training/detail', 'push'], ['exercise-detail', 'training/exercise', 'push'],
   ['plan', 'training/plan', 'push'], ['exercise-picker', 'training/picker', 'large'], ['rest-timer', 'training/rest', 0.684],
@@ -142,8 +142,10 @@ test('no screen replaces a sheet\'s content style, which would take its bottom e
 test('each area\'s own sheet options agree with the root stack, so a route never changes its height once open', () => {
   expect(tileSheetOptions.tray).toEqual(largeSheet);
   expect(tileSheetOptions.section).toEqual(mediumSheet('page-section'));
-  expect(tileEditSheet('home')).toEqual(mediumSheet('home-tile-edit'));
-  expect(tileEditSheet('food')).toEqual(mediumSheet('tile-edit'));
+  // The tile editor is a large sheet on every page.
+  expect(tileEditSheet('home')).toEqual(largeSheet);
+  expect(tileEditSheet('food')).toEqual(largeSheet);
+  expect(tileEditSheet('training', 'split')).toEqual(largeSheet);
   expect(trainingSheetOptions).toEqual({ large: largeSheet, medium: mediumSheet('rest-timer') });
   expect(foodSheet('large').sheetAllowedDetents).toEqual([1]);
   expect(foodSheet('quick-cal').sheetAllowedDetents).toEqual(mediumSheet('quick-cal').sheetAllowedDetents);

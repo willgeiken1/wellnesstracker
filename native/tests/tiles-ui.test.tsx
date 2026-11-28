@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { configureTileRoutes, configureTileToast, resetTileStores, tileEdit, tileStoreFor, type TileStorage } from '../src/features/tiles';
-import { TileCustomizeSheet } from '../src/features/tiles/customize-sheet';
+import { TileEditorSheet } from '../src/features/tiles/editor/editor-sheet';
 import { TileTraySheet } from '../src/features/tiles/tray-sheet';
 import { TileGrid } from '../src/features/tiles/tile-grid';
 
@@ -92,9 +92,9 @@ describe('tile grid screens', () => {
 
   it('customize applies a size as it is picked and removes the tile', async () => {
     const storage = fakeStorage();
-    await wrap(<TileCustomizeSheet page="home" id="next" storage={storage} />);
-    expect(screen.getByText('Customize tile')).toBeTruthy();
-    expect(screen.getByText('Slots')).toBeTruthy();
+    await wrap(<TileEditorSheet page="home" id="next" storage={storage} />);
+    expect(screen.getByText('Edit tile')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /^Slots/ })).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Large'));
     expect(tileStoreFor(storage, 'home').getState().tiles.find(e => e.id === 'next')!.size).toBe('L');
     await fireEvent.press(screen.getByText('Remove from Home'));
@@ -104,9 +104,9 @@ describe('tile grid screens', () => {
 
   it('customize without a tile says so', async () => {
     // an unknown id falls back to the page's first tile, which is the split tile now
-    await wrap(<TileCustomizeSheet page="training" id="none" storage={fakeStorage()} />);
-    expect(screen.getByLabelText('Split tile')).toBeTruthy();
-    await wrap(<TileCustomizeSheet page={undefined} id="none" storage={fakeStorage()} />);
+    await wrap(<TileEditorSheet page="training" id="none" storage={fakeStorage()} />);
+    expect(screen.getByLabelText(/^Preview, .*, Large/)).toBeTruthy();
+    await wrap(<TileEditorSheet page={undefined} id="none" storage={fakeStorage()} />);
     expect(screen.getByText('No tile here')).toBeTruthy();
   });
 });
