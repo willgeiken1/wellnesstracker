@@ -77,3 +77,30 @@ test('callers get their own list and their own local value to change', async () 
   const row = repo.list('sessions')[0];
   expect(Object.isFrozen(row) && Object.isFrozen(row.data)).toBe(true);
 });
+
+test('an empty pulled page and an empty acknowledgment redraw nothing; a row that arrives does', async () => {
+  const { localDatabase } = await import('./sqlite');
+  const { syntheticRow } = await import('../../fixtures/sync');
+  const { repo } = await localDatabase();
+  const notify = jest.fn(); repo.subscribe(notify);
+  repo.applyPage('sessions', [], '5');
+  repo.ack([]);
+  expect(notify).not.toHaveBeenCalled();
+  expect(repo.cursor('sessions')).toBe('5');
+  repo.applyPage('sessions', [{ row: { ...syntheticRow(), device_id: '20000000-0000-4000-8000-000000000002', data: { name: 'From the other phone' } } as never, server_seq: '6' }], '6');
+  expect(notify).toHaveBeenCalledTimes(1);
+  expect(repo.list('sessions')).toHaveLength(1);
+});
+
+test('the pending count matches what would upload, leaving out conflicts', async () => {
+  const { localDatabase } = await import('./sqlite');
+  const { repo } = await localDatabase();
+  expect(repo.pendingCount()).toBe(0);
+  const a = repo.save('sessions', { origin: 'blank', routine_id: null, name: 'A', day: '2026-11-20', started_at: 1, finished_at: 2, duration_ms: 1, notes: null });
+  repo.save('sessions', { ...a.data, name: 'B' }, '40000000-0000-4000-8000-000000000002');
+  expect(repo.pendingCount()).toBe(repo.pending().length);
+  expect(repo.pendingCount()).toBe(2);
+  repo.flagConflict(repo.pending()[0]);
+  expect(repo.pendingCount()).toBe(1);
+  expect(repo.pending()).toHaveLength(1);
+});

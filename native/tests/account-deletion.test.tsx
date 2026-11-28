@@ -41,7 +41,7 @@ function fixtureRepo(owner:string){
   // One unsynced row: deletion must not be blocked by it, unlike a plain sign-out.
   let pending=owner===OWNER_A?[{row:syntheticRow(),revision:'100:fixture'}]:[];
   const local=new Map<string,unknown>(owner===OWNER_A?[['profilePhoto',PHOTO]]:[]);
-  return {owner,localGet:(key:string)=>local.get(key),syncFlags:{syncedV1Columns:false},syncTables:()=>syncTables(),pending:()=>pending,conflicts:()=>[],
+  return {owner,localGet:(key:string)=>local.get(key),syncFlags:{syncedV1Columns:false},syncTables:()=>syncTables(),pending:()=>pending,pendingCount:()=>pending.length,conflicts:()=>[],
     subscribe:()=>()=>{},ack:jest.fn(),wipe:jest.fn(()=>{pending=[];local.clear();}),hasUnsynced:()=>pending.length>0,unsyncedCount:()=>pending.length,
     cursor:()=>'0',applyPage:jest.fn()} as unknown as Repository;
 }

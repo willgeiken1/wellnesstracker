@@ -94,7 +94,7 @@ export class SyncEngine {
 export function syncTriggers(engine: SyncEngine, schedule = setTimeout, cancel = clearTimeout) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const changed=()=>{
-    if (!engine.repository.pending().length) return;
+    if (!engine.repository.pendingCount()) return;
     if (timer) cancel(timer);
     timer=schedule(()=>{timer=undefined; void engine.sync();},2000);
   };

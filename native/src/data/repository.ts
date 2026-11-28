@@ -322,6 +322,12 @@ export class Repository {
     const stamp = this.safe(() => Math.max(now, Number(this.state('clock') ?? 0) + 1));
     this.putLocal({...row,device_id:this.device,updated_at:stamp,deleted_at:stamp});
   }
+  /** How many rows pending() would upload, counted without reading them. */
+  pendingCount(): number {
+    const tables = this.syncTables().filter(table => table !== 'purges');
+    if (!tables.length) return 0;
+    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name IN (${sql.join(tables.map(table => sql`${table}`), sql`, `)}) AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id)`)?.count ?? 0);
+  }
   pending(): Pending[] {
     return this.safe(() => this.db.all<{table_name:Table;row_id:string;revision:string}>(sql`SELECT table_name,row_id,revision FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id) ORDER BY table_name,row_id`).filter(item => this.syncTables().includes(item.table_name)).map(item => {
       const row = this.get(item.table_name,item.row_id); if (!row) throw new Error('Invalid outbox.'); validateRow(row); return {row:projectSyncRow(row,this.syncFlags),revision:item.revision};
@@ -369,7 +375,7 @@ export class Repository {
         this.setState('clock',String(clock));
       }
     }));
-    this.notify();
+    if (items.length) this.notify();
   }
   /** Lazy expiry also physically removes stale payloads whenever sync/recovery is used. */
   losingVersions(now = Date.now()): LosingVersion[] {
@@ -472,8 +478,12 @@ export class Repository {
   applyPage(table: Table, page: ServerRow[], cursor: string, complete = false, after = this.cursor(table)) {
     this.outsideAtomic();
     this.reads.purges.clear();
+    const replay = () => this.safe(() => this.state(this.replayKey(table)));
+    const before = page.length ? undefined : replay();
     try { this.applyPageRows(table, page, cursor, complete, after); } finally { this.reads.purges.clear(); }
-    this.notify();
+    // A foreground sync pulls every table, nearly always empty: only a page that could change what a screen shows
+    // redraws the app.
+    if (page.length || replay() !== before) this.notify();
   }
   private applyPageRows(table: Table, page: ServerRow[], cursor: string, complete: boolean, after: string) {
     this.safe(() => this.db.transaction(() => {
