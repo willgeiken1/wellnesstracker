@@ -8,7 +8,8 @@ import type { GoalKey } from '../look';
 
 const LB = 2.20462, KJ = 4.184, FLOZ = 33.814;
 /** Where a goal is read from and written to: the same places Settings, Goals uses, so every page that shows it follows. */
-export interface GoalCtx { repo: Repository | null; prefs: SettingsPrefs; set: (path: string, value: unknown) => void; units: SettingsPrefs['units'] }
+export interface GoalCtx { repo: Repository | null; prefs: SettingsPrefs; set: (path: string, value: unknown) => void; units: SettingsPrefs['units'];
+  /** The day food targets are read and saved for: the day Food shows, or today when left out. */ day?: string }
 export interface GoalSpec {
   label: string;
   where: string;
@@ -22,22 +23,22 @@ export interface GoalSpec {
   /** Where it is stored on the app's data, for goals Revert puts back exactly (a goal never set stays unset). */
   stored?: 'weight' | 'food';
 }
-function goals(repo: Repository | null) { try { return repo ? readGoalsData(repo) : null; } catch { return null; } }
+function goals(repo: Repository | null, day?: string) { try { return repo ? readGoalsData(repo, day) : null; } catch { return null; } }
 const kg = (c: GoalCtx) => c.units.weight === 'kg';
 const ml = (c: GoalCtx) => c.units.water === 'ml';
 
 export const GOALS: Record<GoalKey, GoalSpec> = {
   kcal: {
     label: t('teGKcal'), where: t('teWKcal'),
-    get: c => goals(c.repo)?.kcal ?? c.prefs.goals.kcal,
-    set: (c, v) => { if (c.repo) saveFoodTarget(c.repo, 'kcal', v); else c.set('goals.kcal', v); },
+    get: c => goals(c.repo, c.day)?.kcal ?? c.prefs.goals.kcal,
+    set: (c, v) => { if (c.repo) saveFoodTarget(c.repo, 'kcal', v, c.day); else c.set('goals.kcal', v); },
     step: () => 50, min: () => 1000, max: () => 5000, stored: 'food',
     show: (c, v) => c.units.energy === 'kJ' ? `${formatNumber(Math.round(v * KJ / 10) * 10)} kJ` : `${formatNumber(v)} kcal`,
   },
   protein: {
     label: t('teGProtein'), where: t('teWProtein'),
-    get: c => goals(c.repo)?.protein ?? c.prefs.goals.protein,
-    set: (c, v) => { if (c.repo) saveFoodTarget(c.repo, 'protein', v); else c.set('goals.protein', v); },
+    get: c => goals(c.repo, c.day)?.protein ?? c.prefs.goals.protein,
+    set: (c, v) => { if (c.repo) saveFoodTarget(c.repo, 'protein', v, c.day); else c.set('goals.protein', v); },
     step: () => 5, min: () => 40, max: () => 300, show: (_c, v) => `${v} g`, stored: 'food',
   },
   train: {

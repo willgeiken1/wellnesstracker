@@ -36,4 +36,4 @@ implementTile('training', 'volume', {
 - Besides a tile's own catalogue options, an entry's `options` can hold two kinds of extra key that the editor writes and every page keeps:
   - `u.<unit>` (`u.weight`, `u.energy`, `u.water`, `u.distance`, `u.height`, `u.clock`): this tile's own unit, when it differs from Settings. Only the units listed for the tile in `TILE_UNITS` (`look.ts`) are offered; renderers read them through `tileUnits(options)`.
   - `tint`: a theme colour token from `SWATCHES` that replaces the tile's own colour, where `canTint` allows it.
-- Goals in the editor (`TILE_GOALS`, `editor/goals.ts`) are the same goals Settings, Goals edits, not per-tile values.
+- Goals in the editor (`tileGoals` over `TILE_GOALS`, `editor/goals.ts`) are the same goals Settings, Goals edits, not per-tile values. Progress's Goal tile offers the goal it shows. Food targets are those of the day Food shows (Home: today as food counts it). Revert puts the weight goal and food targets back exactly as stored, so one never set stays unset.

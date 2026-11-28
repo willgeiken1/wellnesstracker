@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { useAuth } from '../src/auth/provider';
+import { attributedDay } from '../src/features/food/model';
+import { pickFoodDay, resetFoodDay } from '../src/features/food/selection';
 import { ThemeProvider } from '../src/design/theme-provider';
 import { readStoredGoals, saveGoalWeight, weightGoalKg } from '../src/features/settings/goals-data';
 import { configureTileRoutes, configureTileToast, resetTileStores, tileEdit, tileStoreFor, type TileStorage } from '../src/features/tiles';
@@ -14,12 +16,12 @@ function fakeStorage(): TileStorage {
   const data: Record<string, unknown> = {};
   return { owner: 'goals-owner', localGet: <T,>(k: string) => data[k] as T | undefined, localSave: (k: string, v: unknown) => { data[k] = v; } } as TileStorage;
 }
-async function open(id: 'weight' | 'calories') {
+async function open(id: string, page: 'home' | 'food' | 'progress' = 'home', options?: Record<string, string>) {
   const repo = memoryRepository();
   jest.mocked(useAuth).mockReturnValue({ repository: repo, pending: 0, syncStatus: 'idle', demo: false } as ReturnType<typeof useAuth>);
   const storage = fakeStorage();
-  tileStoreFor(storage, 'home').add(id, 'M', 'A');
-  await render(<ThemeProvider><TileEditorSheet page="home" id={id} storage={storage} /></ThemeProvider>);
+  tileStoreFor(storage, page).add(id, 'M', 'A', options);
+  await render(<ThemeProvider><TileEditorSheet page={page} id={id} storage={storage} /></ThemeProvider>);
   return repo;
 }
 
@@ -28,6 +30,7 @@ describe('Revert on a tile goal', () => {
     resetTileStores(); tileEdit.end();
     configureTileRoutes({ tray: jest.fn(), customize: jest.fn(), section: jest.fn(), close: jest.fn() }); configureTileToast(() => {});
   });
+  afterEach(() => { resetFoodDay(); });
 
   it('leaves a goal weight that was never set unset', async () => {
     const repo = await open('weight');
@@ -83,5 +86,38 @@ describe('Revert on a tile goal', () => {
     await fireEvent.press(screen.getByTestId('te-revert'));
     expect(repo.list('food_targets')).toHaveLength(0);
     expect(readStoredGoals(repo)).toEqual(before);
+  });
+});
+
+describe('which goal a tile edits', () => {
+  beforeEach(() => {
+    resetTileStores(); tileEdit.end();
+    configureTileRoutes({ tray: jest.fn(), customize: jest.fn(), section: jest.fn(), close: jest.fn() }); configureTileToast(() => {});
+  });
+  afterEach(() => { resetFoodDay(); });
+
+  it('offers the goal that Progress\'s Goal tile is showing', async () => {
+    await open('goal', 'progress', { goal: 'sleep' });
+    expect(screen.getByLabelText('Raise sleep goal')).toBeTruthy();
+    expect(screen.queryByLabelText('Raise goal weight')).toBeNull();
+    await fireEvent.press(screen.getByRole('radio', { name: 'Weight' }));
+    expect(screen.getByLabelText('Raise goal weight')).toBeTruthy();
+  });
+
+  it('offers no goal while it shows the training plan', async () => {
+    await open('goal', 'progress', { goal: 'plan' });
+    expect(screen.queryByLabelText('Raise goal weight')).toBeNull();
+    expect(screen.queryByLabelText('Raise sleep goal')).toBeNull();
+  });
+
+  it('changes the targets of the day Food is showing, and Revert puts that day back', async () => {
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    const yesterday = attributedDay(d);
+    pickFoodDay(yesterday);
+    const repo = await open('cal', 'food');
+    await fireEvent.press(screen.getByLabelText('Raise daily calories'));
+    expect(repo.list('food_targets').map(r => r.data.day)).toEqual([yesterday]);
+    await fireEvent.press(screen.getByTestId('te-revert'));
+    expect(repo.list('food_targets')).toHaveLength(0);
   });
 });

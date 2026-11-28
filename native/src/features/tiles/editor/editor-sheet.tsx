@@ -8,6 +8,7 @@ import { Tappable } from '@/components/tappable';
 import { useTheme } from '@/design/theme-provider';
 import { tokens, type ThemeColors, type ThemeMode } from '@/design/tokens';
 import type { Repository } from '@/data/repository';
+import { useFoodDay } from '@/features/food/selection';
 import { useSettingsPrefs } from '@/features/settings/prefs';
 import { readStoredGoals, restoreStoredGoals, storedGoalsChanged, type StoredGoals } from '@/features/settings/goals-data';
 import type { UnitKey } from '@/features/settings/unit-override';
@@ -15,7 +16,7 @@ import { showToast } from '@/features/shell/toast';
 import { t, type MessageKey } from '@/i18n/en';
 import { colorMix, rgba } from '../depth';
 import { FRAMES } from '../geometry';
-import { SWATCHES, TILE_GOALS, TILE_UNITS, TINT_KEY, canTint, isSwatch, ownToken, tileUnits, type GoalKey } from '../look';
+import { SWATCHES, TILE_UNITS, TINT_KEY, canTint, isSwatch, ownToken, tileGoals, tileUnits, type GoalKey } from '../look';
 import { defaultStyle, firstSize, optionValues, optionsOf, sameOptions, sizesOf, stylesOf } from '../model';
 import { tileRoutes } from '../nav';
 import { isTilePage } from '../registry';
@@ -100,14 +101,17 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
   useEffect(() => () => { if (!adding && tileEdit.get().customizing) tileEdit.customize(page, null); }, [page, adding]);
   const [goalRev, bump] = useState(0);
   const [change, setChange] = useState<{ c: Change; seq: number }>({ c: null, seq: 0 });
-  const units = def ? TILE_UNITS[`${page}:${def.id}`] ?? [] : [], goalKeys = def && !add ? TILE_GOALS[`${page}:${def.id}`] ?? [] : [];
-  const ctx = useMemo<GoalCtx>(() => ({ repo, prefs, set: setPref, units: { ...prefs.units, ...(tileUnits(entry?.options) ?? {}) } }),
-    [repo, prefs, setPref, entry?.options]);
+  const units = def ? TILE_UNITS[`${page}:${def.id}`] ?? [] : [], goalKeys = def && !add ? tileGoals(page, def.id, entry?.options) : [];
+  // Food targets are those of the day Food shows, or of today as food counts it (until 4 am, yesterday), as Home reads them.
+  const foodSel = useFoodDay(), goalDay = page === 'food' ? foodSel.day : foodSel.today;
+  const ctx = useMemo<GoalCtx>(() => ({ repo, prefs, set: setPref, units: { ...prefs.units, ...(tileUnits(entry?.options) ?? {}) }, day: goalDay }),
+    [repo, prefs, setPref, entry?.options, goalDay]);
   // What the tile and its goals were when the sheet opened, for Revert.
   // The goals are kept in the units the tile had then, so Revert after a unit change puts back the same goal, not the same number.
   const [was] = useState(() => entry ? { pick: { style: entry.style, size: entry.size, options: copy(entry.options) } as Pick0,
-    goals: Object.fromEntries(goalKeys.map(g => [g, safeGet(g, ctx)])) as Partial<Record<GoalKey, number>>, units: ctx.units,
-    stored: repo && goalKeys.some(g => GOALS[g].stored) ? safeStored(repo) : null } : null);
+    // Every goal is kept, since changing what a tile shows can bring a different goal's control into view.
+    goals: Object.fromEntries(ALL_GOALS.map(g => [g, safeGet(g, ctx)])) as Partial<Record<GoalKey, number>>, units: ctx.units,
+    stored: repo && goalKeys.length ? safeStored(repo, goalDay) : null } : null);
   const [touched, setTouched] = useState<readonly GoalKey[]>([]);
   const [headH, setHeadH] = useState(60);
   const [barH, setBarH] = useState(88);
@@ -158,13 +162,14 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
     bump(x => x + 1); setChange(x => ({ c: { how: 'fade' }, seq: x.seq + 1 }));
   };
   const wasCtx: GoalCtx = { ...ctx, units: was.units };
+  const changed = [...new Set([...goalKeys, ...touched])];
   const dirty = entry.style !== was.pick.style || entry.size !== was.pick.size || !sameOptions(entry.options, was.pick.options)
-    || goalKeys.some(g => safeGet(g, wasCtx) !== was.goals[g])
+    || changed.some(g => safeGet(g, wasCtx) !== was.goals[g])
     // A goal stepped back to its number can still have been saved where none was (or estimated targets made manual).
     || (!!repo && !!was.stored && touched.some(g => { const w = GOALS[g].stored; return !!w && safeChanged(repo, was.stored!, w); }));
   const atStart = entry.style === start.style && entry.size === start.size && sameOptions(entry.options, start.options);
   const revert = () => {
-    for (const g of goalKeys) { const v = was.goals[g]; if (v != null && safeGet(g, wasCtx) !== v) { try { GOALS[g].set(wasCtx, v); } catch { /* kept */ } } }
+    for (const g of changed) { const v = was.goals[g]; if (v != null && safeGet(g, wasCtx) !== v) { try { GOALS[g].set(wasCtx, v); } catch { /* kept */ } } }
     // A goal stepped here is put back as it was stored, so one that was never set, or targets still estimated, stay that way.
     const back = new Set(touched.map(g => GOALS[g].stored).filter(x => x != null));
     if (repo && was.stored) for (const w of back) { try { restoreStoredGoals(repo, was.stored, w); } catch { /* kept */ } }
@@ -321,7 +326,8 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
 const TOAST_COLORS = ['accent', 'food', 'water', 'recovery', 'training', 'sleep', 'success', 'warning'] as const;
 const toastColor = (c: string) => (TOAST_COLORS as readonly string[]).includes(c) ? c as (typeof TOAST_COLORS)[number] : 'accent';
 function safeGet(g: GoalKey, c: GoalCtx) { try { return GOALS[g].get(c); } catch { return 0; } }
-function safeStored(repo: Repository) { try { return readStoredGoals(repo); } catch { return null; } }
+function safeStored(repo: Repository, day?: string) { try { return readStoredGoals(repo, day); } catch { return null; } }
+const ALL_GOALS = Object.keys(GOALS) as GoalKey[];
 function safeChanged(repo: Repository, was: StoredGoals, w: 'weight' | 'food') { try { return storedGoalsChanged(repo, was, w); } catch { return false; } }
 function useAnimatedStyleSafe(v: { value: number }) {
   return useAnimatedStyle(() => ({ opacity: v.value, transform: [{ translateY: (1 - v.value) * -6 }] }));

@@ -78,3 +78,8 @@ export const TILE_GOALS: Partial<Record<`${TilePageId}:${string}`, readonly Goal
   'food:cal': ['kcal'], 'food:net': ['kcal'], 'food:protein': ['protein'], 'food:water': ['water'], 'food:week': ['kcal'],
   'training:week': ['train'], 'progress:goal': ['weight'], 'progress:weight': ['weight'], 'progress:recovery': ['sleep'],
 };
+/** The goals a tile measures against as it is set up now: Progress's Goal tile follows the goal it shows. */
+export function tileGoals(page: TilePageId, id: string, options: Readonly<Record<string, string>> | undefined): readonly GoalKey[] {
+  if (page === 'progress' && id === 'goal') { const g = options?.goal ?? 'weight'; return g === 'sleep' ? ['sleep'] : g === 'plan' ? [] : ['weight']; }
+  return TILE_GOALS[`${page}:${id}`] ?? [];
+}
