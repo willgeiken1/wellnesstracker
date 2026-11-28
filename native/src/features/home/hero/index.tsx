@@ -14,6 +14,7 @@ import { heroView } from './model';
 import { PlainHero } from './plain';
 import { useMapPrefs } from './prefs';
 import { RidgeHero } from './ridge';
+import { SwipeDays } from './swipe-days';
 import { skyTokens } from './tones';
 import { FadeUp } from './text-motion';
 import { HeroWeek } from './week';
@@ -103,8 +104,10 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
 
   const W = winW - 32, paused = !focused || !active;
   const style = !prefs.map ? 'plain' : prefs.style === 'ridge' ? 'ridge' : failed ? 'ridge' : 'aurora';
-  const map = style === 'plain' ? <PlainHero view={view} colors={c} reduceMotion={reduceMotion} onReveal={input.hide ? revealNumbers : undefined} />
-    : style === 'ridge' ? <RidgeHero view={view} width={winW} colors={c} mode={mode} reduceMotion={reduceMotion} calm={calm} labels={prefs.labels} glow={prefs.glow} onPeak={reveal} />
+  const map = style === 'plain' ? <SwipeDays sel={sel} swipe={swipe} reduceMotion={reduceMotion} onSwipeDay={select}>
+      <PlainHero view={view} colors={c} reduceMotion={reduceMotion} onReveal={input.hide ? revealNumbers : undefined} /></SwipeDays>
+    : style === 'ridge' ? <SwipeDays sel={sel} swipe={swipe} reduceMotion={reduceMotion} onSwipeDay={select}>
+      <RidgeHero view={view} width={winW} colors={c} mode={mode} reduceMotion={reduceMotion} calm={calm} labels={prefs.labels} glow={prefs.glow} onPeak={reveal} /></SwipeDays>
     : <AuroraHero view={view} width={winW} colors={c} mode={mode} sky={sky} reduceMotion={reduceMotion} calm={calm} paused={paused}
       animate={touched && !reduceMotion} levels={LEVELS[prefs.detail]} glow={prefs.glow} labels={prefs.labels}
       scrollY={scrollY} swipe={swipe} onSwipeDay={select} focus={focus} onFocus={pi => { setTouched(true); setFocus(pi); reveal(pi); }} onTouch={() => setTouched(true)} onFail={() => setFailed(true)} />;
