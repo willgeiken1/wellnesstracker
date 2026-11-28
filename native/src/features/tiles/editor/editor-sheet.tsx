@@ -102,8 +102,9 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
   const ctx = useMemo<GoalCtx>(() => ({ repo, prefs, set: setPref, units: { ...prefs.units, ...(tileUnits(entry?.options) ?? {}) } }),
     [repo, prefs, setPref, entry?.options]);
   // What the tile and its goals were when the sheet opened, for Revert.
+  // The goals are kept in the units the tile had then, so Revert after a unit change puts back the same goal, not the same number.
   const [was] = useState(() => entry ? { pick: { style: entry.style, size: entry.size, options: copy(entry.options) } as Pick0,
-    goals: Object.fromEntries(goalKeys.map(g => [g, safeGet(g, ctx)])) as Partial<Record<GoalKey, number>> } : null);
+    goals: Object.fromEntries(goalKeys.map(g => [g, safeGet(g, ctx)])) as Partial<Record<GoalKey, number>>, units: ctx.units } : null);
   const [headH, setHeadH] = useState(60);
   const [barH, setBarH] = useState(88);
   const [stageBottom, setStageBottom] = useState(400);
@@ -151,11 +152,12 @@ export function Editor({ page, id, storage, close, add }: { page: TilePageId; id
     try { spec.set(ctx, n); } catch { /* left as last saved */ }
     bump(x => x + 1); setChange(x => ({ c: { how: 'fade' }, seq: x.seq + 1 }));
   };
+  const wasCtx: GoalCtx = { ...ctx, units: was.units };
   const dirty = entry.style !== was.pick.style || entry.size !== was.pick.size || !sameOptions(entry.options, was.pick.options)
-    || goalKeys.some(g => safeGet(g, ctx) !== was.goals[g]);
+    || goalKeys.some(g => safeGet(g, wasCtx) !== was.goals[g]);
   const atStart = entry.style === start.style && entry.size === start.size && sameOptions(entry.options, start.options);
   const revert = () => {
-    for (const g of goalKeys) { const v = was.goals[g]; if (v != null && safeGet(g, ctx) !== v) { try { GOALS[g].set(ctx, v); } catch { /* kept */ } } }
+    for (const g of goalKeys) { const v = was.goals[g]; if (v != null && safeGet(g, wasCtx) !== v) { try { GOALS[g].set(wasCtx, v); } catch { /* kept */ } } }
     bump(x => x + 1);
     apply({ style: was.pick.style, size: was.pick.size, options: copy(was.pick.options) }, { how: 'fade' });
     showToast(t('teReverted'), { color: toastColor(def.color) });

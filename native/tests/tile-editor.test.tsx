@@ -73,6 +73,18 @@ describe('the tile editor', () => {
     expect(tile(storage, 'home', 'exercise')).toBeUndefined();
   });
 
+  it('Revert after a unit change puts back the same goal weight, not the same number in the new unit', async () => {
+    const storage = fakeStorage();
+    tileStoreFor(storage, 'home').add('weight', 'M', 'A');
+    await wrap(<TileEditorSheet page="home" id="weight" storage={storage} />);
+    expect(screen.getByText('178 lb')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('radio', { name: 'Kilograms' }));
+    expect(screen.getByText('80.5 kg')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('te-revert'));
+    expect(tile(storage, 'home', 'weight')!.options['u.weight']).toBeUndefined();
+    expect(screen.getByText('178 lb')).toBeTruthy();
+  });
+
   it('a size a style does not come in is offered but cannot be picked', async () => {
     const storage = fakeStorage();
     tileStoreFor(storage, 'home').add('logMeal', 'S', 'A');

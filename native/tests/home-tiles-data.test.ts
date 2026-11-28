@@ -3,7 +3,7 @@ import { nightTimeline } from '../src/features/home/tiles/health-detail';
 import { parseMarkup, parseStyle } from '../src/features/home/tiles/markup-parse';
 import { buildState, tileView } from '../src/features/home/tiles/state';
 import { DEFAULT_UNITS, drawTile, studioVersion } from '../src/features/home/tiles/studio';
-import { detailFor, pickRecovery, todaySources } from '../src/features/home/tiles/use-home-tiles';
+import { detailFor, HOME_GOALS, homeGoals, pickRecovery, todaySources } from '../src/features/home/tiles/use-home-tiles';
 import { createTheme } from '../src/design/tokens';
 import { tilePage } from '../src/features/tiles/registry';
 import type { TileSize } from '../src/features/tiles/types';
@@ -283,5 +283,16 @@ describe('drawing', () => {
     }
     // Only Next up (no routine items yet) and the styles needing sleep score parts sit out.
     expect(drawn).toBeGreaterThan(180);
+  });
+});
+
+describe('Home goals from Settings', () => {
+  it('measures the Exercise tile against daily training, the goal its editor and Settings change', () => {
+    expect(homeGoals(480, 45)).toMatchObject({ exercise: 45, sleepHours: 8 });
+    const data = buildTileData(input({ goals: homeGoals(450, 75), health: health({ exerciseMinutes: series(24) }) }));
+    expect(data.exercise.goal).toBe(75);
+  });
+  it('falls back to its own goals when a saved goal is missing or not a number', () => {
+    expect(homeGoals(Number.NaN, 0)).toEqual(HOME_GOALS);
   });
 });
