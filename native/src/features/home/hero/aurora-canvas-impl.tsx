@@ -1,6 +1,6 @@
 import { Canvas, Picture, Skia, type SkPicture } from '@shopify/react-native-skia';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { GestureDetector, useExclusiveGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
+import { GestureDetector, useTapGesture } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { AuroraScene } from './aurora-scene';
 import { HERO_H } from './camera';
@@ -9,8 +9,9 @@ import type { HeroMotion } from './motion';
 
 /**
  * The Aurora artwork: one Skia canvas the scene draws into, a frame at a time and only while something moves (the opening
- * build, a day change, a glint, a drag easing back). At rest the last picture stays and nothing runs. A horizontal drag turns
- * the globe a little; a tap on the sky hands back to the readout. Loaded on its own so the rest of Home never needs Skia.
+ * build, a day change, a glint, a drag easing back). At rest the last picture stays and nothing runs. The hero's swipe (aurora.tsx)
+ * turns the globe through the motion and asks for frames with `motion.kick`; a tap on the sky hands back to the readout. Loaded on
+ * its own so the rest of Home never needs Skia.
  */
 export interface AuroraCanvasProps {
   motion: HeroMotion; width: number; dpr: number; mode: 'dark' | 'light'; colors: Record<string, string>;
@@ -55,6 +56,7 @@ export function AuroraCanvas(p: AuroraCanvasProps) {
     sc.setData(p.values, false);
     scene.current = sc;
     motion.setOnSettle(() => scene.current?.settle());
+    motion.setKick(invalidate);
     motion.setWidth(width);
     if (firstDay.current) { firstDay.current = false; motion.start({ values: p.values, rest: p.rest }, performance.now(), p.calm); }
     invalidate();
@@ -69,7 +71,9 @@ export function AuroraCanvas(p: AuroraCanvasProps) {
     const dir = Math.sign(p.sel - lastSel.current);
     lastKey.current = key; lastSel.current = p.sel;
     const morph = motion.setDay({ values: p.values, rest: p.rest }, p.animate, dir, performance.now());
-    scene.current?.setData(p.values, morph);
+    // Mid crossing, the rising curtains either become the leaving ones ('promote') or take the new day's shape ('replace').
+    if (morph === 'promote') scene.current?.settle();
+    scene.current?.setData(p.values, !!morph);
     invalidate();
   }, [p.values, p.sel, p.rest, p.animate]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -81,23 +85,11 @@ export function AuroraCanvas(p: AuroraCanvasProps) {
   }, [paused]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { live.current.dead = true; if (raf.current) cancelAnimationFrame(raf.current); raf.current = 0; }, []);
 
-  const drag = useRef({ x0: 0, a0: 0 });
-  const begin = () => { p.onTouch(); motion.finishEntrance(); };
-  const onStart = () => { if (p.reduceMotion) return; drag.current.a0 = motion.beginDrag(); invalidate(); };
-  const onMove = (dx: number) => { if (!motion.dragging) return; motion.dragTo(drag.current.a0 - dx * 0.005); invalidate(); };
-  const onEnd = () => { motion.endDrag(); invalidate(); };
+  const begin = () => { p.onTouch(); motion.finishEntrance(); invalidate(); };
   const onTapSky = p.onTapSky;
-  const pan = usePanGesture({
-    activeOffsetX: [-8, 8], failOffsetY: [-10, 10],
-    onBegin: () => { 'worklet'; runOnJS(begin)(); },
-    onActivate: () => { 'worklet'; runOnJS(onStart)(); },
-    onUpdate: e => { 'worklet'; runOnJS(onMove)(e.translationX); },
-    onFinalize: () => { 'worklet'; runOnJS(onEnd)(); },
-  });
-  const tap = useTapGesture({ maxDistance: 6, onActivate: () => { 'worklet'; runOnJS(onTapSky)(); } });
-  const gesture = useExclusiveGestures(pan, tap);
+  const tap = useTapGesture({ maxDistance: 6, onBegin: () => { 'worklet'; runOnJS(begin)(); }, onActivate: () => { 'worklet'; runOnJS(onTapSky)(); } });
 
-  return <GestureDetector gesture={gesture}>
+  return <GestureDetector gesture={tap}>
     <Canvas style={{ position: 'absolute', left: 0, top: 0, width, height: HERO_H }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {pic ? <Picture picture={pic} /> : null}
     </Canvas>

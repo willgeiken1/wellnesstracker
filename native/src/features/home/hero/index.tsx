@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { AppState, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import { capitals } from '@/components/kit-style';
@@ -14,6 +14,7 @@ import { heroView } from './model';
 import { PlainHero } from './plain';
 import { useMapPrefs } from './prefs';
 import { RidgeHero } from './ridge';
+import { SwipeDays } from './swipe-days';
 import { skyTokens } from './tones';
 import { FadeUp } from './text-motion';
 import { HeroWeek } from './week';
@@ -83,6 +84,10 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
   // Hide numbers: a tap on the hidden food energy shows Home's numbers.
   const reveal = (pi: number) => { if (pi >= 0 && input.hide && view.pillars[pi]?.key === 'food') revealNumbers(); };
   const select = (i: number) => { if (i === sel) return; tick(); setFocus(-1); setTouched(true); setSel(i); };
+  // A swipe on the map, in points as the hero shows it: the words lean with it and the week's glow leans toward the day it heads
+  // for. Once the day changes the new day takes over, so it clears (after the week has folded it into its glow).
+  const swipe = useSharedValue(0);
+  useLayoutEffect(() => { swipe.value = 0; }, [sel, swipe]);
 
   const head = <Animated.View style={[{ paddingRight: 56 }, headStyle]}>
     <KitText weight={600} size={11.5} lineHeight={1.2} tracking={0.14} color="text-muted" style={capitals}>{view.dateLine}</KitText>
@@ -99,11 +104,13 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
 
   const W = winW - 32, paused = !focused || !active;
   const style = !prefs.map ? 'plain' : prefs.style === 'ridge' ? 'ridge' : failed ? 'ridge' : 'aurora';
-  const map = style === 'plain' ? <PlainHero view={view} colors={c} reduceMotion={reduceMotion} onReveal={input.hide ? revealNumbers : undefined} />
-    : style === 'ridge' ? <RidgeHero view={view} width={winW} colors={c} mode={mode} reduceMotion={reduceMotion} calm={calm} labels={prefs.labels} glow={prefs.glow} onPeak={reveal} />
+  const map = style === 'plain' ? <SwipeDays sel={sel} swipe={swipe} reduceMotion={reduceMotion} onSwipeDay={select}>
+      <PlainHero view={view} colors={c} reduceMotion={reduceMotion} onReveal={input.hide ? revealNumbers : undefined} /></SwipeDays>
+    : style === 'ridge' ? <SwipeDays sel={sel} swipe={swipe} reduceMotion={reduceMotion} onSwipeDay={select}>
+      <RidgeHero view={view} width={winW} colors={c} mode={mode} reduceMotion={reduceMotion} calm={calm} labels={prefs.labels} glow={prefs.glow} onPeak={reveal} /></SwipeDays>
     : <AuroraHero view={view} width={winW} colors={c} mode={mode} sky={sky} reduceMotion={reduceMotion} calm={calm} paused={paused}
       animate={touched && !reduceMotion} levels={LEVELS[prefs.detail]} glow={prefs.glow} labels={prefs.labels}
-      scrollY={scrollY} focus={focus} onFocus={pi => { setTouched(true); setFocus(pi); reveal(pi); }} onTouch={() => setTouched(true)} onFail={() => setFailed(true)} />;
+      scrollY={scrollY} swipe={swipe} onSwipeDay={select} focus={focus} onFocus={pi => { setTouched(true); setFocus(pi); reveal(pi); }} onTouch={() => setTouched(true)} onFail={() => setFailed(true)} />;
 
   return <View testID="home-hero" style={{ paddingTop: 6, paddingBottom: 6 }}>
     {head}
@@ -115,7 +122,7 @@ export function HomeHero({ scrollY, name }: { scrollY?: SharedValue<number>; nam
           <KitText weight={500} size={12.5} lineHeight={1.2} color="text-muted" style={{ textAlign: 'right' }} testID="home-hero-week-note">{view.weekNote}</KitText>
         </FadeUp>
       </Animated.View>
-      <HeroWeek width={W + 32} week={view.week} sel={sel} colors={c} sky={sky} dark={dark} glow={prefs.glow} reduceMotion={reduceMotion} build={build} onSelect={select} />
+      <HeroWeek width={W + 32} week={view.week} sel={sel} colors={c} sky={sky} dark={dark} glow={prefs.glow} reduceMotion={reduceMotion} build={build} swipe={swipe} onSelect={select} />
     </> : null}
   </View>;
 }

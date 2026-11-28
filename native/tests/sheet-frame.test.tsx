@@ -66,32 +66,35 @@ describe('which screens get the frame', () => {
 });
 
 describe('the frame', () => {
-  test('a sheet whose screen gives it no height takes the large sheet height, and fills again once it has one', async () => {
+  test('on iOS a large sheet always holds the large sheet height, whatever its screen measures', async () => {
     await render(sheetScreenLayout({ options: largeSheet, children: <Text>Body</Text> }), { wrapper });
     const f = frame();
-    expect(f.style().flex).toBe(1);
-    await fireEvent(f.outer, 'layout', layout(0));
     expect(f.style().flex).toBeUndefined();
     expect(f.style().height).toBeGreaterThan(500);
     await fireEvent(f.outer, 'layout', layout(780));
-    expect(f.style().flex).toBe(1);
-    expect(f.style().height).toBeUndefined();
+    expect(f.style().height).toBeGreaterThan(500);
     expect(screen.getByText('Body')).toBeTruthy();
   });
 
-  test('a medium sheet falls back to its own share of the screen, and keeps filling a height it was given', async () => {
+  test('on iOS a medium sheet holds its own share of the large sheet', async () => {
     const detent = sheetDetent(mediumSheet('rest-timer'))!;
     await render(<SheetFrame detent={detent}><Text>Body</Text></SheetFrame>, { wrapper });
-    const f = frame();
-    await fireEvent(f.outer, 'layout', layout(COLLAPSED - 1));
-    const height = f.style().height as number;
+    const height = frame().style().height as number;
     expect(height).toBeGreaterThan(0);
-    await act(async () => {});
-    await fireEvent(f.outer, 'layout', layout(215));
-    expect(f.style().flex).toBe(1);
     await render(<SheetFrame detent={1}><Text>Body</Text></SheetFrame>, { wrapper });
-    await fireEvent(frame().outer, 'layout', layout(0));
     expect(height).toBeLessThan(frame().style().height as number);
+  });
+
+  test('elsewhere a sheet fills its screen, and takes its own height only while the screen gives it none', async () => {
+    await render(<SheetFrame detent={1} ios={false}><Text>Body</Text></SheetFrame>, { wrapper });
+    const f = frame();
+    expect(f.style().flex).toBe(1);
+    await fireEvent(f.outer, 'layout', layout(COLLAPSED - 1));
+    expect(f.style().flex).toBeUndefined();
+    expect(f.style().height).toBeGreaterThan(500);
+    await act(async () => {});
+    await fireEvent(f.outer, 'layout', layout(780));
+    expect(f.style().flex).toBe(1);
   });
 });
 

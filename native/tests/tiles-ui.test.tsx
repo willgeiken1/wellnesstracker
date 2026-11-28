@@ -5,6 +5,9 @@ import { configureTileRoutes, configureTileToast, resetTileStores, tileEdit, til
 import { TileEditorSheet } from '../src/features/tiles/editor/editor-sheet';
 import { TileTraySheet } from '../src/features/tiles/tray-sheet';
 import { TileGrid } from '../src/features/tiles/tile-grid';
+import { tileSheetOptions } from '../src/features/tiles/nav';
+import { sheetScreenLayout } from '../src/features/navigation/sheet-frame';
+import { StyleSheet } from 'react-native';
 
 // Reanimated, gesture-handler and the Skia tile surface use the shared stand-ins from tests/setup.ts.
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), back: jest.fn(), canGoBack: () => true } }));
@@ -71,6 +74,19 @@ describe('tile grid screens', () => {
     await fireEvent.press(screen.getByLabelText('Add Plan days, Medium'));
     await act(async () => { jest.advanceTimersByTime(600); });
     expect(routes.close).toHaveBeenCalled();
+    expect(tileStoreFor(storage, 'training').getState().tiles.some(e => e.id === 'plan')).toBe(true);
+  });
+
+  // The tray is a large sheet: on iOS its screen can hand it no height, which left Add a tile blank. It sits in the sheet frame.
+  it('the tray still shows its tiles and adds one when its sheet gets no height', async () => {
+    const storage = fakeStorage();
+    await wrap(sheetScreenLayout({ options: tileSheetOptions.tray, children: <TileTraySheet page="training" storage={storage} /> }));
+    const inner = screen.getByTestId('sheet-frame');
+    await fireEvent(inner.parent!, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 0 } } });
+    expect(StyleSheet.flatten(screen.getByTestId('sheet-frame').props.style).height).toBeGreaterThan(500);
+    expect(screen.getByText('Training tiles')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Add Plan days, Medium'));
+    await act(async () => { jest.advanceTimersByTime(600); });
     expect(tileStoreFor(storage, 'training').getState().tiles.some(e => e.id === 'plan')).toBe(true);
   });
 

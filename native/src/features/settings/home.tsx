@@ -26,6 +26,14 @@ export function versionLabel(version: string | undefined, build: string | undefi
   return `${(version || '1.0').replace(/^(\d+\.\d+)\.0$/, '$1')} (${build || '1'})`;
 }
 export const APP_VERSION = versionLabel(Constants.expoConfig?.version, Constants.expoConfig?.ios?.buildNumber);
+/** When the running app came from an over-the-air update, the day and time that update was published ("Nov 27, 9:02 PM"),
+ * so a person can tell which update their phone is on. Empty for the code the build shipped with, or where updates are off. */
+export function updateLabel(u: { isEnabled?: boolean; isEmbeddedLaunch?: boolean; createdAt?: Date | null } | null): string {
+  if (!u?.isEnabled || u.isEmbeddedLaunch || !u.createdAt) return '';
+  return u.createdAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function loadUpdates() { try { return require('expo-updates') as { isEnabled?: boolean; isEmbeddedLaunch?: boolean; createdAt?: Date | null }; } catch { return null; } }
+export const APP_UPDATE = updateLabel(loadUpdates());
 const mss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 /** Opens a Settings section, optionally flashing one setting in it. */
