@@ -27,11 +27,12 @@ export function Scrim({ open, onClose }: { open: boolean; onClose: () => void })
   const [shown, setShown] = useState(open);
   if (open && !shown) setShown(true);
   useEffect(() => {
-    Animated.timing(fade, { toValue: open ? 1 : 0, duration: reduceMotion ? 0 : 200, easing: Easing.linear, useNativeDriver: false })
+    Animated.timing(fade, { toValue: open ? 1 : 0, duration: reduceMotion ? 0 : 200, easing: Easing.linear, useNativeDriver: true })
       .start(({ finished }) => { if (finished && !open) setShown(false); });
   }, [open, fade, reduceMotion]);
   if (!shown) return null;
-  return <Animated.View testID="fan-scrim" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: fade, backgroundColor: shellColors(colors, mode).scrim }}>
+  // Once closing starts it lets taps through, so the page under it answers while it fades.
+  return <Animated.View testID="fan-scrim" pointerEvents={open ? 'auto' : 'none'} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: fade, backgroundColor: shellColors(colors, mode).scrim }}>
     <Tappable dim="none" accessible={false} onPress={onClose} style={{ flex: 1 }} />
   </Animated.View>;
 }
@@ -47,17 +48,17 @@ function Item({ action, index, count, open, x, y, from, width, color, first, onR
   useEffect(() => {
     if (reduceMotion) {
       travel.setValue(1);
-      Animated.timing(fade, { toValue: open ? 1 : 0, duration: open ? 140 : 120, easing: Easing.linear, useNativeDriver: false }).start();
+      Animated.timing(fade, { toValue: open ? 1 : 0, duration: open ? 140 : 120, easing: Easing.linear, useNativeDriver: true }).start();
       return;
     }
     const delay = open ? index * 32 : (count - 1 - index) * 18;
     if (open) Animated.parallel([
-      Animated.sequence([Animated.delay(delay), Animated.spring(travel, { toValue: 1, ...SPRINGS.open, mass: 1, useNativeDriver: false })]),
-      Animated.sequence([Animated.delay(delay), Animated.timing(fade, { toValue: 1, duration: 140, easing: Easing.linear, useNativeDriver: false })]),
+      Animated.sequence([Animated.delay(delay), Animated.spring(travel, { toValue: 1, ...SPRINGS.open, mass: 1, useNativeDriver: true })]),
+      Animated.sequence([Animated.delay(delay), Animated.timing(fade, { toValue: 1, duration: 140, easing: Easing.linear, useNativeDriver: true })]),
     ]).start();
     else Animated.parallel([
-      Animated.timing(travel, { toValue: 0, duration: 190, delay, easing: CLOSE, useNativeDriver: false }),
-      Animated.timing(fade, { toValue: 0, duration: 190, delay, easing: CLOSE, useNativeDriver: false }),
+      Animated.timing(travel, { toValue: 0, duration: 190, delay, easing: CLOSE, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 0, duration: 190, delay, easing: CLOSE, useNativeDriver: true }),
     ]).start();
   }, [open, index, count, reduceMotion, travel, fade]);
   const tint = first ? color : mix(color, shell.dark ? 0.17 : 0.1, colors.surface);
@@ -107,16 +108,16 @@ export function Fan({ open, width, height, plus, pageLabel, color, actions, onRu
   useEffect(() => {
     if (open) {
       Animated.parallel([
-        Animated.timing(cap, { toValue: 1, duration: reduceMotion ? 0 : 220, delay: reduceMotion ? 0 : 80, easing: Easing.linear, useNativeDriver: false }),
-        reduceMotion ? Animated.timing(rise, { toValue: 0, duration: 0, useNativeDriver: false })
-          : Animated.sequence([Animated.delay(40), Animated.spring(rise, { toValue: 0, ...SPRINGS.open, mass: 1, useNativeDriver: false })]),
+        Animated.timing(cap, { toValue: 1, duration: reduceMotion ? 0 : 220, delay: reduceMotion ? 0 : 80, easing: Easing.linear, useNativeDriver: true }),
+        reduceMotion ? Animated.timing(rise, { toValue: 0, duration: 0, useNativeDriver: true })
+          : Animated.sequence([Animated.delay(40), Animated.spring(rise, { toValue: 0, ...SPRINGS.open, mass: 1, useNativeDriver: true })]),
       ]).start();
       return;
     }
     const left = reduceMotion ? 120 : 190 + Math.max(0, actions.length - 1) * 18;
     Animated.parallel([
-      Animated.timing(cap, { toValue: 0, duration: reduceMotion ? 0 : 180, easing: Easing.linear, useNativeDriver: false }),
-      Animated.timing(rise, { toValue: 8, duration: reduceMotion ? 0 : 190, easing: CLOSE, useNativeDriver: false }),
+      Animated.timing(cap, { toValue: 0, duration: reduceMotion ? 0 : 180, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(rise, { toValue: 8, duration: reduceMotion ? 0 : 190, easing: CLOSE, useNativeDriver: true }),
     ]).start();
     const timer = setTimeout(() => setMounted(false), left);
     return () => clearTimeout(timer);

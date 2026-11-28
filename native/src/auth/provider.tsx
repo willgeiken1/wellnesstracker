@@ -157,7 +157,7 @@ export function AuthProvider({children, client: supplied}: PropsWithChildren<{cl
   // Edits stay in the outbox, so turning it back on makes a new engine whose first sync uploads them.
   const syncOn=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>!currentRepo||loadSettingsPrefs(currentRepo).sync.on);
   const engine=useMemo(()=>syncOn&&!departurePending&&currentRepo&&client&&userId ? new SyncEngine(currentRepo,new SupabaseTransport(client,userId)):null,[syncOn,currentRepo,client,userId,departurePending]);
-  const pending=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.pending().length??0);
+  const pending=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.pendingCount()??0);
   const conflicts=useSyncExternalStore(useCallback(listener=>currentRepo?.subscribe(listener)??(()=>{}),[currentRepo]),()=>currentRepo?.conflicts().length??0);
   const initialPullComplete=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.initialPullComplete??false);
   const syncPullRevision=useSyncExternalStore(useCallback(listener=>engine?.subscribe(listener)??(()=>{}),[engine]),()=>engine?.pullRevision??0);

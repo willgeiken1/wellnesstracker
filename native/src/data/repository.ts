@@ -10,10 +10,54 @@ import { DEFAULT_SYNC_FLAGS, gatedColumns, hasGatedColumns, hydrateSyncRow, merg
 type Physical = Record<string, Scalar>;
 // Repositories sharing a database handle must share transaction guards.
 const batches = new WeakMap<ExpoSQLiteDatabase, { depth: number; rollbackOnly: boolean }>();
+/** What repositories on one database have read since its last change. Screens ask for the same lists and
+ * values many times per draw (a few dozen hooks each read the settings; every exercise reads the custom
+ * list), and each ask was a fresh synchronous query on the JS thread. Every write made through a repository,
+ * including one that rolls back, forgets all of it; so does {@link forgetReads}. */
+interface ReadCache {
+  seen: Map<string, unknown>;
+  /** Purge markers by owner. Only a pulled page writes them, so they outlive ordinary saves. */
+  purges: Map<string, Row[]>;
+}
+const remembered = new WeakMap<ExpoSQLiteDatabase, ReadCache>();
+const MAX_REMEMBERED = 4000;
+function readCache(db: ExpoSQLiteDatabase) {
+  let cache = remembered.get(db);
+  if (!cache) { cache = { seen: new Map(), purges: new Map() }; remembered.set(db, cache); }
+  return cache;
+}
+/** For a change made to the database other than through a {@link Repository}. */
+export function forgetReads(db: ExpoSQLiteDatabase) {
+  const cache = remembered.get(db);
+  cache?.seen.clear(); cache?.purges.clear();
+}
+const READ_CALLS = new Set<PropertyKey>(['get', 'all']);
+/** The same handle, except that any call other than a plain read forgets what was remembered, before it runs
+ * and after it ends (so a transaction that rolls back is forgotten too). */
+function forgetOnWrite(db: ExpoSQLiteDatabase, cache: ReadCache): ExpoSQLiteDatabase {
+  return new Proxy(db, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target) as unknown;
+      if (typeof value !== 'function') return value;
+      const call = value as (...args: unknown[]) => unknown;
+      if (READ_CALLS.has(prop)) return call.bind(target);
+      return (...args: unknown[]) => {
+        cache.seen.clear();
+        try { return call.apply(target, args); } finally { cache.seen.clear(); }
+      };
+    },
+  });
+}
+/** Rows are shared by everyone who reads them; in development, a caller that changes one fails at once. */
+function shared(row: Row): Row {
+  if (typeof __DEV__ === 'undefined' || __DEV__) { Object.freeze(row.data); Object.freeze(row); }
+  return row;
+}
 export interface SyncConflict { table: Table; id: string; reason: 'provenance' }
 export interface Pending { row: Row; revision: string }
 /** Corrupt-marker escape only: erase every namespace in one atomic transaction, and the Health store. */
 export function wipeAllOwners(db: ExpoSQLiteDatabase, health?: ExpoSQLiteDatabase) {
+  forgetReads(db);
   try {
     db.transaction(() => {
       for(const table of [...localTables,'sync_outbox','sync_state','sync_conflicts','oura_days','workout_local','workout_milestones','workout_weekly']) {
@@ -22,6 +66,7 @@ export function wipeAllOwners(db: ExpoSQLiteDatabase, health?: ExpoSQLiteDatabas
     });
     health?.run(sql`DELETE FROM weigh_ins`);
   } catch {throw new Error('Local data is unavailable.');}
+  finally { forgetReads(db); }
 }
 export class Repository {
   readonly syncFlags: Readonly<SyncFlags>;
@@ -33,7 +78,27 @@ export class Repository {
   /** Owner-scoped logger state. This table is deliberately absent from the wire catalog. */
   private localTable(key:string) {return sql.identifier(key==='milestones'?'workout_milestones':key==='weekly'?'workout_weekly':'workout_local');}
   localGet<T>(key: string): T | undefined {
-    return this.safe(() => { const row=this.db.get<{value:string}>(sql`SELECT value FROM ${this.localTable(key)} WHERE owner_id=${this.owner} AND key=${key}`); return row ? JSON.parse(row.value) as T : undefined; });
+    // The text is remembered, not the value: callers change what they are given before saving it back.
+    // Outside a batch of writes, the logger's own values are read together: a draw asks for a draft, a unit
+    // and a skip mark per exercise, which was one query each.
+    const local = key !== 'milestones' && key !== 'weekly' && !this.batch.depth ? this.remember('local\u0000*', () => this.safe(() =>
+      new Map(this.db.all<{key:string;value:string}>(sql`SELECT key,value FROM workout_local WHERE owner_id=${this.owner}`).map(row => [row.key, row.value])))) : undefined;
+    const value = local ? local.get(key) : this.remember(`local\u0000${key}`, () => this.safe(() => this.db.get<{value:string}>(sql`SELECT value FROM ${this.localTable(key)} WHERE owner_id=${this.owner} AND key=${key}`)?.value));
+    return value === undefined ? undefined : JSON.parse(value) as T;
+  }
+  private index = new WeakMap<Row[], Map<string, Row>>();
+  private indexed(rows: Row[]) {
+    let byId = this.index.get(rows);
+    if (!byId) { byId = new Map(rows.map(row => [row.id, row])); this.index.set(rows, byId); }
+    return byId;
+  }
+  private remember<T>(key: string, read: () => T): T {
+    const seen = this.reads.seen, at = `${this.owner}\u0000${key}`;
+    if (seen.has(at)) return seen.get(at) as T;
+    const value = read();
+    if (seen.size >= MAX_REMEMBERED) seen.clear();
+    seen.set(at, value);
+    return value;
   }
   /** Owner-scoped local logger state for the phone-only JSON backup. */
   localSnapshot(): Record<string, unknown> {
@@ -52,6 +117,9 @@ export class Repository {
    * Promise/thenable returns are rejected; callbacks must never schedule async writes.
    * A failed nested atomic marks the entire outer transaction rollback-only. */
   private batch: { depth: number; rollbackOnly: boolean };
+  private reads: ReadCache;
+  private db: ExpoSQLiteDatabase;
+  private health?: ExpoSQLiteDatabase;
   private notify() { if (!this.batch.depth) { this.viewRevision++; this.listeners.forEach(listener => listener()); } }
   private outsideAtomic() {
     if (this.batch.depth) {
@@ -85,8 +153,11 @@ export class Repository {
   }
 
   /** `health` is the separate store, kept out of backups, that holds weigh-ins copied from a health service. */
-  constructor(private db: ExpoSQLiteDatabase, readonly owner: string, readonly device: string, private uuid: () => string, flags: SyncFlags = DEFAULT_SYNC_FLAGS, private health?: ExpoSQLiteDatabase) {
+  constructor(db: ExpoSQLiteDatabase, readonly owner: string, readonly device: string, private uuid: () => string, flags: SyncFlags = DEFAULT_SYNC_FLAGS, health?: ExpoSQLiteDatabase) {
     this.syncFlags = Object.freeze({...flags});
+    this.reads = readCache(db);
+    this.db = forgetOnWrite(db, this.reads);
+    this.health = health && forgetOnWrite(health, this.reads);
     let batch = batches.get(db);
     if (!batch) { batch = { depth: 0, rollbackOnly: false }; batches.set(db, batch); }
     this.batch = batch;
@@ -98,11 +169,18 @@ export class Repository {
   private setState(key: string, value: string) { this.db.run(sql`INSERT INTO sync_state(owner_id,key,value) VALUES(${this.owner},${key},${value}) ON CONFLICT(owner_id,key) DO UPDATE SET value=excluded.value`); }
   private decode(table: Table, physical: Physical): Row {
     const { owner_id, id, updated_at, deleted_at, device_id, ...data } = physical;
-    return { table, owner_id: String(owner_id), id: String(id), updated_at: Number(updated_at), deleted_at: deleted_at === null ? null : Number(deleted_at), device_id: String(device_id), data };
+    return shared({ table, owner_id: String(owner_id), id: String(id), updated_at: Number(updated_at), deleted_at: deleted_at === null ? null : Number(deleted_at), device_id: String(device_id), data });
+  }
+  /** Newest first. */
+  private purgeMarkers(): Row[] {
+    let markers = this.reads.purges.get(this.owner);
+    if (!markers) { markers = this.list('purges').sort((a,b)=>compareRows(b,a)); this.reads.purges.set(this.owner, markers); }
+    return markers;
   }
   private write(input: Row) {
     let row = input;
-    for (const marker of this.list('purges').sort((a,b)=>compareRows(b,a))) {
+    if (row.table === 'purges') this.reads.purges.clear();
+    for (const marker of this.purgeMarkers()) {
       if (matchesPurge(row,marker,(table,id)=>this.get(table,id))) { row=purgeTombstone(row,marker); break; }
     }
     const data = {owner_id: row.owner_id, id: row.id, updated_at: row.updated_at, deleted_at: row.deleted_at, device_id: row.device_id, ...row.data};
@@ -111,6 +189,7 @@ export class Repository {
     const values = sql.join(Object.values(data).map(v => sql`${v}`), sql`, `);
     const updates = sql.join(keys.filter(k => !['owner_id','id'].includes(k)).map(k => sql`${sql.identifier(k)}=excluded.${sql.identifier(k)}`), sql`, `);
     this.store(row).run(sql`INSERT INTO ${this.table(row.table)} (${fields}) VALUES (${values}) ON CONFLICT(owner_id,id) DO UPDATE SET ${updates}`);
+    if (row.table === 'purges') this.reads.purges.clear();
     return row;
   }
   /** Health weigh-ins go to the Health store when there is one; everything else to the main database. */
@@ -118,21 +197,28 @@ export class Repository {
   /** With a Health store, a Health weigh-in still in the main database is a copy waiting to move and is not read. */
   private shadowed(table: Table, value: Physical) { return !!this.health && table === 'weigh_ins' && isHealthSource(value.source); }
   get(table: Table, id: string): Row | undefined {
-    return this.safe(() => {
+    // A list read since the last change already holds the row: every entry of a history asks for itself.
+    const all = this.reads.seen.get(`${this.owner}\u0000list\u0000${table}\u0000true`) as Row[] | undefined;
+    if (all) return this.indexed(all).get(id);
+    const live = this.reads.seen.get(`${this.owner}\u0000list\u0000${table}\u0000false`) as Row[] | undefined;
+    const found = live && this.indexed(live).get(id);
+    if (found) return found;
+    return this.remember(`get\u0000${table}\u0000${id}`, () => this.safe(() => {
       const value = this.db.get<Physical>(sql`SELECT * FROM ${this.table(table)} WHERE owner_id=${this.owner} AND id=${id}`);
       if (value && !this.shadowed(table, value)) return this.decode(table, value);
       const kept = this.health && table === 'weigh_ins' ? this.health.get<Physical>(sql`SELECT * FROM weigh_ins WHERE owner_id=${this.owner} AND id=${id}`) : undefined;
       return kept ? this.decode(table, kept) : undefined;
-    });
+    }));
   }
   list(table: Table, includeDeleted = false): Row[] {
-    return this.safe(() => {
+    // Callers sort and filter what they are given, so each gets its own copy of the list.
+    return [...this.remember(`list\u0000${table}\u0000${includeDeleted}`, () => this.safe(() => {
       const live = includeDeleted ? sql`` : sql`AND deleted_at IS NULL`;
       const rows = this.db.all<Physical>(sql`SELECT * FROM ${this.table(table)} WHERE owner_id=${this.owner} ${live} ORDER BY id`);
       if (!this.health || table !== 'weigh_ins') return rows.map(r => this.decode(table, r));
       const kept = this.health.all<Physical>(sql`SELECT * FROM weigh_ins WHERE owner_id=${this.owner} ${live}`);
       return [...rows.filter(r => !this.shadowed(table, r)), ...kept].sort((a, b) => String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0).map(r => this.decode(table, r));
-    });
+    }))];
   }
   /** One synchronous transaction commits both row and outbox before notifying subscribers. */
   putLocal(input: Row): void {
@@ -196,6 +282,7 @@ export class Repository {
   /** Demo carry-over only; caller owns the shared database transaction. */
   clearDemoForTransfer() {
     if (this.owner !== 'demo' || !this.batch.depth) throw new Error('Demo transfer transaction required.');
+    this.reads.purges.clear();
     for (const table of [...localTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
       this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
     }
@@ -204,6 +291,7 @@ export class Repository {
   /** Atomic account departure, including local-only caches and flagged outbox rows. */
   wipe() {
     this.outsideAtomic();
+    this.reads.purges.clear();
     this.safe(() => this.db.transaction(() => {
       for (const table of [...localTables, 'sync_outbox', 'sync_state', 'sync_conflicts', 'oura_days', 'workout_local', 'workout_milestones', 'workout_weekly']) {
         this.db.run(sql`DELETE FROM ${sql.identifier(table)} WHERE owner_id=${this.owner}`);
@@ -254,6 +342,12 @@ export class Repository {
     const stamp = this.safe(() => Math.max(now, Number(this.state('clock') ?? 0) + 1));
     this.putLocal({...row,device_id:this.device,updated_at:stamp,deleted_at:stamp});
   }
+  /** How many rows pending() would upload, counted without reading them. */
+  pendingCount(): number {
+    const tables = this.syncTables().filter(table => table !== 'purges');
+    if (!tables.length) return 0;
+    return this.safe(() => this.db.get<{count:number}>(sql`SELECT count(*) AS count FROM sync_outbox WHERE owner_id=${this.owner} AND table_name IN (${sql.join(tables.map(table => sql`${table}`), sql`, `)}) AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id)`)?.count ?? 0);
+  }
   pending(): Pending[] {
     return this.safe(() => this.db.all<{table_name:Table;row_id:string;revision:string}>(sql`SELECT table_name,row_id,revision FROM sync_outbox WHERE owner_id=${this.owner} AND table_name <> 'purges' AND NOT EXISTS (SELECT 1 FROM sync_conflicts c WHERE c.owner_id=sync_outbox.owner_id AND c.table_name=sync_outbox.table_name AND c.row_id=sync_outbox.row_id) ORDER BY table_name,row_id`).filter(item => this.syncTables().includes(item.table_name)).map(item => {
       const row = this.get(item.table_name,item.row_id); if (!row) throw new Error('Invalid outbox.'); validateRow(row); return {row:projectSyncRow(row,this.syncFlags),revision:item.revision};
@@ -301,7 +395,7 @@ export class Repository {
         this.setState('clock',String(clock));
       }
     }));
-    this.notify();
+    if (items.length) this.notify();
   }
   /** Lazy expiry also physically removes stale payloads whenever sync/recovery is used. */
   losingVersions(now = Date.now()): LosingVersion[] {
@@ -403,6 +497,15 @@ export class Repository {
   /** complete is supplied by the engine only after exhausting the table replay. */
   applyPage(table: Table, page: ServerRow[], cursor: string, complete = false, after = this.cursor(table)) {
     this.outsideAtomic();
+    this.reads.purges.clear();
+    const replay = () => this.safe(() => this.state(this.replayKey(table)));
+    const before = page.length ? undefined : replay();
+    try { this.applyPageRows(table, page, cursor, complete, after); } finally { this.reads.purges.clear(); }
+    // A foreground sync pulls every table, nearly always empty: only a page that could change what a screen shows
+    // redraws the app.
+    if (page.length || replay() !== before) this.notify();
+  }
+  private applyPageRows(table: Table, page: ServerRow[], cursor: string, complete: boolean, after: string) {
     this.safe(() => this.db.transaction(() => {
       this.table(table);
       if (!this.syncTables().includes(table)) throw new Error('Sync feature disabled.');
@@ -454,12 +557,12 @@ export class Repository {
         } else if (complete) this.setState(this.replayKey(table),'complete');
       }
     }));
-    this.notify();
   }
   /** Within the caller's transaction. Children must be wiped before references. */
   private applyPurges() {
-    const markers=this.list('purges').sort((a,b)=>compareRows(b,a));
-    for (const saved of this.losingVersions()) {
+    const markers=this.purgeMarkers();
+    // Recovery copies come only from sync, which the sample and guest data never do: no need to look for them on each save.
+    for (const saved of this.owner === 'demo' || this.owner === 'guest' ? [] : this.losingVersions()) {
       const current = this.get(saved.row.table,saved.row.id);
       if (current?.deleted_at !== null || markers.some(marker => matchesPurge(saved.row,marker,(table,id)=>this.get(table,id)))) {
         this.dropLosingVersion(saved.key);

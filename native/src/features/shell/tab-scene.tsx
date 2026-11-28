@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { Fragment, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { FADES, SPRINGS, tabArrival } from '@/components/kit-motion';
 import { useTheme } from '@/design/theme-provider';
@@ -15,6 +15,15 @@ export interface SceneNavigation {
 export const TAB_SWAP = FADES.tabDelay + FADES.tab;
 
 const openKey = (s: TabState | undefined) => s?.routes[s.index]?.key;
+
+/** Never settles: while a hidden page throws it, React keeps the page as it is and skips redrawing it. */
+const NEVER = { then() {} };
+function Hold({ frozen, children }: { frozen: boolean; children: ReactNode }) {
+  if (frozen) throw NEVER;
+  return <Fragment>{children}</Fragment>;
+}
+/** How long after a page is left before it stops redrawing: once the page that opens has fully covered it. */
+export const FREEZE_AFTER = TAB_SWAP + 120;
 /** The tab the app opened on; any other tab's first showing is a first visit. */
 let launchKey: string | null = null;
 /** Forget the tab the app opened on (tests that start the app again). */
@@ -31,6 +40,9 @@ export function TabScene({ children, routeKey, name, home, navigation }: { child
   useEffect(() => { reduced.current = reduceMotion; }, [reduceMotion]);
   // A page under the navigator starts unseen and fades in when it opens, so it never shows for a frame before its fade.
   const opacity = useSharedValue(navigation && routeKey ? 0 : 1), rise = useSharedValue(0);
+  // A page that is not open stops redrawing for every save made elsewhere (every tab used to redraw on each one); it
+  // catches up in one draw when it opens again.
+  const [frozen, setFrozen] = useState(false);
 
   useEffect(() => {
     if (!navigation || !routeKey) return;
@@ -46,6 +58,7 @@ export function TabScene({ children, routeKey, name, home, navigation }: { child
       rise.value = 0;
       opacity.value = withDelay(TAB_SWAP, withTiming(0, { duration: 0 }));
     };
+    let freeze: ReturnType<typeof setTimeout> | undefined;
     let open = openKey(navigation.getState()) === routeKey, visited = open;
     if (open) {
       if (launchKey === null) launchKey = routeKey;
@@ -55,14 +68,19 @@ export function TabScene({ children, routeKey, name, home, navigation }: { child
       const now = openKey(state) === routeKey;
       if (now === open) return;
       open = now;
-      if (now) { arrive(!visited); visited = true; } else leave();
+      if (freeze) clearTimeout(freeze);
+      freeze = undefined;
+      if (now) { setFrozen(false); arrive(!visited); visited = true; }
+      else { leave(); freeze = setTimeout(() => setFrozen(true), FREEZE_AFTER); }
     };
     const offState = navigation.addListener('state', e => follow(e.data.state));
     // Focus comes back after a screen pushed over the tabs closes; it only matters if a change of tab was missed meanwhile.
     const offFocus = navigation.addListener('focus', () => follow(navigation.getState()));
-    return () => { offState(); offFocus(); };
+    return () => { offState(); offFocus(); if (freeze) clearTimeout(freeze); };
   }, [navigation, routeKey, home, opacity, rise]);
 
   const style = useAnimatedStyle(() => ({ flex: 1, opacity: opacity.value, transform: [{ translateY: rise.value }] }));
-  return <Animated.View style={style} testID={name ? `tab-scene-${name}` : undefined}>{children}</Animated.View>;
+  return <Animated.View style={style} testID={name ? `tab-scene-${name}` : undefined}>
+    <Suspense fallback={null}><Hold frozen={frozen}>{children}</Hold></Suspense>
+  </Animated.View>;
 }

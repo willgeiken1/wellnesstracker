@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { useWindowDimensions } from 'react-native';
+import { router } from 'expo-router';
 import { useTheme } from '@/design/theme-provider';
 import { t } from '@/i18n/en';
 import { useShellPrefs } from '@/features/shell/prefs';
@@ -61,5 +62,7 @@ export function HomeTips({ store, hero, avatar }: HomeTipsProps) {
   };
   return <Coach kind="tips" hole={hole} side={tip.target === 'plus' ? 'above' : tip.target === 'hero' ? 'below' : 'auto'}
     eyebrow={t('obaTipEyebrow').replace('{n}', String(step + 1))} title={t(tip.title)} body={t(tip.body)}
-    index={step} count={TIPS.length} onNext={next} onSize={setSize} />;
+    index={step} count={TIPS.length} onNext={next} onSize={setSize}
+    // The initial is the Settings button: a tap on it in the last tip opens Settings, as it would without the tip.
+    onHole={tip.target === 'avatar' ? () => setTimeout(() => router.push('/settings'), 0) : undefined} />;
 }

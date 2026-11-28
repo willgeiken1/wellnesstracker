@@ -1,6 +1,7 @@
 import { act, render } from '@testing-library/react-native';
+import { Text } from 'react-native';
 import { tabArrival } from '../src/components/kit-motion';
-import { resetTabScenes, TabScene, type SceneNavigation } from '../src/features/shell/tab-scene';
+import { FREEZE_AFTER, resetTabScenes, TabScene, type SceneNavigation } from '../src/features/shell/tab-scene';
 
 // Record what each move asks Reanimated for, so the test can read the mockup's timings back.
 const mockValues: { value: unknown }[] = ((globalThis as Record<string, unknown>).__tabSceneValues ??= []) as { value: unknown }[];
@@ -109,4 +110,27 @@ test('the tab pages are see-through, so a page fading in shows the one it replac
   const src: string = require('fs').readFileSync(require('path').join(__dirname, '../src/components/floating-tabs.tsx'), 'utf8');
   expect(src).toMatch(/CLEAR_SCENE = \{ backgroundColor: 'transparent' \}/);
   expect(src).toMatch(/sceneStyle: CLEAR_SCENE/);
+});
+
+// Every tab used to redraw on every save made anywhere, so each tap on one page also paid for drawing the others.
+test('a tab that has been left stops redrawing once the new one covers it, and catches up when it opens again', async () => {
+  jest.useFakeTimers();
+  try {
+    const { navigation, go } = tabs('a');
+    let draws = 0, label = 'first';
+    const Page = ({ text }: { text: string }) => { draws++; return <Text>{text}</Text>; };
+    const view = await render(<TabScene routeKey="a" navigation={navigation}><Page text={label} /></TabScene>);
+    expect(draws).toBe(1);
+    await go('b');
+    // Still drawn while it fades out under the page that opens.
+    label = 'second'; await view.rerender(<TabScene routeKey="a" navigation={navigation}><Page text={label} /></TabScene>);
+    expect(draws).toBe(2);
+    await act(async () => { jest.advanceTimersByTime(FREEZE_AFTER); });
+    const settled = draws;
+    for (const text of ['third', 'fourth']) await view.rerender(<TabScene routeKey="a" navigation={navigation}><Page text={text} /></TabScene>);
+    expect(draws).toBe(settled);
+    await go('a');
+    expect(draws).toBe(settled + 1);
+    expect(view.getByText('fourth')).toBeTruthy();
+  } finally { jest.useRealTimers(); }
 });
